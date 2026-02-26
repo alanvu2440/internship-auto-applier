@@ -1,0 +1,237 @@
+# ============================================================================
+# MOCK CONFIG FOR TESTING - DO NOT USE FOR REAL APPLICATIONS
+# ============================================================================
+# This is fake data for testing the bot. Replace with real info later.
+# ============================================================================
+
+personal_info:
+  first_name: "Jon"
+  last_name: "Doe"
+  full_name: "Jon Doe"
+  email: "jondoe.dev2847@gmail.com"
+  phone_prefix: "+1"
+  phone: "415-555-0147"
+  address: "742 Maple Ave"
+  apartment: "Apt 3B"
+  city: "San Francisco"
+  state: "CA"
+  zip_code: "94110"
+  country: "United States"
+  date_of_birth: "03/22/2003"
+  linkedin: "https://linkedin.com/in/jondoe-dev"
+  github: "https://github.com/jondoe-dev"
+  portfolio: "https://jondoe.dev"
+
+education:
+  - degree: "Bachelor of Science"
+    field_of_study: "Computer Science"
+    school: "University of California, Berkeley"
+    school_location: "Berkeley, CA"
+    start_date: "August 2021"
+    graduation_date: "May 2025"
+    gpa: "3.75"
+    gpa_scale: "4.0"
+    relevant_coursework:
+      - "Data Structures"
+      - "Algorithms"
+      - "Operating Systems"
+      - "Machine Learning"
+
+work_authorization:
+  us_citizen: true
+  us_permanent_resident: false
+  us_work_authorized: true
+  require_sponsorship_now: false
+  require_sponsorship_future: false
+  current_visa_status: "Citizen"
+  opt_eligible: false
+  cpt_eligible: false
+  stem_opt_eligible: false
+  eu_work_authorized: false
+  uk_work_authorized: false
+  canada_work_authorized: false
+  has_security_clearance: false
+  can_obtain_clearance: true
+
+demographics:
+  gender: "Prefer not to say"
+  pronouns: ""
+  ethnicity: "Prefer not to say"
+  veteran_status: "No"
+  protected_veteran: false
+  disability_status: "Prefer not to say"
+  lgbtq: "Prefer not to say"
+
+availability:
+  earliest_start_date: "May 2025"
+  preferred_start_date: "June 2025"
+  notice_period: "Immediately"
+  available_for_summer: true
+  available_for_fall: false
+  available_for_spring: false
+  willing_to_relocate: true
+  relocation_assistance_needed: false
+  preferred_locations:
+    - "San Francisco, CA"
+    - "New York, NY"
+    - "Seattle, WA"
+    - "Remote"
+  remote_preference: "Flexible"
+  interview_availability: "Flexible"
+  timezone: "America/Los_Angeles"
+
+skills:
+  years_of_coding_experience: "4"
+  years_of_professional_experience: "1"
+  programming_languages:
+    - name: "Python"
+      proficiency: "Advanced"
+      years: "4"
+    - name: "JavaScript"
+      proficiency: "Advanced"
+      years: "3"
+    - name: "Java"
+      proficiency: "Intermediate"
+      years: "2"
+    - name: "C++"
+      proficiency: "Intermediate"
+      years: "2"
+    - name: "TypeScript"
+      proficiency: "Intermediate"
+      years: "2"
+    - name: "SQL"
+      proficiency: "Intermediate"
+      years: "2"
+  frameworks:
+    - "React"
+    - "Node.js"
+    - "Express"
+    - "Django"
+    - "Flask"
+    - "Next.js"
+    - "TensorFlow"
+  tools:
+    - "Git"
+    - "GitHub"
+    - "Docker"
+    - "Kubernetes"
+    - "AWS"
+    - "Linux"
+    - "PostgreSQL"
+    - "MongoDB"
+    - "Redis"
+  interests:
+    - "Full-Stack Development"
+    - "Machine Learning"
+    - "Cloud Computing"
+    - "Distributed Systems"
+
+experience:
+  - title: "Software Intern"
+    company: "Acme Software"
+    location: "Oakland, CA"
+    start_date: "June 2024"
+    end_date: "August 2024"
+    current: false
+    description: |
+      - Worked on backend APIs with Python
+      - Fixed bugs in the React frontend
+      - Helped with deployments
+    skills_used:
+      - "Python"
+      - "React"
+      - "PostgreSQL"
+
+projects:
+  - name: "Task Manager"
+    description: "A simple task management app with React and Node"
+    url: "https://github.com/jondoe-dev/taskmanager"
+    technologies:
+      - "React"
+      - "Node.js"
+      - "MongoDB"
+
+  - name: "Weather App"
+    description: "Mobile weather app using React Native"
+    url: "https://github.com/jondoe-dev/weather-app"
+    technologies:
+      - "React Native"
+      - "OpenWeather API"
+
+common_answers:
+  why_interested_in_company: |
+    I saw the job posting and thought it looked cool. I like what you guys are building and want to be part of it.
+
+  why_interested_in_role: |
+    I've been coding for a few years now and want to get some real experience. This seems like a good fit for what I know.
+
+  greatest_strength: |
+    I pick things up pretty fast. Give me docs and I'll figure it out.
+
+  greatest_weakness: |
+    Sometimes I get too focused on one thing and lose track of time. Working on it.
+
+  where_see_yourself_5_years: |
+    Hopefully a solid engineer working on interesting stuff. Maybe leading a small team.
+
+  tell_me_about_yourself: |
+    CS student at Berkeley, graduating 2025. Been coding since high school. Did an internship last summer. Looking for my next opportunity.
+
+  salary_expectations: "Open to discuss"
+  how_did_you_hear: "LinkedIn"
+
+screening:
+  is_18_or_older: true
+  is_21_or_older: true
+  can_pass_background_check: true
+  can_pass_drug_test: true
+  has_criminal_record: false
+  has_reliable_transportation: true
+  has_valid_drivers_license: true
+  willing_to_travel: true
+  travel_percentage: "25"
+  can_work_full_time: true
+  can_work_part_time: true
+  can_work_weekends: false
+  can_work_nights: false
+  can_work_overtime: true
+  previously_applied_here: false
+  previously_employed_here: false
+  know_current_employees: false
+  agree_to_background_check: true
+  agree_to_drug_test: true
+  agree_to_terms_and_conditions: true
+  agree_to_privacy_policy: true
+  agree_to_arbitration: true
+  has_non_compete: false
+
+files:
+  resume: "config/resume.pdf"
+  cover_letter: ""
+  transcript: ""
+
+preferences:
+  job_types:
+    - "Internship"
+    - "Co-op"
+  roles:
+    - "Software Engineer"
+    - "Software Developer"
+    - "Backend Engineer"
+    - "Frontend Engineer"
+    - "Full Stack Engineer"
+  blacklist_companies: []
+  priority_companies:
+    - "Google"
+    - "Apple"
+    - "Microsoft"
+  blacklist_locations: []
+  max_applications_per_day: 50
+  max_applications_per_hour: 10
+  delay_between_applications_seconds: 30
+  use_ai_for_custom_questions: false  # Disable AI for testing
+  skip_login_required: true  # Skip jobs requiring login
+  headless: true  # Run browser without visible window
+
+# Test mode flag
+test_mode: true

@@ -1,0 +1,57 @@
+# Secrets - NEVER commit these
+config/secrets.yaml
+secrets.yaml
+*.env
+.env
+
+# Personal data
+config/master_config.yaml
+*.pdf
+*.doc
+*.docx
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+
+# Database & data
+data/*.db
+data/*.sqlite
+data/*.json
+data/screenshots/
+data/applications/
+data/workday_cookies/
+data/icims_cookies/
+data/workday_accounts.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+dist/
+build/
+*.egg-info/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/

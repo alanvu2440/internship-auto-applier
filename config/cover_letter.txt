@@ -1,0 +1,12 @@
+Dear Hiring Manager,
+
+I am writing to express my strong interest in the internship position at your company. As a Computer Science student at UC Berkeley with a GPA of 3.75, I am eager to apply my technical skills and passion for software development in a professional setting.
+
+Throughout my academic career, I have developed proficiency in various programming languages and frameworks, including Python, JavaScript, React, and Node.js. I have also gained hands-on experience through personal projects and coursework that have strengthened my problem-solving abilities and collaborative skills.
+
+I am particularly drawn to this opportunity because it aligns with my career goals and offers the chance to work on meaningful projects that make a real impact. I am a fast learner, detail-oriented, and committed to delivering high-quality work.
+
+I would welcome the opportunity to discuss how my skills and enthusiasm can contribute to your team. Thank you for considering my application.
+
+Best regards,
+Jon Doe
