@@ -70,8 +70,34 @@ class JobQueue:
                 notes TEXT,
                 FOREIGN KEY (job_id) REFERENCES jobs(id)
             );
+
+            CREATE TABLE IF NOT EXISTS email_responses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER,
+                message_id TEXT UNIQUE NOT NULL,
+                sender TEXT NOT NULL,
+                sender_email TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                received_at TEXT NOT NULL,
+                category TEXT NOT NULL DEFAULT 'other',
+                company_matched TEXT,
+                snippet TEXT,
+                raw_body_hash TEXT,
+                processed_at TEXT NOT NULL DEFAULT (datetime('now')),
+                notified INTEGER DEFAULT 0,
+                FOREIGN KEY (job_id) REFERENCES jobs(id)
+            );
         """)
         await self._db.commit()
+
+        # Add response_status column if missing (safe for existing DBs)
+        try:
+            await self._db.execute("SELECT response_status FROM jobs LIMIT 0")
+        except Exception:
+            await self._db.execute(
+                "ALTER TABLE jobs ADD COLUMN response_status TEXT DEFAULT NULL"
+            )
+            await self._db.commit()
         logger.info(f"Database initialized at {self.db_path}")
 
     async def close(self):
@@ -146,25 +172,47 @@ class JobQueue:
         logger.info(f"Added {added}/{len(jobs)} jobs to queue")
         return added
 
-    async def get_next_job(self, ats_type: Optional[ATSType] = None, max_attempts: int = 3) -> Optional[dict]:
+    async def get_job_by_url(self, url: str) -> Optional[dict]:
+        """Look up a job by its URL. Returns the job dict or None."""
+        cursor = await self._db.execute(
+            "SELECT * FROM jobs WHERE url = ?", (url,)
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+    async def add_job_url(self, url: str, ats_type: str) -> int:
+        """Insert a minimal job entry by URL and return its ID."""
+        cursor = await self._db.execute(
+            "INSERT INTO jobs (url, company, role, ats_type, status) VALUES (?, ?, ?, ?, 'pending')",
+            (url, "Unknown", "Unknown", ats_type),
+        )
+        await self._db.commit()
+        return cursor.lastrowid
+
+    async def get_next_job(self, ats_type: Optional[ATSType] = None, max_attempts: int = 3, url_patterns: list = None) -> Optional[dict]:
         """
         Get the next job to process.
 
         Args:
             ats_type: Optionally filter by ATS type
             max_attempts: Skip jobs that have failed this many times
+            url_patterns: List of SQL LIKE patterns to filter URLs (e.g. ['%amat.wd1%', '%parsons.wd5%'])
 
         Returns:
             Job dict or None if queue is empty
         """
-        # Prioritize: Greenhouse > Lever > Others (workday requires login)
+        # Prioritize: SmartRecruiters > Lever > Greenhouse > Ashby > Workday > Others
         ats_priority = """
             CASE ats_type
-                WHEN 'greenhouse' THEN 4
-                WHEN 'lever' THEN 3
-                WHEN 'smartrecruiters' THEN 2
-                WHEN 'ashby' THEN 1
-                ELSE 0
+                WHEN 'ashby' THEN 10
+                WHEN 'lever' THEN 9
+                WHEN 'greenhouse' THEN 8
+                WHEN 'smartrecruiters' THEN 7
+                WHEN 'bamboohr' THEN 5
+                WHEN 'jobvite' THEN 4
+                WHEN 'workday' THEN 2
+                WHEN 'icims' THEN 1
+                ELSE 3
             END
         """
 
@@ -184,7 +232,12 @@ class JobQueue:
             query += " AND ats_type = ?"
             params.append(ats_type.value)
 
-        query += f" ORDER BY {ats_priority} DESC, attempts ASC, priority DESC, created_at ASC LIMIT 1"
+        if url_patterns:
+            or_clauses = " OR ".join(["url LIKE ?" for _ in url_patterns])
+            query += f" AND ({or_clauses})"
+            params.extend(url_patterns)
+
+        query += f" ORDER BY priority DESC, {ats_priority} DESC, attempts ASC, created_at DESC LIMIT 1"
 
         cursor = await self._db.execute(query, params)
         row = await cursor.fetchone()

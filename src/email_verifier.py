@@ -273,6 +273,140 @@ class EmailVerifier:
 
         return "\n".join(body_parts)
 
+    def get_verification_link(
+        self,
+        sender_filter: Optional[str] = None,
+        subject_filter: Optional[str] = None,
+        link_pattern: Optional[str] = None,
+        max_age_seconds: int = 300,
+        timeout: int = 90,
+        poll_interval: int = 5,
+    ) -> Optional[str]:
+        """
+        Wait for and extract a verification link from a recent email.
+
+        Args:
+            sender_filter: Only check emails from this sender (substring match)
+            subject_filter: Only check emails with this in the subject
+            link_pattern: Regex pattern for the verification link (if None, matches common patterns)
+            max_age_seconds: Only check emails received within this many seconds
+            timeout: Max seconds to wait for the email
+            poll_interval: Seconds between IMAP checks
+
+        Returns:
+            The verification link URL, or None if not found within timeout
+        """
+        start_time = time.time()
+        logger.info(f"Waiting for verification link email (timeout={timeout}s, sender={sender_filter})")
+
+        while time.time() - start_time < timeout:
+            try:
+                link = self._check_for_link(sender_filter, subject_filter, link_pattern, max_age_seconds)
+                if link:
+                    logger.info(f"Found verification link: {link[:80]}...")
+                    self._disconnect()
+                    return link
+            except Exception as e:
+                logger.warning(f"Error checking email for link: {e}")
+                self._conn = None
+
+            time.sleep(poll_interval)
+
+        logger.warning(f"No verification link found within {timeout}s")
+        self._disconnect()
+        return None
+
+    def _check_for_link(
+        self,
+        sender_filter: Optional[str],
+        subject_filter: Optional[str],
+        link_pattern: Optional[str],
+        max_age_seconds: int,
+    ) -> Optional[str]:
+        """Check inbox for a verification link email."""
+        conn = self._connect()
+        conn.select("INBOX")
+
+        search_criteria = []
+        if sender_filter:
+            search_criteria.append(f'FROM "{sender_filter}"')
+        if subject_filter:
+            search_criteria.append(f'SUBJECT "{subject_filter}"')
+
+        if not search_criteria:
+            search_str = "ALL"
+        elif len(search_criteria) == 1:
+            search_str = search_criteria[0]
+        else:
+            search_str = "(" + " ".join(search_criteria) + ")"
+
+        status, message_ids = conn.search(None, search_str)
+        if status != "OK" or not message_ids[0]:
+            status, message_ids = conn.search(None, "ALL")
+            if status != "OK" or not message_ids[0]:
+                return None
+
+        ids = message_ids[0].split()
+        ids = ids[-15:]
+        ids.reverse()
+
+        cutoff_time = time.time() - max_age_seconds
+
+        # Default link patterns for verification emails
+        default_patterns = [
+            r'href=["\']?(https?://[^\s"\'<>]*(?:verif|confirm|activate|validate)[^\s"\'<>]*)',
+            r'(https?://[^\s"\'<>]*(?:verif|confirm|activate|validate)[^\s"\'<>]*)',
+        ]
+
+        for msg_id in ids:
+            try:
+                status, msg_data = conn.fetch(msg_id, "(RFC822)")
+                if status != "OK":
+                    continue
+
+                msg = email.message_from_bytes(msg_data[0][1])
+
+                date_str = msg.get("Date", "")
+                msg_date = email.utils.parsedate_to_datetime(date_str)
+                if msg_date.timestamp() < cutoff_time:
+                    continue
+
+                subject = self._decode_header_value(msg.get("Subject", ""))
+                sender = self._decode_header_value(msg.get("From", ""))
+
+                if sender_filter and sender_filter.lower() not in sender.lower():
+                    continue
+                if subject_filter and subject_filter.lower() not in subject.lower():
+                    continue
+
+                if not self._is_verification_email(subject, sender):
+                    continue
+
+                body = self._get_email_body(msg)
+                if not body:
+                    continue
+
+                # Try custom pattern first
+                if link_pattern:
+                    match = re.search(link_pattern, body, re.IGNORECASE)
+                    if match:
+                        return match.group(1) if match.lastindex else match.group(0)
+
+                # Try default patterns
+                for pattern in default_patterns:
+                    match = re.search(pattern, body, re.IGNORECASE)
+                    if match:
+                        url = match.group(1) if match.lastindex else match.group(0)
+                        # Clean up trailing punctuation
+                        url = url.rstrip('.,;:)"\'')
+                        return url
+
+            except Exception as e:
+                logger.debug(f"Error processing email {msg_id} for link: {e}")
+                continue
+
+        return None
+
     def test_connection(self) -> bool:
         """Test that Gmail IMAP connection works."""
         try:

@@ -186,23 +186,30 @@ class BaseHandler(ABC):
 
     async def solve_invisible_recaptcha(self, page: Page) -> bool:
         """
-        Solve invisible reCAPTCHA before form submission.
+        Solve invisible reCAPTCHA or hCaptcha before form submission.
 
         Called right before clicking submit to inject a valid token
-        for pages that use invisible reCAPTCHA / reCAPTCHA Enterprise.
+        for pages that use invisible reCAPTCHA / reCAPTCHA Enterprise / hCaptcha.
 
         Returns:
-            True if solved (or no reCAPTCHA present), False on failure
+            True if solved (or no CAPTCHA present), False on failure
         """
         if not self.captcha_solver or not self.captcha_solver.is_configured:
-            # No solver configured - let the form submit naturally
-            # Invisible reCAPTCHA may pass if browser looks human enough
             logger.debug("No CAPTCHA solver configured - submitting without token")
             return True
 
+        # Check for hCaptcha first (Lever uses hCaptcha)
+        hcaptcha_info = await self.captcha_solver.detect_hcaptcha(page)
+        if hcaptcha_info.get("hasHcaptcha"):
+            logger.info("hCaptcha detected - solving before submit...")
+            return await self.captcha_solver.solve_and_inject_hcaptcha(
+                page, hcaptcha_info.get("sitekey")
+            )
+
+        # Then check for reCAPTCHA
         recaptcha_info = await self.captcha_solver.detect_recaptcha_type(page)
         if not recaptcha_info.get("hasRecaptcha"):
-            logger.debug("No reCAPTCHA on page - proceeding with submit")
+            logger.debug("No CAPTCHA on page - proceeding with submit")
             return True
 
         logger.info("Invisible reCAPTCHA detected - solving before submit...")
@@ -210,21 +217,64 @@ class BaseHandler(ABC):
 
     async def is_application_complete(self, page: Page) -> bool:
         """Check if application was submitted successfully."""
+        page_text = await page.text_content("body") or ""
+        page_text_lower = page_text.lower()
+
+        # Check for FAILURE indicators first — these override any success text
+        failure_indicators = [
+            "no longer accepting",
+            "position is closed",
+            "position has been filled",
+            "no longer available",
+            "this job has expired",
+            "this job is no longer",
+            "flagged as possible spam",
+            "flagged as spam",
+            "suspicious activity",
+            "already applied",
+            "already submitted",
+            "you have already submitted an application",
+            "duplicate application",
+            "previously applied",
+            "application already exists",
+            "page not found",
+            "page you are looking for doesn't exist",
+            "page you are looking for doesn",
+            "job is no longer posted",
+            "this position is no longer",
+            "this role has been filled",
+            "this requisition has been closed",
+            "posting has been removed",
+            # Workday auth pages — never mark as success
+            "password requirements:",
+            "verify new password",
+            "create your candidate home account",
+        ]
+
+        for indicator in failure_indicators:
+            if indicator in page_text_lower:
+                logger.debug(f"is_application_complete: matched failure indicator '{indicator}'")
+                return False
+
         success_indicators = [
-            "thank you",
+            "thank you for applying",
+            "thanks for applying",
             "application received",
             "application submitted",
             "successfully applied",
             "we've received your application",
             "application complete",
+            "thank you for your interest in",
+            "thank you for submitting",
         ]
-
-        page_text = await page.text_content("body") or ""
-        page_text_lower = page_text.lower()
 
         for indicator in success_indicators:
             if indicator in page_text_lower:
                 return True
+
+        # Fallback: bare "thank you" only if page has few words (likely a confirmation page)
+        if "thank you" in page_text_lower and len(page_text_lower.split()) < 200:
+            return True
 
         return False
 
@@ -269,6 +319,52 @@ class BaseHandler(ABC):
             return "; ".join(errors[:3])  # Return first 3 errors max
         return None
 
+    async def check_required_fields_filled(self, page: Page) -> list:
+        """Check all required fields are filled before submit. Returns list of empty required field labels.
+
+        This is a SAFETY CHECK to prevent submitting incomplete forms,
+        which triggers spam/fraud detection on ATS platforms.
+        """
+        try:
+            empty = await page.evaluate('''() => {
+                const empty = [];
+                // Check text/email/tel inputs
+                const inputs = document.querySelectorAll(
+                    'input:not([type="hidden"]):not([type="file"]):not([type="radio"]):not([type="checkbox"]):not([type="submit"]), textarea'
+                );
+                for (const inp of inputs) {
+                    if (inp.getBoundingClientRect().width === 0) continue;
+                    let labelText = "";
+                    let p = inp.parentElement;
+                    for (let i = 0; i < 4 && p; i++) {
+                        const l = p.querySelector("label, legend, [class*='label']");
+                        if (l && l.textContent.trim()) { labelText = l.textContent.trim(); break; }
+                        p = p.parentElement;
+                    }
+                    const req = inp.required || inp.getAttribute("aria-required") === "true" || labelText.includes("*");
+                    if (req && (!inp.value || !inp.value.trim())) {
+                        empty.push(labelText || inp.name || inp.id || "?");
+                    }
+                }
+                // Check required file inputs (resume)
+                for (const inp of document.querySelectorAll('input[type="file"]')) {
+                    let labelText = "";
+                    let p = inp.parentElement;
+                    for (let i = 0; i < 5 && p; i++) {
+                        const l = p.querySelector("label, legend, [class*='label']");
+                        if (l && l.textContent.trim()) { labelText = l.textContent.trim(); break; }
+                        p = p.parentElement;
+                    }
+                    if ((labelText.includes("*") || /resume|cv/i.test(labelText)) && !inp.files.length) {
+                        empty.push(labelText || "Resume");
+                    }
+                }
+                return empty;
+            }''')
+            return empty or []
+        except Exception:
+            return []
+
     async def scroll_to_bottom(self, page: Page):
         """Scroll to bottom of page."""
         await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
@@ -304,6 +400,14 @@ class BaseHandler(ABC):
             "sorry, this job has expired",  # SmartRecruiters expired
             "the page you are looking for doesn't exist",  # Workday 404
             "page you are looking for doesn",  # Workday 404 variant
+            "something went wrong",  # Workday already-applied / error state
+            "this position is no longer",
+            "this role is no longer",
+            "job is no longer posted",
+            "posting has been removed",
+            "this opening has been filled",
+            "you have already submitted",
+            "already applied to this",
         ]
 
         try:
@@ -419,6 +523,225 @@ class BaseHandler(ABC):
             return False
 
         return True
+
+    async def wait_for_extension_autofill(self, page: Page, timeout: int = 8000) -> bool:
+        """Click Simplify Copilot autofill button and wait for it to fill fields.
+
+        Finds the Simplify widget, clicks the autofill button, waits for fields
+        to stabilize, then returns what was filled. The handler should only fill
+        fields that Simplify left empty afterward.
+
+        Returns:
+            True if extension was detected and filled at least one field
+        """
+        import asyncio
+        try:
+            # Give extension 2s to inject after navigation before we start polling
+            await asyncio.sleep(2)
+
+            # Scroll slightly so Simplify can see the page content and activate
+            try:
+                await page.evaluate("window.scrollBy(0, 200)")
+                await asyncio.sleep(0.5)
+                await page.evaluate("window.scrollTo(0, 0)")
+            except Exception:
+                pass
+
+            # Poll up to 4s for Simplify shadow root or icon to appear
+            simplify_host = None
+            simplify_selectors = [
+                'simplify-jobs-shadow-root',
+                '[class*="simplify-icon"]',
+                '#simplify-sidebar',
+                '[data-simplify]',
+                '[class*="simplify"]',
+            ]
+            for _ in range(8):
+                for sel in simplify_selectors:
+                    el = await page.query_selector(sel)
+                    if el:
+                        simplify_host = el
+                        logger.debug(f"Simplify detected via selector: {sel}")
+                        break
+                if simplify_host:
+                    break
+                await asyncio.sleep(0.5)
+
+            if not simplify_host:
+                logger.debug("Simplify extension not detected on page")
+                return False
+
+            # Debug: dump all simplify-related elements so we can find the right click target
+            debug_info = await page.evaluate("""() => {
+                const results = [];
+                // All elements with simplify in class/id/tag
+                for (const el of document.querySelectorAll('[class*="simplify"], [id*="simplify"], simplify-jobs-shadow-root')) {
+                    results.push({
+                        tag: el.tagName,
+                        id: el.id,
+                        className: el.className?.toString()?.substring(0, 100),
+                        text: el.textContent?.trim()?.substring(0, 50),
+                        hasShadow: !!el.shadowRoot
+                    });
+                }
+                return results;
+            }""")
+            for item in debug_info[:5]:
+                logger.info(f"[SIMPLIFY DOM] {item}")
+
+            logger.info("Simplify extension detected — clicking autofill button...")
+
+            # Snapshot fields BEFORE clicking
+            before_snapshot = await page.evaluate("""() => {
+                const result = {};
+                for (const el of document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="file"]), textarea, select')) {
+                    const key = el.id || el.name || el.getAttribute('data-qa') || el.placeholder || '';
+                    if (key) result[key] = el.value || '';
+                }
+                return result;
+            }""")
+
+            # The Simplify widget uses an OPEN shadow DOM — we can access it via element.shadowRoot.
+            # The widget shows a floating panel (resume match %). Clicking it opens the full sidebar.
+            # The Autofill button appears inside the sidebar's shadow root after panel opens.
+            autofill_clicked = False
+
+            async def _find_autofill_in_shadows() -> dict:
+                """Search ALL simplify shadow roots for Autofill button and click it."""
+                return await page.evaluate("""() => {
+                    const hosts = document.querySelectorAll('.simplify-jobs-shadow-root, [class*="simplify-jobs"]');
+                    const allTexts = [];
+                    for (const host of hosts) {
+                        const shadow = host.shadowRoot;
+                        if (!shadow) continue;
+                        const clickables = shadow.querySelectorAll('button, [role="button"], a');
+                        for (const el of clickables) {
+                            const text = el.textContent?.trim() || '';
+                            allTexts.push(text.substring(0, 60));
+                            if (/autofill|auto.?fill/i.test(text)) {
+                                el.click();
+                                return {found: true, clicked: text, method: 'shadow_autofill_text'};
+                            }
+                        }
+                    }
+                    return {found: false, allTexts: allTexts.slice(0, 15)};
+                }""")
+
+            async def _open_simplify_panel() -> bool:
+                """Click the Simplify widget to open the full panel."""
+                return await page.evaluate("""() => {
+                    const hosts = document.querySelectorAll('.simplify-jobs-shadow-root');
+                    for (const host of hosts) {
+                        const shadow = host.shadowRoot;
+                        if (!shadow) continue;
+                        const clickables = shadow.querySelectorAll('button, [role="button"], a');
+                        for (const el of clickables) {
+                            const rect = el.getBoundingClientRect();
+                            if (rect.width > 0 && rect.height > 0) {
+                                el.click();
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                }""")
+
+            # Step 1: Try to find Autofill button directly (in case panel is already open)
+            result = await _find_autofill_in_shadows()
+            logger.info(f"[SIMPLIFY] Initial scan: {result}")
+
+            if result.get('found'):
+                autofill_clicked = True
+                logger.info(f"Simplify Autofill clicked: '{result.get('clicked')}'")
+                await asyncio.sleep(2)
+            else:
+                # Step 2: Open the Simplify panel by clicking the widget, then search again
+                opened = await _open_simplify_panel()
+                logger.info(f"[SIMPLIFY] Panel open click: {opened}")
+                if opened:
+                    await asyncio.sleep(2)  # Wait for panel animation
+                    result2 = await _find_autofill_in_shadows()
+                    logger.info(f"[SIMPLIFY] Post-open scan: {result2}")
+                    if result2.get('found'):
+                        autofill_clicked = True
+                        logger.info(f"Simplify Autofill clicked (post-open): '{result2.get('clicked')}'")
+                        await asyncio.sleep(2)
+                    else:
+                        # Step 3: Playwright shadow-piercing selectors as fallback
+                        for autofill_sel in [
+                            '.simplify-jobs-shadow-root >> button:has-text("Autofill")',
+                            '.simplify-jobs-shadow-root >> [role="button"]:has-text("Autofill")',
+                            'button:has-text("Autofill")',
+                        ]:
+                            try:
+                                btn = page.locator(autofill_sel).first
+                                if await btn.count() > 0:
+                                    await btn.click(timeout=2000)
+                                    autofill_clicked = True
+                                    logger.info(f"Simplify Autofill clicked via Playwright: {autofill_sel}")
+                                    await asyncio.sleep(2)
+                                    break
+                            except Exception:
+                                pass
+
+            if not autofill_clicked:
+                logger.warning("Simplify detected but could NOT click Autofill — proceeding without")
+            else:
+                logger.info("Simplify triggered — waiting for fields to fill...")
+
+            # Poll until field values stabilize (Simplify fills asynchronously)
+            polls = timeout // 500
+            prev_filled = 0
+            stable_count = 0
+
+            for _ in range(polls):
+                await asyncio.sleep(0.5)
+                filled_count = await page.evaluate("""() => {
+                    let count = 0;
+                    for (const inp of document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="file"]), textarea')) {
+                        if (inp.value && inp.value.trim()) count++;
+                    }
+                    return count;
+                }""")
+                if filled_count > prev_filled:
+                    prev_filled = filled_count
+                    stable_count = 0
+                else:
+                    stable_count += 1
+                    if stable_count >= 3:  # 1.5s stable = done filling
+                        break
+
+            # Diff: find which fields Simplify actually changed
+            after_snapshot = await page.evaluate("""() => {
+                const result = {};
+                for (const el of document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="file"]), textarea, select')) {
+                    const key = el.id || el.name || el.getAttribute('data-qa') || el.placeholder || '';
+                    if (key) result[key] = el.value || '';
+                }
+                return result;
+            }""")
+
+            newly_filled = {k: v for k, v in after_snapshot.items()
+                           if v and not before_snapshot.get(k)}
+            changed = {k: v for k, v in after_snapshot.items()
+                      if v and before_snapshot.get(k) and before_snapshot[k] != v}
+
+            net_filled = len(newly_filled) + len(changed)
+            logger.info(f"Simplify filled {net_filled} fields ({len(newly_filled)} new, {len(changed)} updated)")
+
+            # Flag anything Simplify filled that looks wrong
+            for field_key, value in {**newly_filled, **changed}.items():
+                low_key = field_key.lower()
+                if 'email' in low_key and '@' not in value:
+                    logger.warning(f"[SIMPLIFY FLAG] email field '{field_key}' has bad value: '{value}'")
+                elif ('first' in low_key or 'last' in low_key or 'name' in low_key) and len(value) > 40:
+                    logger.warning(f"[SIMPLIFY FLAG] name field '{field_key}' looks long: '{value}'")
+
+            return net_filled > 0
+
+        except Exception as e:
+            logger.debug(f"Extension autofill check failed: {e}")
+            return False
 
     async def wait_for_navigation_stable(self, page: Page, timeout: int = 5000):
         """Wait for page to stabilize after navigation."""

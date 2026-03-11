@@ -7,6 +7,9 @@ Coordinates all components to automatically apply to jobs from SimplifyJobs.
 
 import asyncio
 import sys
+import os
+import threading
+import select
 from pathlib import Path
 from typing import Dict, Any, Optional
 import yaml
@@ -26,6 +29,99 @@ from application_tracker import ApplicationTracker
 from handlers import GreenhouseHandler, LeverHandler, WorkdayHandler, SmartRecruitersHandler, AshbyHandler, ICIMSHandler, GenericHandler
 from captcha_solver import CaptchaSolver
 from email_verifier import EmailVerifier
+from email_response_tracker import EmailResponseTracker
+from gemini_form_scanner import GeminiFormScanner
+from extension_manager import ExtensionManager
+
+
+class EscMonitor:
+    """Monitor ESC key to toggle between auto/manual mode.
+
+    Press ESC during automation -> bot pauses, you control the browser.
+    Press ESC during manual mode -> bot resumes with next job.
+    """
+
+    def __init__(self):
+        self.is_manual = False
+        self._stop = False
+        self._thread = None
+        self._loop = None
+        self._toggle_event = None
+        self._old_settings = None
+        self._fd = None
+
+    def start(self, loop):
+        if not sys.stdin.isatty():
+            return
+        import tty, termios
+        self._loop = loop
+        self._fd = sys.stdin.fileno()
+        self._old_settings = termios.tcgetattr(self._fd)
+        self._toggle_event = asyncio.Event()
+        tty.setcbreak(self._fd)
+        self._thread = threading.Thread(target=self._listen, daemon=True)
+        self._thread.start()
+        import atexit
+        atexit.register(self.stop)
+        logger.info("ESC monitor active — press ESC to toggle manual/auto mode")
+        sys.stdout.write(
+            "\r\n══════════════════════════════════════════════\r\n"
+            "  ESC MONITOR ACTIVE — Press ESC to pause bot\r\n"
+            "══════════════════════════════════════════════\r\n"
+        )
+        sys.stdout.flush()
+
+    def stop(self):
+        self._stop = True
+        if self._old_settings and self._fd is not None:
+            try:
+                import termios
+                termios.tcsetattr(self._fd, termios.TCSADRAIN, self._old_settings)
+            except Exception:
+                pass
+            self._old_settings = None
+
+    def _listen(self):
+        while not self._stop:
+            try:
+                r, _, _ = select.select([self._fd], [], [], 0.15)
+                if not r:
+                    continue
+                ch = os.read(self._fd, 1)
+                if ch == b'\x1b':
+                    # Distinguish standalone ESC from escape sequences (arrow keys)
+                    r2, _, _ = select.select([self._fd], [], [], 0.05)
+                    if r2:
+                        os.read(self._fd, 10)  # consume sequence
+                        continue
+                    # Standalone ESC — toggle
+                    self.is_manual = not self.is_manual
+                    if self._loop and self._toggle_event:
+                        self._loop.call_soon_threadsafe(self._toggle_event.set)
+                    if self.is_manual:
+                        sys.stdout.write(
+                            "\a\r\n  >>> MANUAL MODE — Browser is yours. Press ESC to resume bot. <<<\r\n"
+                        )
+                        logger.warning("ESC toggle: MANUAL MODE — bot paused, browser is yours")
+                    else:
+                        sys.stdout.write(
+                            "\a\r\n  >>> AUTO MODE — Bot resuming. Press ESC to take over. <<<\r\n"
+                        )
+                        logger.warning("ESC toggle: AUTO MODE — bot resuming")
+                    sys.stdout.flush()
+            except (OSError, ValueError):
+                break
+            except Exception:
+                continue
+
+    async def wait_for_toggle(self):
+        """Async: wait for next ESC press. Blocks forever if no terminal."""
+        if self._loop:
+            self._toggle_event = asyncio.Event()  # Fresh event — no stale state from prior ESC
+            await self._toggle_event.wait()
+        else:
+            # No terminal — block forever (never resolve)
+            await asyncio.Event().wait()
 
 
 class InternshipAutoApplier:
@@ -214,6 +310,14 @@ class InternshipAutoApplier:
         self.ai_answerer = AIAnswerer(api_key=api_key, secrets=self.secrets)
         self.ai_answerer.set_profile(self.config)
 
+        # Initialize Gemini form scanner (DOM + vision cleanup pass)
+        self.gemini_scanner = GeminiFormScanner(self.ai_answerer)
+        self._smart_mode = False  # Enabled via --smart flag
+        self._assist_mode = False  # Enabled via --assist flag
+        self._extension_path = None  # Set via --with-simplify flag
+        self._url_patterns = None  # URL LIKE patterns for filtering (e.g. workday accounts only)
+        self.esc_monitor = None  # Initialized when smart mode starts
+
         # Initialize application tracker
         self.tracker = ApplicationTracker(report_dir="logs")
 
@@ -274,7 +378,7 @@ class InternshipAutoApplier:
         if dry_run:
             logger.info("DRY RUN MODE: Forms will be filled but not submitted")
 
-    async def _on_new_jobs(self, readme_content: str):
+    async def _on_new_jobs(self, readme_content: str, priority: int = 100) -> int:
         """Handle new jobs from GitHub watcher."""
         logger.info("Processing new jobs from SimplifyJobs...")
 
@@ -289,19 +393,32 @@ class InternshipAutoApplier:
         new_jobs = [j for j in jobs if j.url not in existing_urls]
         logger.info(f"Found {len(new_jobs)} new jobs")
 
+        added = 0
         if new_jobs:
-            # Add new jobs with high priority
-            added = await self.queue.add_jobs(new_jobs, priority=100)
-            logger.info(f"Added {added} new jobs to queue")
+            added = await self.queue.add_jobs(new_jobs, priority=priority)
+            logger.info(f"Added {added} new jobs to queue (priority={priority})")
+        return added
 
     async def fetch_and_queue_jobs(self):
-        """Fetch current jobs and add to queue."""
-        logger.info("Fetching jobs from SimplifyJobs...")
+        """Fetch current jobs from all SimplifyJobs repos and add to queue."""
+        logger.info("Fetching jobs from all SimplifyJobs repos...")
 
-        # Get current README
-        _, content = await self.watcher.check_for_changes()
-        if content:
-            await self._on_new_jobs(content)
+        # Fetch from all repos (Summer2026, New-Grad, etc.)
+        repo_results = await self.watcher.fetch_all_repos()
+        total_added = 0
+        for repo_name, content, priority in repo_results:
+            if content:
+                added = await self._on_new_jobs(content, priority=priority)
+                total_added += added
+                logger.info(f"  {repo_name}: +{added} new jobs (priority={priority})")
+
+        if total_added == 0:
+            # Fallback to legacy single-repo fetch
+            _, content = await self.watcher.check_for_changes()
+            if content:
+                await self._on_new_jobs(content)
+
+        logger.info(f"Total new jobs added: {total_added}")
 
     async def apply_to_job(self, job_data: Dict[str, Any], job_index: int = 0, total_jobs: int = 0) -> bool:
         """Apply to a single job."""
@@ -338,24 +455,214 @@ class InternshipAutoApplier:
         fields_missed = {}
         questions_answered = {}
         error_msg = None
+        success = False
+        _close_tab = False  # Set True for skipped/closed jobs that don't need manual help
+        _timed_out = False   # Set True if job hit 5-min stall timeout
 
         # Create page
         try:
             await self.browser_manager.start()
             page = await self.browser_manager.create_stealth_page()
 
-            # Apply with timeout
+            # Apply with timeout — ESC cancels handler and enters manual mode
             import time as _time
             start_time = _time.time()
+            esc_interrupted = False
             try:
-                success = await asyncio.wait_for(
-                    handler.apply(page, url, job_data),
-                    timeout=300
+                handler_task = asyncio.create_task(
+                    asyncio.wait_for(handler.apply(page, url, job_data), timeout=300)
                 )
+                if self.esc_monitor and not self.esc_monitor.is_manual:
+                    esc_task = asyncio.create_task(self.esc_monitor.wait_for_toggle())
+                    done, pending = await asyncio.wait(
+                        {handler_task, esc_task}, return_when=asyncio.FIRST_COMPLETED
+                    )
+                    for t in pending:
+                        t.cancel()
+                        try:
+                            await t
+                        except (asyncio.CancelledError, Exception):
+                            pass
+                    if esc_task in done and self.esc_monitor.is_manual:
+                        logger.info("[ESC] User took over — entering manual mode")
+                        success = False
+                        esc_interrupted = True
+                    elif handler_task in done:
+                        success = handler_task.result()
+                    else:
+                        success = False
+                elif self.esc_monitor and self.esc_monitor.is_manual:
+                    # Already in manual mode before handler started — go straight to assist
+                    handler_task.cancel()
+                    try:
+                        await handler_task
+                    except (asyncio.CancelledError, Exception):
+                        pass
+                    success = False
+                    esc_interrupted = True
+                else:
+                    success = await handler_task
             except asyncio.TimeoutError:
                 success = False
-                error_msg = "Timed out after 300s"
-                logger.warning(f"Application timed out after 300s")
+                _timed_out = True
+                error_msg = "Timed out after 300s — tab left open for manual review"
+                logger.warning(f"Application timed out after 300s — leaving tab open for manual review")
+            except asyncio.CancelledError:
+                success = False
+                esc_interrupted = True
+
+            # SMART MODE: If handler failed and page is still up, run Gemini scanner
+            if not success and self._smart_mode and not error_msg and not esc_interrupted:
+                try:
+                    logger.info(f"[SMART] Running Gemini form scanner on {company}...")
+                    scan_result = await asyncio.wait_for(
+                        self.gemini_scanner.scan_and_fill(page, max_retries=1),
+                        timeout=60,
+                    )
+                    scanner_filled = scan_result.get("filled", {})
+                    scanner_empty = scan_result.get("still_empty", [])
+                    if scanner_filled:
+                        logger.info(f"[SMART] Scanner filled {len(scanner_filled)} fields, attempting submit...")
+                        # Try clicking submit button directly (don't re-run full handler)
+                        try:
+                            submit_selectors = [
+                                'button[type="submit"]',
+                                'input[type="submit"]',
+                                'button:has-text("Submit")',
+                                'button:has-text("Apply")',
+                                'button:has-text("Submit Application")',
+                                'a:has-text("Submit")',
+                            ]
+                            is_dry = self.config.get("preferences", {}).get("dry_run", False)
+                            if not is_dry:
+                                for sel in submit_selectors:
+                                    btn = await page.query_selector(sel)
+                                    if btn and await btn.is_visible():
+                                        await btn.scroll_into_view_if_needed()
+                                        await asyncio.sleep(0.5)
+                                        await btn.click()
+                                        await asyncio.sleep(3)
+                                        break
+                            # Check if submission succeeded
+                            success = await handler.is_application_complete(page)
+                            if success:
+                                logger.info(f"[SMART] Submit succeeded after scanner fill!")
+                        except Exception as retry_e:
+                            logger.warning(f"[SMART] Submit retry failed: {retry_e}")
+                    else:
+                        logger.info(f"[SMART] Scanner found nothing to fill ({len(scanner_empty)} still empty)")
+                except asyncio.TimeoutError:
+                    logger.warning("[SMART] Scanner timed out after 60s")
+                except Exception as scan_e:
+                    logger.warning(f"[SMART] Scanner error: {scan_e}")
+
+            # ASSIST MODE: If failed (or ESC interrupted), pause for user.
+            # Browser stays open. Bot watches for submit or next ESC.
+            if not success and (self._assist_mode or self._smart_mode or esc_interrupted) and not error_msg and sys.stdin.isatty():
+                try:
+                    # Show what's missing
+                    scan_info = await self.gemini_scanner.quick_scan(page)
+                    empty_required = scan_info.get("empty_required", [])
+                    page_errors = await handler.get_error_message(page)
+
+                    # NOTIFY — bell + macOS notification
+                    import subprocess
+                    sys.stdout.write("\a\a\a")
+                    sys.stdout.flush()
+                    try:
+                        subprocess.Popen([
+                            "osascript", "-e",
+                            f'display notification "Fill remaining fields for {company} - {role}" '
+                            f'with title "ASSIST MODE" sound name "Glass"'
+                        ])
+                    except Exception:
+                        pass
+
+                    sys.stdout.write("\r\n" + "=" * 60 + "\r\n")
+                    sys.stdout.write(f"  >>> YOUR TURN — {company} - {role}\r\n")
+                    sys.stdout.write("=" * 60 + "\r\n")
+                    sys.stdout.write(f"  URL: {url}\r\n")
+                    if page_errors:
+                        sys.stdout.write(f"  Form errors: {page_errors}\r\n")
+                    if empty_required:
+                        sys.stdout.write(f"  Empty required fields ({len(empty_required)}):\r\n")
+                        for fld in empty_required[:10]:
+                            sys.stdout.write(f"    - {fld['label'][:60]} ({fld['type']})\r\n")
+                    else:
+                        sys.stdout.write("  No obviously empty fields detected (may be custom components)\r\n")
+                    sys.stdout.write("\r\n")
+                    sys.stdout.write("  >>> Browser is OPEN. Fill fields + submit yourself.\r\n")
+                    sys.stdout.write("  >>> Press ESC when done to move to next job.\r\n")
+                    sys.stdout.write("  >>> Bot auto-detects submission too.\r\n")
+                    sys.stdout.write("=" * 60 + "\r\n")
+                    sys.stdout.flush()
+
+                    # Watch for submission on the page
+                    async def _watch_for_submit():
+                        original_url = page.url
+                        while True:
+                            await asyncio.sleep(3)
+                            try:
+                                if page.url != original_url:
+                                    await asyncio.sleep(2)
+                                    if await handler.is_application_complete(page):
+                                        return "auto_detected"
+                                if await handler.is_application_complete(page):
+                                    return "auto_detected"
+                            except Exception:
+                                return "page_closed"
+
+                    watch_task = asyncio.create_task(_watch_for_submit())
+                    tasks = {watch_task}
+
+                    if self.esc_monitor:
+                        # Wait for ESC (resume auto / skip job) OR submission detected
+                        esc_task = asyncio.create_task(self.esc_monitor.wait_for_toggle())
+                        tasks.add(esc_task)
+                    else:
+                        esc_task = None
+
+                    done, pending = await asyncio.wait(
+                        tasks, return_when=asyncio.FIRST_COMPLETED, timeout=600,
+                    )
+                    for task in pending:
+                        task.cancel()
+                        try:
+                            await task
+                        except (asyncio.CancelledError, Exception):
+                            pass
+
+                    if not done:
+                        logger.info(f"[ASSIST] Timed out waiting for {company}")
+                    elif watch_task in done:
+                        result = watch_task.result()
+                        if result == "auto_detected":
+                            success = True
+                            sys.stdout.write("\r\n  >>> SUBMISSION DETECTED! Screenshotting...\r\n")
+                            sys.stdout.flush()
+                            logger.info(f"[ASSIST] Auto-detected submission for {company}")
+                            try:
+                                subprocess.Popen([
+                                    "osascript", "-e",
+                                    f'display notification "Auto-detected submission for {company}!" '
+                                    f'with title "APPLIED" sound name "Hero"'
+                                ])
+                            except Exception:
+                                pass
+                        else:
+                            logger.info(f"[ASSIST] Page closed for {company}")
+                    elif esc_task and esc_task in done:
+                        if not self.esc_monitor.is_manual:
+                            # ESC pressed = back to auto mode, move to next job
+                            logger.info(f"[ASSIST] User pressed ESC — moving to next job")
+                            sys.stdout.write("  >>> Skipping to next job...\r\n")
+                            sys.stdout.flush()
+                        else:
+                            # Toggled back to manual? Wait for another ESC
+                            logger.info(f"[ASSIST] Still in manual mode for {company}")
+
+                except Exception as assist_e:
+                    logger.warning(f"[ASSIST] Error: {assist_e}")
 
             duration = round(_time.time() - start_time, 1)
 
@@ -473,6 +780,15 @@ class InternshipAutoApplier:
 
                 return True
             else:
+                # FILL-ONLY MODE (Ashby): form filled, browser stays open for manual submit
+                if handler_status == "fill_only":
+                    logger.info(f"[FILL-ONLY] {company} — {role}: Form filled, waiting for manual submit")
+                    # Don't mark as failed or skipped — leave as pending for retry
+                    # Browser stays open via the finally block
+                    app_record["status"] = "fill_only"
+                    self._save_application_log("fill_only", safe_company, safe_role, timestamp, app_record, screenshot_path)
+                    return False
+
                 # Check if handler already flagged as closed
                 is_closed = handler_status == "closed"
 
@@ -487,6 +803,7 @@ class InternshipAutoApplier:
                     await self.queue.mark_skipped(job_id, "Job closed/unavailable")
                     self.stats["skipped"] += 1
                     logger.info(f"[CLOSED] {company} — job is no longer available")
+                    _close_tab = True  # Nothing to manually fix
 
                     app_record["error"] = "Job closed/unavailable"
                     self._save_application_log("skipped", safe_company, safe_role, timestamp, app_record, screenshot_path)
@@ -503,6 +820,7 @@ class InternshipAutoApplier:
 
                 # Check if login required
                 if handler_status == "login_required":
+                    _close_tab = True  # Nothing to manually fix for login walls
                     # Workday and iCIMS have auth flows — retry up to 3 times
                     ats_with_auth = ("workday", "icims")
                     if ats_type.value in ats_with_auth and attempts < 2:
@@ -537,6 +855,7 @@ class InternshipAutoApplier:
                     except Exception:
                         pass
                 if captcha_blocked:
+                    _close_tab = True  # Nothing to manually fix for CAPTCHA
                     error_msg = "CAPTCHA blocked"
                     if attempts >= 2:
                         await self.queue.mark_skipped(job_id, "CAPTCHA blocked (max retries)")
@@ -558,6 +877,28 @@ class InternshipAutoApplier:
                             questions_answered=questions_answered
                         )
 
+                    return False
+
+                # SPAM FLAG HANDLING — never retry, skip all remaining jobs of this ATS
+                if handler_status == "spam_flagged":
+                    error_msg = "SPAM FLAGGED — email burned, skipping permanently"
+                    await self.queue.mark_skipped(job_id, error_msg)
+                    self.stats["skipped"] += 1
+                    logger.error(f"[SPAM] {company} — {role}: {error_msg}")
+                    # Skip ALL remaining jobs of this ATS type to prevent further damage
+                    ats_type_str = job_data.get("ats_type", "")
+                    if ats_type_str:
+                        skip_count = await self._skip_all_ats_jobs(ats_type_str, "Spam flagged — ATS disabled")
+                        logger.error(f"SAFETY: Skipped {skip_count} remaining {ats_type_str} jobs due to spam flag")
+
+                    app_record["error"] = error_msg
+                    self._save_application_log("failed", safe_company, safe_role, timestamp, app_record, screenshot_path)
+                    if self.tracker:
+                        self.tracker.record_application(
+                            job_data=job_data, status="spam_flagged",
+                            fields_filled=fields_filled, fields_missed=fields_missed,
+                            error_message=error_msg, questions_answered=questions_answered
+                        )
                     return False
 
                 # Get error message from page or handler status
@@ -611,7 +952,56 @@ class InternshipAutoApplier:
             return False
 
         finally:
-            await self.browser_manager.close()
+            if success and screenshot_path and Path(screenshot_path).exists():
+                # SUCCESS with screenshot — close this tab, move on
+                logger.info(f"[BROWSER] SUCCESS + SCREENSHOT — closing tab")
+                try:
+                    sys.stdout.write("\a\a\a")  # Triple bell
+                    sys.stdout.write(f"\r\n{'='*60}\r\n")
+                    sys.stdout.write(f"  >>> APPLIED SUCCESSFULLY — {company} — {role}\r\n")
+                    sys.stdout.write(f"  >>> Screenshot saved. Moving to next job.\r\n")
+                    sys.stdout.write(f"{'='*60}\r\n")
+                    sys.stdout.flush()
+                except Exception:
+                    pass
+                # Close successful tab to keep browser clean
+                try:
+                    if page and not page.is_closed():
+                        await page.close()
+                except Exception:
+                    pass
+                await asyncio.sleep(2)
+            elif _close_tab:
+                # SKIPPED/CLOSED job — close tab, nothing to manually fix
+                logger.info(f"[BROWSER] Skipped job — closing tab")
+                try:
+                    if page and not page.is_closed():
+                        await page.close()
+                except Exception:
+                    pass
+                await asyncio.sleep(1)
+            elif _timed_out:
+                # TIMEOUT — leave tab open for manual review, move on
+                logger.warning(f"[BROWSER] Tab left open for manual review (timed out): {company} — {role}")
+                try:
+                    sys.stdout.write(f"\r\n{'='*60}\r\n")
+                    sys.stdout.write(f"  MANUAL REVIEW NEEDED: {company} — {role}\r\n")
+                    sys.stdout.write(f"  Tab left open — fill and submit it yourself.\r\n")
+                    sys.stdout.write(f"  Moving to next job...\r\n")
+                    sys.stdout.write(f"{'='*60}\r\n")
+                    sys.stdout.flush()
+                except Exception:
+                    pass
+                await asyncio.sleep(1)
+            else:
+                # FAILURE — close tab and move on autonomously, no manual help needed
+                logger.warning(f"[BROWSER] Closing failed tab — moving on autonomously.")
+                try:
+                    if page and not page.is_closed():
+                        await page.close()
+                except Exception:
+                    pass
+                await asyncio.sleep(1)
 
     def _save_application_log(self, outcome: str, company: str, role: str, timestamp: str,
                               record: dict, screenshot_path=None):
@@ -659,6 +1049,11 @@ class InternshipAutoApplier:
         total_pending = await self.queue.get_pending_count()
         target = min(total_pending, max_applications) if max_applications > 0 else total_pending
 
+        # Start ESC monitor for manual/auto toggle (ALL modes)
+        if not self.esc_monitor and sys.stdin.isatty():
+            self.esc_monitor = EscMonitor()
+            self.esc_monitor.start(asyncio.get_event_loop())
+
         applications = 0
         preferences = self.config.get("preferences", {})
         max_per_hour = preferences.get("max_applications_per_hour", 10)
@@ -681,9 +1076,15 @@ class InternshipAutoApplier:
             except ValueError:
                 logger.warning(f"Unknown ATS filter: {ats_filter_str} — processing all")
 
+        consecutive_failures = 0
+        MAX_CONSECUTIVE_FAILURES = 3  # Stop after 3 failures in a row
+        open_manual_tabs = 0
+        max_open_tabs = getattr(self, '_max_open_tabs', 0)  # 0 = unlimited
+        self._failed_urls = []  # Track failed job URLs for manual tab opening
+
         while max_applications == 0 or applications < max_applications:
             # Get next job (with optional ATS filter)
-            job = await self.queue.get_next_job(ats_type=ats_filter_type)
+            job = await self.queue.get_next_job(ats_type=ats_filter_type, url_patterns=self._url_patterns)
             if not job:
                 logger.info("No more jobs in queue — all done!")
                 break
@@ -694,9 +1095,31 @@ class InternshipAutoApplier:
                 self.stats["skipped"] += 1
                 continue
 
+            # If in manual mode (ESC was pressed between jobs), wait for resume
+            if self.esc_monitor and self.esc_monitor.is_manual:
+                sys.stdout.write("\r\n  >>> PAUSED between jobs. Press ESC to resume bot. <<<\r\n")
+                sys.stdout.flush()
+                await self.esc_monitor.wait_for_toggle()
+                # Reset failure counter when user resumes — they chose to continue
+                consecutive_failures = 0
+
             # Apply with progress tracking
             applications += 1
+            applied_before = self.stats.get("applied", 0)
             await self.apply_to_job(job, job_index=applications, total_jobs=target)
+            applied_after = self.stats.get("applied", 0)
+
+            # Track consecutive failures — stop spamming if nothing works
+            if applied_after > applied_before:
+                consecutive_failures = 0  # Reset on success
+            else:
+                consecutive_failures += 1
+
+            if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                logger.warning(
+                    f"\n  {MAX_CONSECUTIVE_FAILURES} consecutive failures — skipping problematic jobs and continuing."
+                )
+                consecutive_failures = 0  # Reset and keep going — don't stop
 
             # Log progress summary
             pending = await self.queue.get_pending_count()
@@ -709,22 +1132,44 @@ class InternshipAutoApplier:
                 f"Remaining: {pending}"
             )
 
-            # Per-ATS safe rate limiting
-            # Researched limits: Ashby (fraud detection), Greenhouse (velocity monitoring),
-            # SmartRecruiters (DataDome), Lever (reCAPTCHA + email verification)
+            # Per-ATS rate limiting — each ATS has different bot detection
+            # Ashby: burned email, fill-only mode, still space out to look human
+            # Greenhouse: velocity monitoring, invisible reCAPTCHA
+            # Lever: reCAPTCHA Enterprise + email verification
+            # SmartRecruiters: DataDome anti-bot per page
+            # Workday: login walls, session-based detection
             ats_delays = {
-                "ashby": 120,          # 30/hour — fraud detection is aggressive
-                "greenhouse": 30,      # 120/hour — invisible reCAPTCHA, velocity monitoring
-                "lever": 60,           # 60/hour — reCAPTCHA Enterprise + email verify
-                "smartrecruiters": 90, # 40/hour — DataDome behavioral analysis
-                "workday": 45,         # 80/hour — login walls, no aggressive bot detection
-                "icims": 45,           # 80/hour — login walls
-                "unknown": 30,         # 120/hour — varies, play it safe
+                "ashby": 120,          # 30/hour — BURNED, max spacing to avoid further flags
+                "greenhouse": 30,      # 120/hour — highest success, keep fast
+                "lever": 90,           # 40/hour — heavy CAPTCHA, space out
+                "smartrecruiters": 60, # 60/hour — DataDome per-page checks
+                "workday": 90,         # 40/hour — login walls, session detection
+                "icims": 60,           # 60/hour — login walls
+                "unknown": 45,         # 80/hour — varies
             }
             job_ats = job.get("ats_type", "unknown")
-            ats_delay = ats_delays.get(job_ats, delay_seconds)
+            ats_delay = max(ats_delays.get(job_ats, delay_seconds), delay_seconds)
+
+            # Per-COMPANY spacing — don't hit the same company back-to-back
+            # Skip cooldown if job was closed/skipped (no form engagement occurred)
+            job_company = job.get("company", "").lower()
+            if not hasattr(self, '_last_company_time'):
+                self._last_company_time = {}
+            now = _time_loop.time()
+            handler = self.handlers.get(job.get("ats_type", "unknown"), self.handlers.get("unknown"))
+            last_handler_status = getattr(handler, "_last_status", "failed") if handler else "failed"
+            skip_company_cooldown = last_handler_status in ("closed", "skipped", "skipped_by_user", "login_required")
+            if job_company in self._last_company_time and not skip_company_cooldown:
+                since_last = now - self._last_company_time[job_company]
+                company_cooldown = 120  # 2 min minimum between same company
+                if since_last < company_cooldown:
+                    extra_wait = company_cooldown - since_last
+                    logger.info(f"Same company ({job_company}) cooldown — waiting {extra_wait:.0f}s extra")
+                    ats_delay += extra_wait
+            self._last_company_time[job_company] = now + ats_delay
+
             if max_applications == 0 or applications < max_applications:
-                logger.debug(f"Waiting {ats_delay}s before next application (ATS: {job_ats})...")
+                logger.debug(f"Waiting {ats_delay:.0f}s before next (ATS: {job_ats}, company: {job_company})...")
                 await asyncio.sleep(ats_delay)
 
             # Hourly rate limit check — dynamic pause based on elapsed time
@@ -738,6 +1183,11 @@ class InternshipAutoApplier:
                 # Reset batch timer for next hour window
                 _batch_start = _time_loop.time()
 
+        # Restore terminal
+        if self.esc_monitor:
+            self.esc_monitor.stop()
+            self.esc_monitor = None
+
         logger.info(f"\n{'='*60}")
         logger.info(f"APPLICATION LOOP COMPLETE")
         logger.info(f"  Applied:  {self.stats['applied']}")
@@ -750,6 +1200,21 @@ class InternshipAutoApplier:
             self.tracker.print_session_report()
             report_path = self.tracker.save_session_report()
             logger.info(f"Session report saved: {report_path}")
+
+    async def _skip_all_ats_jobs(self, ats_type: str, reason: str) -> int:
+        """Skip ALL pending jobs for a given ATS type. Used when spam is detected."""
+        try:
+            cursor = await self.queue._db.execute(
+                "UPDATE jobs SET status = 'skipped', error_message = ? WHERE ats_type = ? AND status IN ('pending', 'failed')",
+                (reason, ats_type),
+            )
+            await self.queue._db.commit()
+            count = cursor.rowcount
+            logger.warning(f"Skipped {count} {ats_type} jobs: {reason}")
+            return count
+        except Exception as e:
+            logger.error(f"Failed to skip {ats_type} jobs: {e}")
+            return 0
 
     def _should_skip_job(self, job: Dict[str, Any]) -> bool:
         """Check if job should be skipped based on preferences."""
@@ -824,18 +1289,27 @@ class InternshipAutoApplier:
         """Apply to a single URL."""
         logger.info(f"Applying to single URL: {url}")
 
-        # Detect ATS type
-        from job_parser import JobParser
-        parser = JobParser()
-        ats_type = parser.detect_ats(url)
+        # Look up job in database by URL first
+        existing = await self.queue.get_job_by_url(url)
+        if existing:
+            job_data = dict(existing)
+            logger.info(f"Found job in DB: {job_data.get('company', 'Unknown')} — {job_data.get('role', 'Unknown')} (id={job_data['id']})")
+        else:
+            # Not in DB — detect ATS type and create a temporary entry
+            from job_parser import JobParser
+            parser = JobParser()
+            ats_type = parser.detect_ats(url)
 
-        job_data = {
-            "id": 0,
-            "url": url,
-            "company": "Unknown",
-            "role": "Unknown",
-            "ats_type": ats_type.value,
-        }
+            # Insert into DB so we get a real ID
+            new_id = await self.queue.add_job_url(url, ats_type.value)
+            job_data = {
+                "id": new_id,
+                "url": url,
+                "company": "Unknown",
+                "role": "Unknown",
+                "ats_type": ats_type.value,
+            }
+            logger.info(f"Created new job entry (id={new_id})")
 
         await self.apply_to_job(job_data)
 
@@ -858,14 +1332,42 @@ class InternshipAutoApplier:
         print(f"In Progress:   {stats.get('in_progress', 0)}")
         print("=" * 50 + "\n")
 
+    def _open_manual_tabs(self, urls: list):
+        """Open URLs as tabs in a single Chrome window (survives process exit)."""
+        import subprocess
+        if not urls:
+            return
+        # Dedupe URLs
+        unique_urls = list(dict.fromkeys(urls))
+        # Save URLs to file for reference
+        urls_file = Path("data/manual_tabs.txt")
+        urls_file.write_text("\n".join(unique_urls))
+        logger.info(f"Saved {len(unique_urls)} unique URLs to {urls_file}")
+        # Open all URLs in one Chrome window using --new-window for first, rest are tabs
+        chrome_path = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        try:
+            subprocess.Popen(
+                [chrome_path, "--new-window"] + unique_urls,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            logger.info(f"Opened {len(unique_urls)} tabs in one Chrome window")
+        except Exception:
+            # Fallback: use 'open' command
+            for url in unique_urls:
+                try:
+                    subprocess.Popen(["open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                except Exception as e:
+                    logger.debug(f"Failed to open {url}: {e}")
+
     async def cleanup(self):
-        """Clean up resources."""
+        """Clean up resources. Browser stays open — user closes it manually."""
         if self.watcher:
             await self.watcher.close()
         if self.queue:
             await self.queue.close()
-        if self.browser_manager:
-            await self.browser_manager.close()
+        # DON'T close browser — tabs stay open for user to review/finish
+        # User closes the browser window themselves when done
+        logger.info("[CLEANUP] Resources released. Browser stays open — close it yourself when done.")
 
 
 # CLI Commands
@@ -896,7 +1398,12 @@ def run(max):
 @click.option("--dry-run", is_flag=True, help="Fill forms but don't submit")
 @click.option("--review", is_flag=True, help="Fill forms, pause for your review, YOU click submit")
 @click.option("--ats", default=None, help="Only process specific ATS type (greenhouse, lever, ashby, smartrecruiters)")
-def backfill(max, headless, dry_run, review, ats):
+@click.option("--smart", is_flag=True, help="Enable Gemini form scanner — catches empty fields after handler fill")
+@click.option("--with-simplify", is_flag=True, help="Load Simplify Copilot extension for boilerplate autofill")
+@click.option("--workday-accounts", is_flag=True, help="Only apply to Workday jobs where we already have accounts (slow mode)")
+@click.option("--assist", is_flag=True, help="Assist mode — bot fills what it can, YOU finish the rest, bot submits + screenshots")
+@click.option("--max-open-tabs", default=0, help="Max tabs to leave open for manual help (0=unlimited)")
+def backfill(max, headless, dry_run, review, ats, smart, with_simplify, workday_accounts, assist, max_open_tabs):
     """Apply to all existing jobs in the database."""
     async def main():
         app = InternshipAutoApplier()
@@ -919,11 +1426,154 @@ def backfill(max, headless, dry_run, review, ats):
                 app.config.setdefault("preferences", {})["ats_filter"] = ats_lower
                 logger.info(f"ATS FILTER: Only processing {ats_lower} jobs")
 
+            # Smart mode — enable Gemini form scanner as cleanup pass
+            if smart:
+                app._smart_mode = True
+                logger.info("SMART MODE — Gemini will scan for missed fields after each application")
+
+            # Assist mode — bot fills, user finishes, bot submits
+            if assist:
+                app._assist_mode = True
+                app._smart_mode = True  # Always use smart mode with assist
+                app.browser_manager.headless = False  # Must be headed for user interaction
+                logger.info("ASSIST MODE — bot fills what it can, YOU finish the rest, bot submits + screenshots")
+
+            # Simplify extension — load browser extension for autofill
+            if with_simplify:
+                ext_mgr = ExtensionManager()
+                ext_path = await ext_mgr.ensure_extension()
+                if ext_path:
+                    app._extension_path = ext_path
+                    app.browser_manager.extension_paths = [ext_path]
+                    app.browser_manager.headless = False  # Extensions require headed mode
+                    logger.info(f"SIMPLIFY EXTENSION loaded from {ext_path}")
+                else:
+                    logger.warning("Failed to load Simplify extension — continuing without it")
+
+            # Workday accounts only — filter to jobs where we have existing accounts + slow mode
+            if workday_accounts:
+                import json
+                accounts_path = Path("data/workday_accounts.json")
+                if accounts_path.exists():
+                    with open(accounts_path) as f:
+                        accounts = json.load(f)
+                    # Build URL LIKE patterns from tenant names (e.g. "amat.wd1" → "%amat.wd%")
+                    tenants = list(accounts.keys())
+                    url_patterns = [f"%{tenant.split('.')[0]}.wd%" for tenant in tenants]
+                    app._url_patterns = url_patterns
+
+                    # Count matching jobs
+                    import sqlite3 as _sq
+                    _conn = _sq.connect(app.db_path)
+                    _c = _conn.cursor()
+                    or_clauses = " OR ".join([f"url LIKE ?" for _ in url_patterns])
+                    _c.execute(f"SELECT COUNT(*) FROM jobs WHERE status='pending' AND ({or_clauses})", url_patterns)
+                    count = _c.fetchone()[0]
+                    _conn.close()
+
+                    # Force ATS filter to workday
+                    app.config.setdefault("preferences", {})["ats_filter"] = "workday"
+                    # Slow mode: 90s between apps, 4/hour max
+                    app.config["preferences"]["delay_between_applications_seconds"] = 90
+                    app.config["preferences"]["max_applications_per_hour"] = 4
+                    app.browser_manager.headless = False  # Headed mode — less suspicious
+
+                    logger.info(f"WORKDAY ACCOUNTS MODE — {len(tenants)} tenants, {count} pending jobs")
+                    logger.info(f"  Tenants: {', '.join(tenants)}")
+                    logger.info(f"  Rate: 4/hour, 90s delay (slow mode to avoid detection)")
+                else:
+                    logger.error(f"No accounts file found at {accounts_path}")
+                    return
+
+            # Max open tabs — pause when N tabs are open for manual help
+            if max_open_tabs > 0:
+                app._max_open_tabs = max_open_tabs
+                logger.info(f"MAX OPEN TABS: Will pause after {max_open_tabs} tabs left open for manual help")
+
             await app.backfill(max_applications=max)
         except KeyboardInterrupt:
             logger.info("\nGracefully stopping... saving session report.")
         finally:
             # Always save report on exit
+            if app.tracker and app.tracker.session_records:
+                app.tracker.print_session_report()
+                app.tracker.save_session_report()
+            await app.cleanup()
+
+            # If there are open tabs for manual help, keep browser alive
+            if app.browser_manager and (app.browser_manager._persistent_context or app.browser_manager._browser):
+                open_pages = []
+                if app.browser_manager._persistent_context:
+                    open_pages = [p for p in app.browser_manager._persistent_context.pages if not p.is_closed()]
+                if open_pages:
+                    try:
+                        sys.stdout.write(f"\r\n{'='*60}\r\n")
+                        sys.stdout.write(f"  DONE — {len(open_pages)} tab(s) still open for manual help\r\n")
+                        sys.stdout.write(f"  Fill out the remaining fields and submit manually.\r\n")
+                        sys.stdout.write(f"  Press Enter here when you're done to close browser.\r\n")
+                        sys.stdout.write(f"{'='*60}\r\n")
+                        sys.stdout.flush()
+                        await asyncio.get_event_loop().run_in_executor(None, input)
+                    except (EOFError, KeyboardInterrupt):
+                        pass
+                # Now close browser
+                await app.browser_manager.close()
+
+    asyncio.run(main())
+
+
+@cli.command()
+@click.option("--max", "-m", default=0, help="Max jobs to assist (0=all failed)")
+@click.option("--ats", default=None, help="Only assist specific ATS type")
+def assist(max, ats):
+    """Retry failed jobs with human assist — bot fills, YOU finish, bot submits + screenshots."""
+    async def main():
+        app = InternshipAutoApplier()
+        try:
+            await app.initialize()
+            app._assist_mode = True
+            app._smart_mode = True
+            app.browser_manager.headless = False
+
+            # Reset failed jobs back to pending for retry
+            ats_filter = ""
+            params = []
+            if ats:
+                ats_filter = " AND ats_type = ?"
+                params.append(ats.lower().strip())
+
+            cursor = await app.queue._db.execute(
+                f"SELECT COUNT(*) FROM jobs WHERE status = 'failed'{ats_filter}",
+                params,
+            )
+            failed_count = (await cursor.fetchone())[0]
+
+            if failed_count == 0:
+                print("No failed jobs to assist with!")
+                return
+
+            target = min(failed_count, max) if max > 0 else failed_count
+            print(f"\n{'='*60}")
+            print(f"  ASSIST MODE — {failed_count} failed jobs available")
+            print(f"  Will process: {target}")
+            print(f"  Bot fills what it can → YOU fix the rest → bot submits")
+            print(f"{'='*60}\n")
+
+            # Reset failed jobs to pending
+            await app.queue._db.execute(
+                f"UPDATE jobs SET status = 'pending', attempts = 0 WHERE status = 'failed'{ats_filter}",
+                params,
+            )
+            await app.queue._db.commit()
+            logger.info(f"Reset {failed_count} failed jobs to pending for assist")
+
+            if ats:
+                app.config.setdefault("preferences", {})["ats_filter"] = ats.lower().strip()
+
+            await app.run_application_loop(max_applications=target)
+        except KeyboardInterrupt:
+            logger.info("\nStopping assist mode...")
+        finally:
             if app.tracker and app.tracker.session_records:
                 app.tracker.print_session_report()
                 app.tracker.save_session_report()
@@ -936,7 +1586,9 @@ def backfill(max, headless, dry_run, review, ats):
 @click.argument("url")
 @click.option("--dry-run", is_flag=True, help="Fill form but don't submit")
 @click.option("--review", is_flag=True, help="Fill form, pause for your review, YOU click submit")
-def apply(url, dry_run, review):
+@click.option("--smart", is_flag=True, help="Enable Gemini form scanner")
+@click.option("--with-simplify", is_flag=True, help="Load Simplify Copilot extension")
+def apply(url, dry_run, review, smart, with_simplify):
     """Apply to a single job URL."""
     async def main():
         app = InternshipAutoApplier()
@@ -949,6 +1601,17 @@ def apply(url, dry_run, review):
             if review:
                 app.config.setdefault("preferences", {})["review_mode"] = True
                 logger.info("REVIEW MODE — form will be filled, then PAUSED for your review. YOU submit.")
+            if smart:
+                app._smart_mode = True
+                logger.info("SMART MODE enabled")
+            if with_simplify:
+                ext_mgr = ExtensionManager()
+                ext_path = await ext_mgr.ensure_extension()
+                if ext_path:
+                    app._extension_path = ext_path
+                    app.browser_manager.extension_paths = [ext_path]
+                    app.browser_manager.headless = False
+                    logger.info(f"SIMPLIFY EXTENSION loaded from {ext_path}")
             await app.apply_to_url(url)
         finally:
             await app.cleanup()
@@ -1242,6 +1905,53 @@ def review_questions():
     stats = verifier.get_stats()
     print(f"  Total verified: {stats['verified_answers']} | Pending: {stats['pending_review']}")
     print(f"{'=' * 62}\n")
+
+
+def _get_response_tracker() -> EmailResponseTracker:
+    """Create an EmailResponseTracker from secrets config."""
+    secrets_path = Path("config/secrets.yaml")
+    if not secrets_path.exists():
+        raise click.ClickException("config/secrets.yaml not found")
+
+    with open(secrets_path) as f:
+        secrets = yaml.safe_load(f) or {}
+
+    gmail_config = secrets.get("gmail", {})
+    gmail_email = gmail_config.get("email")
+    app_password = gmail_config.get("app_password")
+
+    if not gmail_email or not app_password:
+        raise click.ClickException(
+            "Gmail not configured in config/secrets.yaml. "
+            "Set gmail.email and gmail.app_password."
+        )
+
+    return EmailResponseTracker(
+        gmail_email=gmail_email,
+        app_password=app_password,
+    )
+
+
+@cli.command(name="check-responses")
+@click.option("--days", default=30, help="How many days back to search")
+@click.option("--limit", default=500, help="Max emails to fetch")
+@click.option("--category", default=None,
+              type=click.Choice(["rejection", "follow_up", "assessment",
+                                 "interview_invite", "offer", "other"]),
+              help="Filter by response category")
+def check_responses(days, limit, category):
+    """Scan Gmail for responses to your applications."""
+    tracker = _get_response_tracker()
+    tracker.scan(days=days, limit=limit, category_filter=category)
+
+
+@cli.command()
+@click.option("--interval", default=48, help="Hours between scans")
+@click.option("--days", default=7, help="Lookback window per scan cycle")
+def track(interval, days):
+    """Continuously monitor Gmail for application responses."""
+    tracker = _get_response_tracker()
+    tracker.track(interval_hours=interval, days=days)
 
 
 @cli.command()

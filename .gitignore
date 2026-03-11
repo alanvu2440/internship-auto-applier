@@ -41,6 +41,14 @@ data/applications/
 data/workday_cookies/
 data/icims_cookies/
 data/workday_accounts.json
+data/browser_profiles/
+data/extensions/
+data/interview_prep_*.md
+data/true_anomaly_*.md
+data/manual_tabs.txt
+
+# Misc
+=0.8.0
 
 # OS
 .DS_Store
@@ -55,3 +63,5 @@ build/
 .pytest_cache/
 .coverage
 htmlcov/
+src/data/
+data/question_knowledge_base.md

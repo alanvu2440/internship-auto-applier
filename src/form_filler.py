@@ -46,6 +46,9 @@ class FormFiller:
         ],
         "country": [
             r"^country$",
+            r"^country\s*of\s*(current\s*)?residence",
+            r"country.*residence",
+            r"^country\s*\*?$",
         ],
 
         # Online Profiles
@@ -1326,6 +1329,22 @@ class FormFiller:
         if "veteran" in label_lower:
             return "No"
 
+        # Low-code automation platforms (Zapier, Make, Workato, etc.)
+        if any(x in label_lower for x in ["zapier", "workato", "power automate", "make.com", "low-code", "low code", "no-code", "automation platform"]):
+            return "No"
+
+        # Built/deployed project with Python/JavaScript + AI/APIs
+        if ("built" in label_lower or "deployed" in label_lower) and ("project" in label_lower or "app" in label_lower) and any(x in label_lower for x in ["python", "javascript", "ai model", "integrat"]):
+            return "Yes"
+
+        # GPA threshold questions (e.g. "Is your GPA 3.0 or higher?")
+        import re as _re
+        gpa_match = _re.search(r"gpa.*?(\d+\.\d+)\s*or\s*higher", label_lower)
+        if gpa_match:
+            threshold = float(gpa_match.group(1))
+            actual_gpa = float(self._flat_config.get("education.gpa", "3.6"))
+            return "Yes" if actual_gpa >= threshold else "No"
+
         return None
 
     async def _fill_standard_select(self, page: Page, select_elem, value: str, label: str, filled: Dict) -> None:
@@ -1487,8 +1506,14 @@ class FormFiller:
                     return "Freshman"
             return "Senior"
 
-        # GPA dropdown
+        # GPA dropdown — if question asks "X.X or higher?" answer Yes/No, else return raw GPA
         if "gpa" in label_lower or "grade point" in label_lower:
+            import re as _re
+            threshold_match = _re.search(r"(\d+\.\d+)\s*or\s*higher", label_lower)
+            if threshold_match:
+                threshold = float(threshold_match.group(1))
+                actual_gpa = float(self._flat_config.get("education.gpa", "3.6"))
+                return "Yes" if actual_gpa >= threshold else "No"
             return self._flat_config.get("education.gpa", "3.6")
 
         # "Would you like to be considered for other openings/positions?"
@@ -1552,6 +1577,11 @@ class FormFiller:
                     "MO": "Missouri", "MI": "Michigan", "SC": "South Carolina",
                 }
                 return state_abbrev_map.get(state.upper(), state)
+
+        # Phone country code / dialing code dropdown
+        if any(x in label_lower for x in ["country code", "dialing code", "phone country", "phone prefix",
+                                            "countryphonecode", "country_phone_code"]):
+            return "United States +1"
 
         # Security clearance eligibility
         if "security clearance" in label_lower or "clearance" in label_lower:
@@ -1790,6 +1820,13 @@ class FormFiller:
         if any(x in label_lower for x in ["relative", "family member", "immediate family", "close personal"]):
             if any(x in label_lower for x in ["employed", "work", "practic", "use", "purchase"]):
                 return "No"
+
+        # Standalone "Source" dropdown (e.g., source--source, "How did you find this job?")
+        # Must come BEFORE "source of right to work" to avoid false match
+        import re as _re_source
+        if (("source" in label_lower and not any(x in label_lower for x in ["right to work", "income", "funding"])) and
+            _re_source.search(r'\b(source|where did you find|how did you find|job source)\b', label_lower)):
+            return self._flat_config.get("common_answers.how_did_you_hear", "LinkedIn")
 
         # "Source of your right to work" — this is a work authorization question, not "how did you hear"
         if "source" in label_lower and "right to work" in label_lower:

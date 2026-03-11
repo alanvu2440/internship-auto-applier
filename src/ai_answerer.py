@@ -230,6 +230,21 @@ Role: {role}
             key += f"|{'|'.join(sorted(o.lower().strip() for o in options))}"
         return key
 
+    def _sub_company(self, text: str) -> str:
+        """Replace [Company] placeholder with the current job's company name."""
+        company = self.job_context.get("company", "") if self.job_context else ""
+        if company and "[Company]" in text:
+            return text.replace("[Company]", company)
+        return text
+
+    def _to_template(self, text: str) -> str:
+        """Replace the current company name with [Company] before caching,
+        so the answer can be reused across companies."""
+        company = self.job_context.get("company", "") if self.job_context else ""
+        if company and company != "Unknown" and len(company) > 2:
+            return text.replace(company, "[Company]")
+        return text
+
     def _get_model(self):
         """Get or create Gemini model."""
         if not GENAI_AVAILABLE:
@@ -475,6 +490,12 @@ Role: {role}
             (r"(language|speak|fluent|bilingual|multilingual)",
              common.get("languages_spoken") or "English"),
 
+            # Bilingual yes/no questions (Korean/English, Spanish/English, etc.)
+            (r"(bilingual|fluent|proficient|speak).*(korean|japanese|mandarin|chinese|spanish|french|german|portuguese)",
+             "No"),
+            (r"(korean|japanese|mandarin|chinese|spanish|french|german|portuguese).*(bilingual|fluent|proficient|speak)",
+             "No"),
+
             # Recruiting events / career fairs
             (r"(attend|visit|participate).*(recruit|career|fair|event|campus)",
              common.get("attended_recruiting_events") or "No"),
@@ -536,7 +557,7 @@ Role: {role}
              common.get("how_did_you_hear") or "Online Job Board"),
 
             # Additional information / anything else to share
-            (r"(additional|anything else|other information|more.*share|like to add|like to share)",
+            (r"(additional\s+information|anything else|other information|more.*share|like to add|like to share|anything.*add)",
              common.get("additional_information")),
 
             # Experience with technology / describe your experience
@@ -570,6 +591,18 @@ Role: {role}
             # Date available for work / start date
             (r"date\s*(available|you.*(can|could|are).*(start|begin|available))\s*(for work|to work|to start)?",
              availability.get("earliest_start_date") or "05/19/2026"),
+
+            # Generic "From" / "To" date fields (work experience / education)
+            # "To (Actual or Expected)" — graduation or end date
+            (r"^to\s*\(actual\s*(or|/)\s*expected\)",
+             education.get("graduation_date", "May 2026")),
+            # Bare "To" — end date of most recent experience or education graduation
+            (r"^to\s*\*?\s*$",
+             experience.get("end_date", "") or education.get("graduation_date", "May 2026")),
+            # Bare "From" — start date of most recent experience or education
+            (r"^from\s*\*?\s*$",
+             experience.get("start_date", "October 2025") if experience else
+             education.get("start_date", "August 2021")),
 
             # Days and times available to work
             (r"(list|what).*(days|times).*(available|can).*(work|you)",
@@ -611,9 +644,28 @@ Role: {role}
             (r"(year|how long|how many).*(professional|work|industry).*(experience)",
              skills.get("years_of_professional_experience") or "1"),
 
+            # "Do you have X years of non-internship/industry experience?" type questions
+            # These appear as yes/no dropdowns asking about minimum experience thresholds
+            (r"(have|do you have|do you).*(2|two|3|three|4|four|5|five|\d+).*(year|yr).*(industry|non.?intern|professional|work).*(experience)",
+             "No"),
+            (r"(industry|non.?intern|professional|work).*(experience).*(2|two|3|three|4|four|5|five|\d+).*(year|yr)",
+             "No"),
+
             # Number of prior internships / co-ops
             (r"how many.*(internship|co.?op|intern)",
              skills.get("num_prior_internships") or "1"),
+
+            # GPA threshold yes/no questions (e.g. "Is your GPA 3.0 or higher?")
+            (r"(gpa|grade.*point).*(3\.0|3\.5|2\.5|minimum|or higher|at least|above)",
+             "Yes"),
+            (r"(is|do you have).*(gpa|grade.*point).*(3|above|higher|minimum)",
+             "Yes"),
+
+            # Built/deployed a project with Python/JavaScript/AI questions
+            (r"(built|deployed|created).*(project|app|application).*(python|javascript|js|ai|ml|api|llm|integrat)",
+             "Yes"),
+            (r"(project|app|application).*(python|javascript|js|ai|ml|api|integrat).*(built|deployed|created)",
+             "Yes"),
 
             # GPA (including "G. P. A." format)
             (r"(gpa|g\.?\s*p\.?\s*a|grade point|cumulative|academic.*gpa)",
@@ -678,6 +730,10 @@ Role: {role}
             (r"(able|available).*(meet|attend|start).*(required|program|date)",
              "Yes"),
 
+            # "Which available location(s) on the posting are you open to?" — answer with city, state
+            (r"(available|which).*(location|city|office).*(posting|open|interest|prefer)",
+             f"{personal.get('city', '')}, {personal.get('state', '')}".strip(", ")),
+
             # Current location / where are you located
             (r"(current|where).*(locat|city|based|live|reside)",
              f"{personal.get('city', '')}, {personal.get('state', '')}".strip(", ")),
@@ -716,11 +772,70 @@ Role: {role}
 
             # Veteran status (text field version)
             (r"veteran.*(status|u\.s\.|military)",
-             "I am not a veteran"),
+             "I am not a protected veteran"),
 
             # Disability (text field version)
             (r"disab.*(status|identify|condition)",
-             "I do not wish to answer"),
+             "No, I don't have a disability"),
+
+            # UK diversity monitoring questions (mthree, Peregrine, UK employers)
+            # Country of current residence
+            (r"country.*(current|your|of).*(residence|residing|live|based)",
+             personal.get("country", "United States")),
+            (r"country.*residence",
+             personal.get("country", "United States")),
+
+            # Racial/ethnic groups (UK)
+            (r"racial.*(ethnic|group|describe|identify)",
+             "Prefer not to say"),
+            (r"ethnic.*(group|background|describe|racial)",
+             "Prefer not to say"),
+
+            # Impairment / health condition (UK disability monitoring)
+            (r"(impairment|long.?term).*(health|condition|consider|have)",
+             "No"),
+            (r"consider.*(yourself|have).*(impairment|disability|health condition)",
+             "No"),
+
+            # Neurodiverse condition
+            (r"neurodiverse|neurodiversity|neurodivers",
+             "No"),
+            (r"(adhd|autism|dyspraxia|dyslexia).*(condition|diagnos|have)",
+             "No"),
+
+            # UK school type (socioeconomic)
+            (r"type.*(school|secondary).*(attend|11|16|ages)",
+             "Prefer not to say"),
+            (r"school.*(attend|type).*(11|16|secondary|ages)",
+             "Prefer not to say"),
+
+            # Free school meals (UK socioeconomic)
+            (r"free.*(school|meals|lunch)",
+             "No"),
+            (r"eligible.*(free.*school|school.*meals)",
+             "No"),
+
+            # Parents university degree (UK socioeconomic)
+            (r"(parent|guardian).*(university|degree|higher.*education|attend.*univ)",
+             "Yes"),
+            (r"(university|degree).*(parent|guardian|mother|father)",
+             "Yes"),
+
+            # Household earner occupation at age 14 (UK socioeconomic)
+            (r"occupation.*(household|earner|parent|guardian).*(14|age|when you were)",
+             "Prefer not to say"),
+            (r"(household|earner|main earner).*(occupation|job|work).*(14|age)",
+             "Prefer not to say"),
+
+            # UK employment status / location questions
+            (r"employment.*(status|category|type)",
+             "Full-time student"),
+            (r"(please indicate|indicate|describe).*(employment|working|work status|currently)",
+             "Full-time student"),
+            (r"(currently|where).*(located|based|living).*(united kingdom|UK|england|scotland|wales|northern ireland)",
+             "Not Applicable"),
+            (r"(united kingdom|UK).*(currently|located|based|living|where)",
+             "Not Applicable"),
 
             # Company name (current/previous employer)
             (r"^company\s*name\*?$",
@@ -914,6 +1029,10 @@ Role: {role}
         # Check text patterns
         for pattern, answer in patterns:
             if answer is not None and re.search(pattern, q):
+                if answer == "__SKIP__":
+                    # Explicitly skip this question (don't fill it)
+                    logger.info(f"Config pattern skip: '{question[:40]}...' -> skip (no military/govt)")
+                    return "__SKIP__"
                 # Convert booleans to Yes/No strings
                 if isinstance(answer, bool):
                     answer = "Yes" if answer else "No"
@@ -936,17 +1055,38 @@ Role: {role}
              work_auth.get("us_work_authorized", True)),
             (r"(citizen|permanent resident).*(us|united states|u\.s)",
              work_auth.get("us_citizen", False) or work_auth.get("us_permanent_resident", False)),
-            (r"(require|need|will you|would you|if hired).*(sponsor|visa|h1b|h-1b|now or in the future|employment authorization)",
+            (r"(require|need|will you|would you|if hired).*(sponsor|visa|h1b|h-1b|now or in the future|employment authorization|immigration)",
              work_auth.get("require_sponsorship_now", False) or work_auth.get("require_sponsorship_future", False)),
             # ITAR / export compliance asking about needing sponsorship
             (r"(itar|export).*(require|need|sponsor|additional)", False),
             # Export compliance: citizen/resident of Cuba, Iran, North Korea, Syria, Crimea
             (r"(citizen|resident|national origin).*(cuba|iran|north korea|syria|crimea)", False),
 
-            # Previously worked/employed at company
-            (r"(previously|have you).*(worked|employed).*(for|at|with)", False),
+            # Military service — "have you ever served in the military"
+            (r"(served|serving|service).*(military|armed forces|us army|us navy|us air force)",
+             False),  # Not a veteran
+            (r"(military|armed forces).*(served|service|veteran|member)",
+             False),
+            # Military/Government status follow-up fields — skip if no service
+            # "Current Military Status" with options like Active/Retired/Other
+            (r"current military status", "__SKIP__"),
+            (r"military (dates? of service|branch|rank)", "__SKIP__"),
+            (r"terminal leave date", "__SKIP__"),
+            (r"current government status", "__SKIP__"),
+            (r"government (start|end|separation) date", "__SKIP__"),
+            (r"government separation", "__SKIP__"),
+            (r"transition leave date", "__SKIP__"),
+            (r"military service.*(from|to|start|end)\b", "__SKIP__"),
+            # Government employee/service — "served as a government employee"
+            (r"(served|serving).*(government|federal|state).*(employee|official|capacity)", False),
+            (r"(government|federal).*(employee|service|official|capacity)", False),
+
+            # Previously worked/employed/applied at company
+            (r"(previously|have you|ever).*(worked|employed|applied|been an? .* employee|been an employee).*(for|at|with|work)?", False),
             # Family member at company
             (r"(family member|relative).*(work|employ)", False),
+            # Commitments to another employer
+            (r"(commitment|obligation).*(employer|organization|company|interfere)", False),
 
             # Age
             (r"(18|eighteen).*(year|age|older)", screening.get("is_18_or_older", True)),
@@ -968,6 +1108,9 @@ Role: {role}
 
             # Travel
             (r"(willing|able).*(travel)", screening.get("willing_to_travel", True)),
+
+            # Managing direct reports (internship = no)
+            (r"(managing|manage|supervise).*(direct report|employee|staff|people)", False),
 
             # Employment history at this company
             (r"employment history", False),
@@ -1007,6 +1150,9 @@ Role: {role}
             (r"(relative|family).*(employ|work)",
              screening.get("know_current_employees", False)),
             (r"(have any).*(relative|family|friend)",
+             screening.get("know_current_employees", False)),
+            # "Are you a relative or close friend of any [company]..."
+            (r"(are you a|are you).*(relative|friend)",
              screening.get("know_current_employees", False)),
 
             # Full time / part time
@@ -1129,11 +1275,18 @@ Role: {role}
             (r"(subject.*specific authority|regulatory.*order|government.*sanction)",
              False),
 
-            # Security clearance eligibility
-            (r"(eligible|hold|have|possess).*(security clearance|dod|department of defense)",
-             True),  # US citizen = eligible
-            (r"security clearance",
-             True),
+            # Security clearance — "do you currently hold/have" → has_security_clearance (false)
+            (r"(currently|do you).*(hold|have|possess).*(security clearance|clearance)",
+             work_auth.get("has_security_clearance", False)),
+            # Security clearance — "have you ever held" → has_security_clearance (false)
+            (r"(ever|previously).*(held|had|possess).*(security clearance|clearance)",
+             work_auth.get("has_security_clearance", False)),
+            # Security clearance — "eligible/able/willing to obtain" → can_obtain_clearance (true)
+            (r"(eligible|able|willing|obtain|get).*(security clearance|clearance|dod|department of defense)",
+             work_auth.get("can_obtain_clearance", True)),
+            # Generic security clearance — only for "can/able/willing" contexts
+            (r"(can|able|willing).*(security clearance|clearance)",
+             work_auth.get("can_obtain_clearance", True)),
 
             # Currently bound by agreements
             (r"(bound|subject).*(non.?compete|employment agreement|restrictive)",
@@ -1165,9 +1318,9 @@ Role: {role}
             (r"(18|21).*(years|year).*(old|age|or older)",
              True),
 
-            # Export control / ITAR / defense articles
+            # Export control / ITAR / defense articles — affirm eligibility (US citizen)
             (r"(export control|itar|ear|defense article|defense service|import defense)",
-             False),
+             True),
             (r"(declared ineligible|denied.*export|denied.*license).*(contract|import|export|defense)",
              False),
 
@@ -1194,6 +1347,9 @@ Role: {role}
 
         for pattern, value in yes_no_patterns:
             if re.search(pattern, q):
+                if value == "__SKIP__":
+                    logger.info(f"Config pattern skip (yes_no): '{question[:40]}...' -> skip")
+                    return "__SKIP__"
                 answer = "Yes" if value else "No"
                 logger.info(f"Config fallback (yes/no): '{question[:40]}...' -> {answer}")
                 return answer
@@ -1250,7 +1406,7 @@ Role: {role}
         # Check answer cache before calling AI
         cache_key = self._cache_key(question, field_type, options)
         if cache_key in self._answer_cache:
-            cached = self._answer_cache[cache_key]
+            cached = self._sub_company(self._answer_cache[cache_key])
             if max_length and len(cached) > max_length:
                 cached = cached[:max_length-3] + "..."
             logger.info(f"Cache hit: '{question[:40]}...' -> '{cached[:40]}...'")
@@ -1258,10 +1414,25 @@ Role: {role}
             self._log_to_kb(question, cached, "cache", field_type=field_type)
             return cached
 
-        # Try AI if available
+        # Try generic fallback BEFORE AI — most questions match config patterns
+        generic_answer, generic_confidence = self._generate_generic_answer_with_confidence(question, field_type, max_length)
+        if generic_confidence >= 60:
+            # Good config-based answer — skip AI entirely
+            source = "config_fallback" if generic_confidence >= 85 else "config_fallback_broad"
+            logger.info(f"Config fallback (confidence={generic_confidence}): '{question[:50]}...' -> '{generic_answer[:50]}...'")
+            self.session_answers.append({"question": question, "answer": generic_answer, "source": source, "confidence": generic_confidence})
+            self._log_to_kb(question, generic_answer, source, field_type=field_type)
+            # Cache it for instant reuse next time
+            self._answer_cache[cache_key] = self._to_template(generic_answer)
+            self._save_answer_cache()
+            return generic_answer
+
+        # Generic confidence is low (0) — try AI for a better answer
         if not GENAI_AVAILABLE or not self._ai_available or not self.api_key or not isinstance(self.api_key, str):
-            logger.warning(f"AI unavailable, no config match for: '{question[:50]}...'")
-            return self._generate_generic_answer(question, field_type, max_length)
+            logger.warning(f"AI unavailable, using low-confidence generic for: '{question[:50]}...'")
+            self.session_answers.append({"question": question, "answer": generic_answer, "source": "generic_fallback", "confidence": 0})
+            self._log_to_kb(question, generic_answer, "generic_fallback", field_type=field_type)
+            return generic_answer
 
         for attempt in range(self._retry_count):
             try:
@@ -1326,7 +1497,7 @@ Role: {role}
                     answer = answer[:max_length-3] + "..."
 
                 # Cache the answer for future use
-                self._answer_cache[cache_key] = answer
+                self._answer_cache[cache_key] = self._to_template(answer)
                 self._save_answer_cache()
                 self._track_ai_call(is_backup=self._using_backup, input_len=len(full_prompt), output_len=len(answer))
 
@@ -1368,7 +1539,7 @@ Role: {role}
                                 answer = answer.text.strip()
                                 if max_length and len(answer) > max_length:
                                     answer = answer[:max_length-3] + "..."
-                                self._answer_cache[cache_key] = answer
+                                self._answer_cache[cache_key] = self._to_template(answer)
                                 self._save_answer_cache()
                                 self._track_ai_call(is_backup=True, input_len=len(full_prompt), output_len=len(answer))
                                 logger.info(f"Backup AI answered: '{question[:50]}...' -> '{answer[:50]}...'")
@@ -1382,20 +1553,20 @@ Role: {role}
                 logger.error(f"AI answering failed: {e}")
                 break
 
-        # Fallback to generic answer — queue for human review
-        fallback = self._generate_generic_answer(question, field_type, max_length)
-        self.session_answers.append({"question": question, "answer": fallback, "source": "generic_fallback"})
-        self._log_to_kb(question, fallback, "generic_fallback", field_type=field_type)
+        # AI failed — use the generic answer we already computed (confidence was 0)
+        logger.info(f"AI failed, using generic fallback: '{question[:50]}...' -> '{generic_answer[:50]}...'")
+        self.session_answers.append({"question": question, "answer": generic_answer, "source": "generic_fallback", "confidence": 0})
+        self._log_to_kb(question, generic_answer, "generic_fallback", field_type=field_type)
         self.verifier.queue_for_review(
             question=question,
-            proposed_answer=fallback,
+            proposed_answer=generic_answer,
             source="generic_fallback",
             confidence=QuestionVerifier.CONFIDENCE_GENERIC,
             field_type=field_type,
             options=options,
             company=self.job_context.get("company", ""),
         )
-        return fallback
+        return generic_answer
 
     def _match_option_from_config(self, question: str, options: List[str]) -> Optional[str]:
         """Try to match an option based on config values and question context."""
@@ -1413,9 +1584,24 @@ Role: {role}
                 for i, opt in enumerate(options_lower):
                     if "yes" in opt:
                         return options[i]
+                # If no "yes" option, look for "permanently authorized" type options
+                for i, opt in enumerate(options_lower):
+                    if "permanent" in opt or "authorized" in opt:
+                        return options[i]
 
-        # Sponsorship questions
-        if any(x in q for x in ["sponsor", "visa", "h1b", "h-1b"]):
+        # Work permit type / authorization type (conditional follow-up)
+        if any(x in q for x in ["work permit", "permit type", "authorization type", "work authorization"]):
+            if work_auth.get("us_citizen", False) or work_auth.get("us_work_authorized", True):
+                for i, opt in enumerate(options_lower):
+                    if "permanent" in opt or "citizen" in opt or "authorized" in opt:
+                        return options[i]
+                # Fallback: first non-"select one" that isn't "temporary"
+                for i, opt in enumerate(options_lower):
+                    if "select" not in opt and "temporary" not in opt and opt.strip():
+                        return options[i]
+
+        # Sponsorship / immigration support questions
+        if any(x in q for x in ["sponsor", "visa", "h1b", "h-1b", "immigration"]):
             need_sponsor = work_auth.get("require_sponsorship_now", False)
             for i, opt in enumerate(options_lower):
                 if need_sponsor and "yes" in opt:
@@ -1439,15 +1625,32 @@ Role: {role}
         # Gender
         if "gender" in q:
             gender = demographics.get("gender", "Prefer not to say")
+            gender_lower = gender.lower()
+            # Exact match first (avoid "male" matching "female")
             for i, opt in enumerate(options_lower):
-                if gender.lower() in opt or "prefer not" in opt or "decline" in opt:
+                if opt.strip() == gender_lower or opt.strip() == f"{gender_lower} ":
+                    return options[i]
+            # Word-boundary match
+            import re as _re
+            for i, opt in enumerate(options_lower):
+                if _re.search(r'\b' + _re.escape(gender_lower) + r'\b', opt):
+                    return options[i]
+            # Fallback to "prefer not to say"
+            for i, opt in enumerate(options_lower):
+                if "prefer not" in opt or "decline" in opt:
                     return options[i]
 
         # Ethnicity
         if any(x in q for x in ["ethnic", "race", "racial"]):
             ethnicity = demographics.get("ethnicity", "Prefer not to say")
+            race = demographics.get("race", "Asian")
+            # Try exact match first ("East Asian"), then broader ("Asian")
+            for candidate in [ethnicity.lower(), race.lower()]:
+                for i, opt in enumerate(options_lower):
+                    if candidate in opt:
+                        return options[i]
             for i, opt in enumerate(options_lower):
-                if ethnicity.lower() in opt or "prefer not" in opt or "decline" in opt:
+                if "prefer not" in opt or "decline" in opt:
                     return options[i]
 
         # Hispanic/Latino
@@ -1462,17 +1665,38 @@ Role: {role}
                 if "no" in opt or "prefer not" in opt or "decline" in opt:
                     return options[i]
 
-        # Veteran status
-        if "veteran" in q:
+        # Veteran status — detect by question text OR option text mentioning "veteran"
+        options_joined = " ".join(options_lower)
+        if "veteran" in q or ("veteran" in options_joined and ("government contractor" in q or "protected" in options_joined)):
+            # Priority 1: "I am not a protected veteran" (exact non-veteran answer)
             for i, opt in enumerate(options_lower):
-                if "not" in opt or "i am not" in opt:
+                if "i am not a protected veteran" in opt:
                     return options[i]
+            # Priority 2: "I am not a veteran" or similar clear negation
             for i, opt in enumerate(options_lower):
-                if "no" in opt:
+                if opt.strip().startswith("i am not") and "veteran" in opt:
+                    return options[i]
+            # Priority 3: Any option with "not a veteran" that doesn't start with "I identify"
+            for i, opt in enumerate(options_lower):
+                if "not" in opt and "veteran" in opt and not opt.strip().startswith("i identify"):
+                    return options[i]
+            # Priority 4: Generic "no" or "not" option
+            for i, opt in enumerate(options_lower):
+                if "not" in opt or "no" in opt:
                     return options[i]
 
-        # Disability
-        if "disab" in q:
+        # Polygraph / security clearance type — default to "None" option
+        if "polygraph" in q or "clearance" in q and "type" in q:
+            for i, opt in enumerate(options_lower):
+                if opt.strip() == "none" or "no clearance" in opt or "never" in opt:
+                    return options[i]
+
+        # Disability — detect by question text OR option text mentioning "disability"
+        # User confirmed: NO disability. Prioritize "No" answers over "prefer not to say"
+        if "disab" in q or "disab" in options_joined:
+            for i, opt in enumerate(options_lower):
+                if "do not have" in opt or "no, i don" in opt or opt.strip() == "no":
+                    return options[i]
             for i, opt in enumerate(options_lower):
                 if "do not want" in opt or "don't want" in opt or "don't wish" in opt or "i do not wish" in opt:
                     return options[i]
@@ -1544,6 +1768,20 @@ Role: {role}
                 if "no" in opt:
                     return options[i]
 
+        # Government/defense contractor negative questions — always "No"
+        neg_keywords = [
+            "performed services", "performed work",
+            "suspended or debarred", "been suspended", "proposed for debarment",
+            "private sector organization",
+            "worked for u.s. government", "seta", "a&as",
+            "found liable", "found guilty",
+            "citizen of another country", "dual citizen",
+        ]
+        if any(kw in q for kw in neg_keywords):
+            for i, opt in enumerate(options_lower):
+                if "no" in opt:
+                    return options[i]
+
         # Have you completed an internship before
         if any(x in q for x in ["complet", "done", "had", "previous"]) and "internship" in q:
             for i, opt in enumerate(options_lower):
@@ -1583,8 +1821,14 @@ Role: {role}
             if options:
                 return options[0]
 
+        # General consent / agree / acknowledge questions
+        if any(x in q for x in ["consent", "agree", "acknowledge", "do you accept"]):
+            for i, opt in enumerate(options_lower):
+                if any(x in opt for x in ["yes", "i agree", "i accept", "agree", "accept", "i consent"]):
+                    return options[i]
+
         # Phone/SMS/text consent questions
-        if any(x in q for x in ["consent", "sms", "text message", "phone number"]) and any(x in q for x in ["receive", "communication", "follow", "contact"]):
+        if any(x in q for x in ["sms", "text message", "phone number"]) and any(x in q for x in ["receive", "communication", "follow", "contact"]):
             for i, opt in enumerate(options_lower):
                 if "yes" in opt:
                     return options[i]
@@ -1644,8 +1888,8 @@ Role: {role}
                 if target_year in options[i]:
                     return options[i]
 
-        # Previously applied
-        if "previously" in q and "applied" in q:
+        # Previously applied / ever applied
+        if ("previously" in q and "applied" in q) or ("ever" in q and "applied" in q) or "applied for work" in q:
             for i, opt in enumerate(options_lower):
                 if "no" in opt:
                     return options[i]
@@ -1674,17 +1918,43 @@ Role: {role}
                 if "no" in opt:
                     return options[i]
 
-        # Relatives / family working at company
-        if any(x in q for x in ["relative", "family"]) and any(x in q for x in ["work", "employ"]):
+        # Relatives / family / friends at company
+        if any(x in q for x in ["relative", "family", "close friend"]) and any(x in q for x in ["work", "employ", "parsons", "company", "organization", "subcontract", "supplier", "vendor", "client"]):
+            for i, opt in enumerate(options_lower):
+                if "no" in opt:
+                    return options[i]
+        # Broader: "are you a relative or close friend of any [Company]"
+        if ("relative" in q or "close friend" in q) and "are you" in q:
             for i, opt in enumerate(options_lower):
                 if "no" in opt:
                     return options[i]
 
-        # Previously employed at company
-        if "previously" in q and ("employed" in q or "worked" in q):
+        # Previously employed / ever worked at company
+        if (("previously" in q and ("employed" in q or "worked" in q))
+            or ("ever" in q and ("worked" in q or "employed" in q or "employee" in q or "been" in q))
+            or "worked for" in q):
             for i, opt in enumerate(options_lower):
                 if "no" in opt:
                     return options[i]
+
+        # Military service dropdown (including "Current Military Status" which has no "No" option)
+        if any(x in q for x in ["military", "armed forces", "served"]) and any(x in q for x in ["ever", "current", "have you", "status"]):
+            # Check if "No" option exists
+            for i, opt in enumerate(options_lower):
+                if "no" in opt:
+                    return options[i]
+            # No "No" option (e.g. Current Military Status: Active/Terminal Leave/Retired/Other)
+            # Return __SKIP__ to tell handler to leave this field alone
+            return "__SKIP__"
+
+        # Desired salary / annualized salary range — pick lowest for intern
+        if any(x in q for x in ["desired annualized", "salary range", "desired salary", "salary expectation", "compensation range", "what is your desired salary"]):
+            # Pick the lowest non-"Select One" range (intern-level)
+            for i, opt in enumerate(options_lower):
+                if "select" in opt or opt == "":
+                    continue
+                # Return first real option (usually lowest range)
+                return options[i]
 
         # Desired hourly rate — pick the highest range
         if "hourly rate" in q or ("hourly" in q and "rate" in q) or "desired rate" in q:
@@ -1740,6 +2010,191 @@ Role: {role}
                 if "bachelor" in opt:
                     return options[i]
 
+        # Security clearance — "Do you currently hold a clearance?" with descriptive options
+        if "clearance" in q and ("hold" in q or "have" in q or "currently" in q or "possess" in q):
+            work_auth = self.config.get("work_authorization", {})
+            if not work_auth.get("has_security_clearance", False):
+                # Priority 1: "No, Never Held" or "No, I do not" (best answer for no clearance)
+                for i, opt in enumerate(options_lower):
+                    if "never" in opt and ("held" in opt or "clearance" in opt):
+                        return options[i]
+                # Priority 2: "do not have" WITHOUT "held" (never held before)
+                for i, opt in enumerate(options_lower):
+                    if "do not have" in opt and "held" not in opt:
+                        return options[i]
+                # Priority 3: "do not" or "not" + "clearance" (without "held in the past")
+                for i, opt in enumerate(options_lower):
+                    if ("do not" in opt or "not" in opt) and "clearance" in opt and "held" not in opt and "past" not in opt:
+                        return options[i]
+                # Priority 4: Exact "No"
+                for i, opt in enumerate(options_lower):
+                    if opt.strip() == "no":
+                        return options[i]
+                # Priority 5: "No" as first word
+                for i, opt in enumerate(options_lower):
+                    if opt.strip().startswith("no"):
+                        return options[i]
+                # Priority 6: Any option with "do not" (even if "held in past")
+                for i, opt in enumerate(options_lower):
+                    if "do not" in opt:
+                        return options[i]
+
+        # Security clearance level — if we don't have clearance, pick "None" or first option
+        if "clearance" in q and any(x in q for x in ["highest", "level", "type", "previously obtained"]):
+            work_auth = self.config.get("work_authorization", {})
+            if not work_auth.get("has_security_clearance", False):
+                for i, opt in enumerate(options_lower):
+                    if "none" in opt or "n/a" in opt or "not applicable" in opt or "never" in opt:
+                        return options[i]
+                # If no "none" option and all are clearance levels, select first (required field)
+                for i, opt in enumerate(options_lower):
+                    if "select" not in opt and opt.strip():
+                        return options[i]
+
+        # Government employment history — "employment history with the U.S. Government"
+        if ("government" in q and "employ" in q) or ("federal" in q and "employ" in q):
+            for i, opt in enumerate(options_lower):
+                if "never" in opt and ("employ" in opt or "government" in opt):
+                    return options[i]
+            # Fallback: option with "no" or "not"
+            for i, opt in enumerate(options_lower):
+                if opt.strip().startswith("i have never") or opt.strip().startswith("no") or opt.strip().startswith("not"):
+                    return options[i]
+
+        # Commitments / obligations to another employer
+        if "commitment" in q and ("employer" in q or "organization" in q or "company" in q):
+            for i, opt in enumerate(options_lower):
+                if "no" in opt:
+                    return options[i]
+
+        # Name prefix (Mr./Mrs./Ms./Miss)
+        if q.strip().rstrip("*. ") == "prefix" or ("prefix" in q and len(q) < 30):
+            for i, opt in enumerate(options_lower):
+                if "mr." in opt or opt.strip() == "mr":
+                    return options[i]
+
+        # Name suffix (Jr./Sr./II/III) — skip (optional)
+        if q.strip().rstrip("*. ") == "suffix" or ("suffix" in q and len(q) < 30):
+            # Don't select anything — suffix is optional
+            return None
+
+        # Notice period — pick shortest option (for internship applicants not currently employed)
+        if "notice period" in q:
+            for i, opt in enumerate(options_lower):
+                if "15" in opt or "immediate" in opt or "none" in opt or "0" in opt:
+                    return options[i]
+            # Pick first non-placeholder option
+            for i, opt in enumerate(options_lower):
+                if opt.strip() != "select one" and opt.strip() != "" and opt.strip() != "select":
+                    return options[i]
+
+        # "Indicate the entity you work for" — not employed, pick "N/A" or first option
+        if "entity you work for" in q or "indicate the entity" in q:
+            for i, opt in enumerate(options_lower):
+                if "n/a" in opt or "not applicable" in opt or "none" in opt or "other" in opt:
+                    return options[i]
+
+        # School/academic status questions (final year, second to last year, etc.)
+        if "best describes your status" in q or ("which" in q and "status" in q and "school" in q):
+            grad_date = self._get_grad_date()
+            import re as _re_stat
+            from datetime import datetime as _dt_stat
+            ym = _re_stat.search(r'20\d{2}', str(grad_date))
+            gy = int(ym.group()) if ym else _dt_stat.now().year
+            diff = gy - _dt_stat.now().year
+            if diff <= 0:
+                # Already graduated
+                for i, opt in enumerate(options_lower):
+                    if "earned" in opt or "past 12" in opt or "graduated" in opt:
+                        return options[i]
+            elif diff == 1:
+                # Graduating next year = final year
+                for i, opt in enumerate(options_lower):
+                    if "final year" in opt or "last year" in opt:
+                        return options[i]
+            else:
+                # 2+ years left = second to last or earlier
+                for i, opt in enumerate(options_lower):
+                    if "second to last" in opt or "earlier" in opt:
+                        return options[i]
+            # Fallback to "final year"
+            for i, opt in enumerate(options_lower):
+                if "final" in opt:
+                    return options[i]
+
+        # Graduation term/season (Spring, Summer, Fall, Winter)
+        if ("term" in q or "when" in q or "season" in q) and ("graduat" in q or "finish" in q or "complet" in q):
+            grad_date = self._get_grad_date()
+            # Determine season from grad date
+            grad_lower = str(grad_date).lower()
+            if "may" in grad_lower or "june" in grad_lower or "apr" in grad_lower:
+                target = "spring"
+            elif "dec" in grad_lower or "nov" in grad_lower or "oct" in grad_lower:
+                target = "fall"
+            elif "aug" in grad_lower or "jul" in grad_lower or "sep" in grad_lower:
+                target = "summer"
+            else:
+                target = "spring"  # Default to spring
+            for i, opt in enumerate(options_lower):
+                if target in opt:
+                    return options[i]
+
+        # Type of opportunity (Internship / New College Graduate / etc.)
+        if "type of opportunity" in q or ("looking for" in q and "opportun" in q):
+            for i, opt in enumerate(options_lower):
+                if "intern" in opt:
+                    return options[i]
+
+        # Major / Field of study dropdown (not the typeahead — preset values)
+        if any(x in q for x in ["major", "field of study"]):
+            education = self.config.get("education", [{}])
+            if isinstance(education, list) and education:
+                fos = education[0].get("field_of_study", "Software Engineering").lower()
+                # Try exact match first
+                for i, opt in enumerate(options_lower):
+                    if fos in opt:
+                        return options[i]
+                # Try individual words (e.g. "software" matches "Software Engineering")
+                for word in fos.split():
+                    if len(word) > 3:
+                        for i, opt in enumerate(options_lower):
+                            if word in opt:
+                                return options[i]
+                # Fallback: try related CS fields
+                related = ["computer science", "engineering", "software", "information technology", "computer"]
+                for r in related:
+                    for i, opt in enumerate(options_lower):
+                        if r in opt:
+                            return options[i]
+
+        # Questions where "No" is almost always the correct answer for an applicant
+        no_patterns = [
+            "currently work for",           # "Do you currently work for X company?"
+            "serve as a director",          # "Do you serve as a director, officer..."
+            "serve as an officer",
+            "serve as a consultant",
+            "government official",          # "Are you a government official?"
+            "non-compete",                  # "Do you have a non-compete?"
+            "relative.*work",               # "Do you have a relative who works here?"
+            "family.*work",
+            "currently employed",           # "Are you currently employed by..."
+            "previously worked for",        # Covered by radio too, but catch dropdown version
+        ]
+        if any(p in q for p in no_patterns):
+            for i, opt in enumerate(options_lower):
+                if opt.strip() == "no" or ("no" in opt and len(opt) < 20):
+                    return options[i]
+
+        # Option-based matching: when question text is generic but options reveal context
+        # Work authorization options (e.g. "permanently authorized" / "temporary work permit")
+        has_perm_auth = any("authorized" in opt and "permanent" in opt for opt in options_lower)
+        has_temp_permit = any("temporary" in opt and ("permit" in opt or "work" in opt) for opt in options_lower)
+        if has_perm_auth or has_temp_permit:
+            if work_auth.get("us_citizen", False) or work_auth.get("us_work_authorized", True):
+                for i, opt in enumerate(options_lower):
+                    if "permanent" in opt:
+                        return options[i]
+
         # Yes/No questions without specific patterns - generic catch-all (MUST BE LAST)
         yes_no_keywords = ["do you", "are you", "can you", "will you", "have you", "is your", "would you"]
         if any(k in q for k in yes_no_keywords):
@@ -1750,7 +2205,21 @@ Role: {role}
 
         return None
 
-    def _generate_generic_answer(self, question: str, field_type: str, max_length: Optional[int] = None) -> str:
+    def _generate_generic_answer_with_confidence(self, question: str, field_type: str, max_length: Optional[int] = None) -> tuple:
+        """Try generic answer and return (answer, confidence).
+
+        Confidence levels:
+          - 85: specific keyword match from config data (high quality, skip AI)
+          - 60: broader keyword match or reasonable default (use if AI unavailable)
+          - 0:  ultimate catch-all (should try AI first)
+        """
+        answer = self._generate_generic_answer(question, field_type, max_length, _return_confidence=True)
+        if isinstance(answer, tuple):
+            return answer
+        # All early returns from _generate_generic_answer are specific matches → confidence 85
+        return answer, 85
+
+    def _generate_generic_answer(self, question: str, field_type: str, max_length: Optional[int] = None, _return_confidence: bool = False):
         """Generate a generic answer when AI and config both fail."""
         q = question.lower().strip()
 
@@ -1759,6 +2228,9 @@ Role: {role}
         demographics = self.config.get("demographics", {})
         personal = self.config.get("personal_info", {})
         company = self.job_context.get("company", "your company")
+
+        # Confidence tracking: 85 = specific keyword match, 60 = broader match, 0 = ultimate catch-all
+        _confidence = 85
 
         # ── CRITICAL: For SELECT/DROPDOWN fields, NEVER return long text ──
         # Dropdowns need short answers: Yes/No, a name, a number, etc.
@@ -1773,9 +2245,13 @@ Role: {role}
                          "ai usage policy", "usage policy"]
             no_words = ["employed with", "been employed", "previously employed",
                         "worked at", "worked for", "previously worked",
+                        "ever been an", "ever been a",
+                        "ever worked", "ever served",
+                        "currently serving or have you",
                         "employment history",
                         "non-compete", "restrictive", "criminal", "convicted",
                         "felony", "debarred", "ineligible", "disqualif", "excluded",
+                        "suspended or debarred", "been suspended",
                         "require sponsor", "need sponsor", "require any",
                         "additional sponsor", "sponsorship for",
                         "refer you", "referred you", "someone refer",
@@ -1784,7 +2260,13 @@ Role: {role}
                         "certif", "license",
                         "cuba", "iran", "north korea", "syria", "crimea",
                         "national origin one of", "itar",
-                        "tobacco", "smok", "nicotine", "vape"]
+                        "tobacco", "smok", "nicotine", "vape",
+                        "performed services", "performed work",
+                        "private sector", "bid, proposal",
+                        "citizen of another country",
+                        "currently employ", "ever been employ",
+                        "found liable", "found guilty",
+                        "seta", "a&as"]
             if any(w in q for w in no_words):
                 logger.info(f"Generic fallback (select→No): '{question[:40]}...' -> 'No'")
                 return "No"
@@ -1818,18 +2300,20 @@ Role: {role}
                 return "I am not a protected veteran"
             if any(x in q for x in ["disab"]):
                 logger.info(f"Generic fallback (select→disability): '{question[:40]}...'")
-                return "I do not wish to answer"
+                return "No, I don't have a disability"
             # Demographic checkbox labels — individual checkboxes from EEO forms
             # e.g. "Female", "Asian", "American Indian or Alaskan Native: Asian"
             # Match against config demographics to only check correct ones
             user_gender = demographics.get("gender", "").lower()  # "male"
-            user_ethnicity = demographics.get("ethnicity", "").lower()  # "asian"
+            user_ethnicity = demographics.get("ethnicity", "").lower()  # "east asian"
+            user_race = demographics.get("race", "").lower()  # "asian" (broader category)
 
             # Race/ethnicity labels that appear as checkboxes
             race_labels = [
                 "american indian", "alaskan native", "native hawaiian",
                 "pacific islander", "black or african", "white",
                 "hispanic", "latino", "latina", "two or more races", "asian",
+                "east asian", "south asian", "southeast asian",
             ]
             # Gender labels
             gender_labels = ["female", "male", "non-binary", "transgender",
@@ -1840,21 +2324,24 @@ Role: {role}
 
             if is_race_checkbox:
                 # Check if this specific race matches the user
-                # Handle compound labels like "American Indian or Alaskan Native: Asian"
-                if user_ethnicity and user_ethnicity in q:
-                    # But NOT if it's a compound like "American Indian: Asian"
-                    # where the primary category isn't ours
-                    parts = q.split(":")
-                    if len(parts) > 1:
-                        # Compound label — check if the sub-label matches
-                        sub = parts[-1].strip()
-                        if user_ethnicity in sub:
-                            logger.info(f"Generic fallback (race→Yes, matches '{user_ethnicity}'): '{question[:40]}...'")
-                            return "Yes"
+                # Try both specific ethnicity ("east asian") and broad race ("asian")
+                matches_user = False
+                for user_val in [user_ethnicity, user_race]:
+                    if user_val and user_val in q:
+                        # Handle compound labels like "American Indian or Alaskan Native: Asian"
+                        parts = q.split(":")
+                        if len(parts) > 1:
+                            sub = parts[-1].strip()
+                            if user_val in sub:
+                                matches_user = True
+                                break
+                            # Compound mismatch — don't match
                         else:
-                            logger.info(f"Generic fallback (race→No, compound mismatch): '{question[:40]}...'")
-                            return "No"
-                    logger.info(f"Generic fallback (race→Yes, matches '{user_ethnicity}'): '{question[:40]}...'")
+                            matches_user = True
+                            break
+
+                if matches_user:
+                    logger.info(f"Generic fallback (race→Yes, matches '{user_ethnicity or user_race}'): '{question[:40]}...'")
                     return "Yes"
                 logger.info(f"Generic fallback (race→No): '{question[:40]}...'")
                 return "No"
@@ -1868,7 +2355,9 @@ Role: {role}
                 return "No"
             # If we still can't figure it out for a dropdown, return "Yes" as safe default
             # (better than a paragraph of text that won't match any option)
-            logger.warning(f"Generic fallback (select→Yes default): '{question[:40]}...' -> 'Yes'")
+            logger.warning(f"Generic fallback (select→Yes default, confidence=60): '{question[:40]}...' -> 'Yes'")
+            if _return_confidence:
+                return "Yes", 60
             return "Yes"
 
         # URL fields - MUST be checked first before generic fallbacks
@@ -1895,8 +2384,23 @@ Role: {role}
             return ""  # Return empty rather than garbage for URL fields
 
         # Twitter / X URL — return empty
-        if any(x in q for x in ["twitter", "x url"]) or q.strip() in ["x", "x*"]:
+        if any(x in q for x in ["twitter", "x url"]) or q.strip().rstrip("*") in ["x", "twitter"]:
             logger.info(f"Generic fallback (twitter/x): '{question[:40]}...' -> empty")
+            return ""
+
+        # Facebook — return empty (no Facebook profile to share)
+        if q.strip().rstrip("*") in ["facebook", "facebook url", "facebook profile"] or "facebook" in q:
+            logger.info(f"Generic fallback (facebook): '{question[:40]}...' -> empty")
+            return ""
+
+        # Instagram — return empty
+        if q.strip().rstrip("*") in ["instagram", "instagram url"] or "instagram" in q:
+            logger.info(f"Generic fallback (instagram): '{question[:40]}...' -> empty")
+            return ""
+
+        # TikTok / Snapchat / other social — return empty
+        if any(x in q for x in ["tiktok", "snapchat", "social media", "other social"]):
+            logger.info(f"Generic fallback (social): '{question[:40]}...' -> empty")
             return ""
 
         # Any URL-looking field — return empty rather than garbage text
@@ -1965,6 +2469,44 @@ Role: {role}
             avail = self.config.get("availability", {})
             answer = avail.get("earliest_start_date") or "05/19/2026"
             logger.info(f"Generic fallback: '{question[:40]}...' -> '{answer}...'")
+            return answer
+
+        # Standalone "Date" or "Date*" — typically signature date on CC-305 forms
+        if q.strip().rstrip("*") == "date":
+            import datetime
+            answer = datetime.date.today().strftime("%m/%d/%Y")
+            logger.info(f"Generic fallback (today's date): '{question[:40]}...' -> '{answer}'")
+            return answer
+
+        # Standalone "Name" or "Name*" — typically signature on CC-305 / self-identify forms
+        if q.strip().rstrip("*") == "name":
+            full_name = f"{personal.get('first_name', '')} {personal.get('last_name', '')}".strip()
+            if full_name:
+                logger.info(f"Generic fallback (name): '{question[:40]}...' -> '{full_name}'")
+                return full_name
+
+        # Standalone "Employee ID" — not an employee
+        if "employee id" in q or "employee number" in q:
+            logger.info(f"Generic fallback (employee id): '{question[:40]}...' -> 'N/A'")
+            return "N/A"
+
+        # Current base salary / compensation
+        if any(x in q for x in ["current base salary", "current salary", "hourly rate", "compensation in the prior"]):
+            logger.info(f"Generic fallback (salary): '{question[:40]}...' -> 'N/A - student'")
+            return "N/A - student seeking internship"
+
+        # Days/times available to work
+        if "days and times" in q and "available" in q:
+            logger.info(f"Generic fallback (availability): '{question[:40]}...'")
+            return "Available Monday through Friday, 8:00 AM to 6:00 PM"
+
+        # Educational institution name, city, state
+        if "educational institution" in q and ("name" in q or "city" in q or "state" in q):
+            school = education.get("school", "San Jose State University")
+            city = personal.get("city", "San Jose")
+            state = personal.get("state", "CA")
+            answer = f"{school}, {city}, {state}"
+            logger.info(f"Generic fallback (school info): '{question[:40]}...' -> '{answer}'")
             return answer
 
         # Specific field answers first (before generic fallback)
@@ -2126,7 +2668,7 @@ Role: {role}
             answer = "I am not a protected veteran"
         # Disability
         elif "disab" in q:
-            answer = "I do not wish to answer"
+            answer = "No, I don't have a disability"
         # How did you hear / referral source
         elif any(x in q for x in ["hear about", "find out", "learn about", "how did you"]):
             answer = self.config.get("common_answers", {}).get("how_did_you_hear", "LinkedIn")
@@ -2146,18 +2688,22 @@ Role: {role}
         elif any(x in q for x in ["start", "begin", "available", "availability"]):
             avail = self.config.get("availability", {})
             answer = avail.get("earliest_start_date") or avail.get("preferred_start_date") or "Immediately"
-        # Why interested questions
+        # Why interested questions (medium confidence — AI would do better for these)
         elif any(x in q for x in ["why", "interest", "excite", "motivat"]):
+            _confidence = 60
             answer = (f"I'm excited about this opportunity at {company} because it aligns with my "
                      f"background in {education.get('field_of_study', 'Computer Science')} and my passion for "
                      f"building impactful software. I'm eager to contribute and grow with the team.")
         elif any(x in q for x in ["strength", "skill", "good at"]):
+            _confidence = 60
             answer = ("I'm a fast learner with strong problem-solving abilities. I have hands-on experience "
                      f"with {', '.join(skills.get('frameworks', ['various technologies'])[:3])} and I work well in team environments.")
         elif any(x in q for x in ["weakness", "improve", "challenge"]):
+            _confidence = 60
             answer = ("I sometimes spend too much time perfecting details. I'm actively working on "
                      "balancing thoroughness with meeting deadlines efficiently.")
         elif any(x in q for x in ["project", "accomplish", "proud"]):
+            _confidence = 60
             projects = self.config.get("projects", [])
             if projects:
                 p = projects[0]
@@ -2165,9 +2711,11 @@ Role: {role}
             else:
                 answer = "I built a full-stack application that helped me strengthen my skills in both frontend and backend development."
         elif "experience" in q:
+            _confidence = 60
             answer = f"I have {skills.get('years_of_coding_experience', '3')} years of coding experience and have worked with technologies like {', '.join(skills.get('frameworks', ['React', 'Python'])[:3])}."
         else:
-            # Ultimate generic fallback
+            # Ultimate generic fallback — confidence 0, should try AI first
+            _confidence = 0
             answer = (f"I'm a motivated {education.get('degree', 'Computer Science')} student at "
                      f"{education.get('school', 'university')} with experience in software development. "
                      f"I'm eager to contribute to {company} and continue growing as an engineer.")
@@ -2175,7 +2723,9 @@ Role: {role}
         if max_length and len(answer) > max_length:
             answer = answer[:max_length-3] + "..."
 
-        logger.info(f"Generic fallback: '{question[:40]}...' -> '{answer[:40]}...'")
+        logger.info(f"Generic fallback (confidence={_confidence}): '{question[:40]}...' -> '{answer[:40]}...'")
+        if _return_confidence:
+            return answer, _confidence
         return answer
 
     async def generate_cover_letter(self, job_description: str = "", max_words: int = 300) -> str:
@@ -2255,6 +2805,108 @@ Respond with ONLY the exact option text that best matches the user's answer. If 
 
         except Exception as e:
             logger.error(f"Option matching failed: {e}")
+            return None
+
+    async def diagnose_with_gemini(self, prompt: str, max_output_tokens: int = 1000) -> Optional[dict]:
+        """Call Gemini for structured JSON diagnosis (used by supervisor).
+
+        Args:
+            prompt: The diagnosis prompt (should request JSON output)
+            max_output_tokens: Max tokens for response
+
+        Returns:
+            Parsed JSON dict, or None on failure
+        """
+        if not GENAI_AVAILABLE:
+            logger.warning("google-generativeai not installed — cannot diagnose")
+            return None
+
+        model = self._get_model()
+        if not model:
+            logger.warning("No Gemini model available for diagnosis")
+            return None
+
+        try:
+            response = await asyncio.wait_for(
+                asyncio.get_running_loop().run_in_executor(
+                    None,
+                    lambda: model.generate_content(
+                        prompt,
+                        generation_config=genai.types.GenerationConfig(
+                            max_output_tokens=max_output_tokens,
+                            temperature=0.2,
+                            response_mime_type="application/json",
+                        )
+                    )
+                ),
+                timeout=30
+            )
+            text = response.text.strip()
+            self._track_ai_call(
+                is_backup=self._using_backup,
+                input_len=len(prompt),
+                output_len=len(text),
+            )
+            # Update supervisor call counter
+            self._cost_data.setdefault("supervisor_calls", 0)
+            self._cost_data["supervisor_calls"] += 1
+            self._save_cost_tracker()
+
+            # Clean up common Gemini JSON issues
+            # Strip markdown code fences
+            if text.startswith("```"):
+                text = re.sub(r'^```(?:json)?\s*', '', text)
+                text = re.sub(r'\s*```$', '', text)
+
+            # Try parsing as-is first
+            try:
+                result = json.loads(text)
+            except json.JSONDecodeError:
+                # Try to repair truncated JSON — find last complete object/array
+                # Try closing open brackets
+                for fix in [text + "]", text + "}]", text + '"}]', text + '"}']:
+                    try:
+                        result = json.loads(fix)
+                        logger.debug("Repaired truncated JSON from Gemini")
+                        break
+                    except json.JSONDecodeError:
+                        continue
+                else:
+                    # Last resort: extract any JSON array or object
+                    arr_match = re.search(r'\[.*\]', text, re.DOTALL)
+                    obj_match = re.search(r'\{.*\}', text, re.DOTALL)
+                    if arr_match:
+                        try:
+                            result = json.loads(arr_match.group())
+                        except json.JSONDecodeError:
+                            logger.warning(f"Gemini returned unparseable JSON ({len(text)} chars): {text[:200]}")
+                            return None
+                    elif obj_match:
+                        try:
+                            result = json.loads(obj_match.group())
+                        except json.JSONDecodeError:
+                            logger.warning(f"Gemini returned unparseable JSON ({len(text)} chars): {text[:200]}")
+                            return None
+                    else:
+                        logger.warning(f"Gemini returned no JSON structure ({len(text)} chars): {text[:200]}")
+                        return None
+
+            if isinstance(result, dict):
+                logger.info(f"Gemini diagnosis: strategy={result.get('strategy', '?')}, confidence={result.get('confidence', '?')}")
+            else:
+                logger.info(f"Gemini returned {type(result).__name__} with {len(result)} items")
+            return result
+
+        except asyncio.TimeoutError:
+            logger.warning("Gemini diagnosis timed out after 30s")
+            return None
+        except Exception as e:
+            error_str = str(e).lower()
+            if ("429" in str(e) or "quota" in error_str) and not self._using_backup:
+                if self._switch_to_backup_key():
+                    logger.info("Primary key exhausted during diagnosis, retrying with backup...")
+                    return await self.diagnose_with_gemini(prompt, max_output_tokens)
+            logger.error(f"Gemini diagnosis failed: {e}")
             return None
 
 

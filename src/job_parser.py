@@ -142,10 +142,10 @@ class JobParser:
         """
         jobs = []
 
-        # Check if content has HTML tables
-        if '<table>' in content.lower():
+        # Check if content has HTML tables (some repos use <tr>/<td> without <table>)
+        if '<table>' in content.lower() or '<tr>' in content.lower():
             jobs = self._parse_html_tables(content)
-        else:
+        if not jobs:
             jobs = self._parse_markdown_tables(content)
 
         self.jobs = jobs
@@ -157,14 +157,19 @@ class JobParser:
         jobs = []
         soup = BeautifulSoup(content, 'lxml')
 
-        # Find all tables
+        # Find all tables, or fall back to all <tr> rows directly
         tables = soup.find_all('table')
         current_company = ""
 
-        for table in tables:
-            rows = table.find_all('tr')
+        if tables:
+            all_rows = []
+            for table in tables:
+                all_rows.extend(table.find_all('tr'))
+        else:
+            # Some repos use <tr>/<td> without <table> wrapper
+            all_rows = soup.find_all('tr')
 
-            for row in rows:
+        for row in all_rows:
                 cells = row.find_all('td')
                 if len(cells) < 4:
                     continue

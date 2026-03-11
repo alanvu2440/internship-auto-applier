@@ -31,6 +31,7 @@ class BrowserManager:
         slow_mo: int = 50,
         user_data_dir: Optional[str] = None,
         proxy: Optional[dict] = None,
+        extension_paths: Optional[list] = None,
     ):
         """
         Initialize browser manager.
@@ -40,20 +41,23 @@ class BrowserManager:
             slow_mo: Slow down operations by X ms (more human-like)
             user_data_dir: Path to Chrome user data for session persistence
             proxy: Proxy config dict with host, port, username, password
+            extension_paths: List of unpacked extension directories to load
         """
         self.headless = headless
         self.slow_mo = slow_mo
         self.user_data_dir = user_data_dir
         self.proxy = proxy
+        self.extension_paths = extension_paths or []
         self._playwright = None
         self._browser: Optional[Browser] = None
         self._persistent_context: Optional[BrowserContext] = None
         self._contexts: list[BrowserContext] = []
+        self._keeper_page: Optional[Page] = None  # Blank tab to keep browser window alive
 
     async def start(self):
         """Start the browser."""
         # Avoid leaking resources if start() called multiple times
-        if self._browser:
+        if self._browser or self._persistent_context:
             return
         if self._playwright:
             try:
@@ -63,18 +67,49 @@ class BrowserManager:
 
         self._playwright = await async_playwright().start()
 
+        # Extensions require headed mode + persistent context
+        headless = self.headless
+        if self.extension_paths:
+            headless = False
+            if not self.user_data_dir:
+                from pathlib import Path
+                # Use copied Chrome profile (has user's cookies/logins)
+                chrome_profile = Path("data/browser_profiles/chrome_profile")
+                if chrome_profile.exists():
+                    self.user_data_dir = str(chrome_profile)
+                    logger.info(f"Using Chrome profile with user data: {self.user_data_dir}")
+                else:
+                    profile = Path("data/browser_profiles/extension_default")
+                    profile.mkdir(parents=True, exist_ok=True)
+                    self.user_data_dir = str(profile)
+                    logger.info(f"Auto-created browser profile: {self.user_data_dir}")
+
+        chrome_args = [
+            "--disable-blink-features=AutomationControlled",
+            "--disable-dev-shm-usage",
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-infobars",
+            "--window-size=1920,1080",
+            "--start-maximized",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-session-crashed-bubble",
+            "--disable-features=TranslateUI",
+            "--noerrdialogs",
+        ]
+
+        # Add extension loading args
+        if self.extension_paths:
+            ext_list = ",".join(self.extension_paths)
+            chrome_args.append(f"--load-extension={ext_list}")
+            chrome_args.append(f"--disable-extensions-except={ext_list}")
+            logger.info(f"Loading extensions: {ext_list}")
+
         launch_args = {
-            "headless": self.headless,
+            "headless": headless,
             "slow_mo": self.slow_mo,
-            "args": [
-                "--disable-blink-features=AutomationControlled",
-                "--disable-dev-shm-usage",
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-infobars",
-                "--window-size=1920,1080",
-                "--start-maximized",
-            ],
+            "args": chrome_args,
         }
 
         # Add proxy if configured
@@ -96,6 +131,31 @@ class BrowserManager:
             )
             self._browser = None  # Not a Browser object
             logger.info(f"Started persistent browser with profile: {self.user_data_dir}")
+
+            # Close any extra pages that Chrome restored, except keep ONE blank tab alive
+            # so the browser window never closes between jobs (one window, multiple tabs)
+            pages = self._persistent_context.pages
+            if len(pages) > 1:
+                logger.info(f"Closing {len(pages) - 1} extra tabs from previous session")
+                for extra_page in pages[1:]:
+                    try:
+                        await extra_page.close()
+                    except Exception:
+                        pass
+            # Keep one blank page as the permanent keeper tab
+            if pages:
+                self._keeper_page = pages[0]
+                try:
+                    await self._keeper_page.goto("about:blank")
+                except Exception:
+                    pass
+            else:
+                self._keeper_page = await self._persistent_context.new_page()
+                try:
+                    await self._keeper_page.goto("about:blank")
+                except Exception:
+                    pass
+            logger.info("Browser keeper tab ready — one window, multiple tabs mode")
         else:
             self._persistent_context = None
             self._browser = await self._playwright.chromium.launch(**launch_args)
@@ -133,30 +193,57 @@ class BrowserManager:
         if context is None:
             context = await self.create_context()
 
-        page = await context.new_page()
+        try:
+            page = await context.new_page()
+        except Exception as e:
+            if "has been closed" in str(e):
+                logger.warning("Browser was closed — restarting...")
+                # Force-clear stale references so start() creates a fresh browser
+                self._browser = None
+                self._persistent_context = None
+                self._contexts.clear()
+                self._keeper_page = None
+                if self._playwright:
+                    try:
+                        await self._playwright.stop()
+                    except Exception:
+                        pass
+                    self._playwright = None
+                await self.start()
+                context = await self.create_context()
+                page = await context.new_page()
+            else:
+                raise
 
         # Apply stealth to page
         stealth = Stealth()
         await stealth.apply_stealth_async(page)
 
-        # Additional stealth measures
-        await page.add_init_script("""
-            // Override navigator properties
-            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+        # Additional stealth measures (lighter when extensions loaded)
+        if self.extension_paths:
+            # Skip plugins/chrome overrides — they break extension functionality
+            await page.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+            """)
+        else:
+            await page.add_init_script("""
+                // Override navigator properties
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+                Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
 
-            // Override chrome property
-            window.chrome = { runtime: {} };
+                // Override chrome property
+                window.chrome = { runtime: {} };
 
-            // Override permissions
-            const originalQuery = window.navigator.permissions.query;
-            window.navigator.permissions.query = (parameters) => (
-                parameters.name === 'notifications' ?
-                    Promise.resolve({ state: Notification.permission }) :
-                    originalQuery(parameters)
-            );
-        """)
+                // Override permissions
+                const originalQuery = window.navigator.permissions.query;
+                window.navigator.permissions.query = (parameters) => (
+                    parameters.name === 'notifications' ?
+                        Promise.resolve({ state: Notification.permission }) :
+                        originalQuery(parameters)
+                );
+            """)
 
         return page
 

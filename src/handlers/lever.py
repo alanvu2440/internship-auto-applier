@@ -25,15 +25,15 @@ class LeverHandler(BaseHandler):
         try:
             logger.info(f"Applying to Lever job: {job_data.get('company')} - {job_data.get('role')}")
 
-            # Handle URLs that already have /apply
-            clean_url = job_url.replace('/apply', '') if job_url.endswith('/apply') else job_url
+            # Always navigate directly to /apply URL (skips needing to click Apply button)
+            apply_url = job_url if job_url.rstrip('/').endswith('/apply') else job_url.rstrip('/') + '/apply'
 
-            # Navigate to job URL
+            # Navigate to application form
             try:
-                await page.goto(clean_url, wait_until="domcontentloaded", timeout=30000)
+                await page.goto(apply_url, wait_until="domcontentloaded", timeout=30000)
             except Exception as e:
                 logger.warning(f"Page load issue: {e}")
-                await page.goto(clean_url, wait_until="commit", timeout=15000)
+                await page.goto(apply_url, wait_until="commit", timeout=15000)
 
             await self.browser_manager.human_delay(1000, 2000)
 
@@ -46,16 +46,31 @@ class LeverHandler(BaseHandler):
             # Dismiss any popups
             await self.dismiss_popups(page)
 
-            # Click Apply button to open form
-            apply_clicked = await self._click_apply_button(page)
-            if not apply_clicked:
-                # Maybe we're already on the apply page
-                form_present = await page.query_selector('input[name="name"], input[name="email"]')
-                if not form_present:
-                    logger.warning("Could not find Apply button on Lever page")
+            # We navigated directly to /apply — check form is present
+            form_present = await page.query_selector(
+                'input[name="name"], input[name="email"], '
+                '.application-form, form[action*="lever"], '
+                '#application-form, .postings-application-form, '
+                'input[placeholder*="name"], input[placeholder*="email"], '
+                '.application-page, .lever-application-page'
+            )
+            if not form_present:
+                # Wait a bit more and retry
+                await page.wait_for_timeout(3000)
+                form_present = await page.query_selector('input, textarea, select')
+            if not form_present:
+                # Last resort: try clicking Apply button if page redirected to job listing
+                apply_clicked = await self._click_apply_button(page)
+                if not apply_clicked:
+                    logger.warning("Could not find Lever application form")
                     return False
 
             await self.browser_manager.human_delay(1500, 2500)
+
+            # Let Simplify extension autofill boilerplate if loaded
+            ext_filled = await self.wait_for_extension_autofill(page)
+            if ext_filled:
+                logger.info("Simplify extension pre-filled fields — handler will fill remaining gaps")
 
             # Check for CAPTCHA
             if not await self.handle_captcha(page):
@@ -143,28 +158,37 @@ class LeverHandler(BaseHandler):
             config = self.form_filler.config
             personal = config.get("personal_info", {})
 
-            # Wait for form to load
+            # Wait for form to load + Simplify extension to autofill
             await page.wait_for_selector('input[name="name"], input[name="email"]', timeout=10000)
+            await self.browser_manager.human_delay(2000, 3000)  # Let extension fill first
+
+            # Helper: only fill if empty (don't overwrite extension autofill)
+            async def _fill_if_empty(element, value, label="field"):
+                if not element or not value:
+                    return
+                try:
+                    current = await element.input_value()
+                    if current and current.strip():
+                        logger.info(f"Skipping {label} — already filled: '{current[:30]}'")
+                        return
+                    await element.fill(str(value))
+                    await self.browser_manager.human_delay(200, 400)
+                except Exception:
+                    await element.fill(str(value))
 
             # Full name (Lever often uses single name field)
             name_input = await page.query_selector('input[name="name"]')
-            if name_input:
-                full_name = f"{personal.get('first_name', '')} {personal.get('last_name', '')}".strip()
-                await name_input.fill(full_name)
-                await self.browser_manager.human_delay(200, 400)
+            full_name = f"{personal.get('first_name', '')} {personal.get('last_name', '')}".strip()
+            await _fill_if_empty(name_input, full_name, "name")
 
             # Email
             email_input = await page.query_selector('input[name="email"]')
-            if email_input:
-                await email_input.fill(personal.get("email", ""))
-                await self.browser_manager.human_delay(200, 400)
+            await _fill_if_empty(email_input, personal.get("email", ""), "email")
 
             # Phone
             phone_input = await page.query_selector('input[name="phone"]')
-            if phone_input:
-                phone = re.sub(r'[\s\-\(\)]', '', f"{personal.get('phone_prefix', '')}{personal.get('phone', '')}").replace("+", "")
-                await phone_input.fill(phone)
-                await self.browser_manager.human_delay(200, 400)
+            phone = re.sub(r'[\s\-\(\)]', '', f"{personal.get('phone_prefix', '')}{personal.get('phone', '')}").replace("+", "")
+            await _fill_if_empty(phone_input, phone, "phone")
 
             # Current company (optional)
             company_input = await page.query_selector('input[name="org"]')
@@ -601,8 +625,10 @@ class LeverHandler(BaseHandler):
             try:
                 btn = await page.query_selector(selector)
                 if btn and await btn.is_visible():
-                    # Solve invisible reCAPTCHA if present
-                    await self.solve_invisible_recaptcha(page)
+                    # Solve CAPTCHA (handles both reCAPTCHA and hCaptcha via base handler)
+                    captcha_solved = await self.solve_invisible_recaptcha(page)
+                    if not captcha_solved:
+                        logger.warning("CAPTCHA solve failed — submitting anyway, tab stays open for manual")
                     await self.browser_manager.human_delay(500, 1000)
                     await btn.click()
                     logger.info("Clicked Lever submit button")

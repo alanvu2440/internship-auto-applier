@@ -61,6 +61,7 @@ GitHub Watcher → Job Parser → Job Queue (SQLite) → ATS Router → Handler 
 | `src/handlers/workday.py` | 500+ | Workday ATS | Partial (login) |
 | `src/handlers/generic.py` | 400+ | Fallback handler | Basic |
 | `src/handlers/base.py` | 391 | Base handler class | Production |
+| `src/email_response_tracker.py` | 450 | Gmail response scanner + categorizer | Production |
 
 ### Data Files
 
@@ -76,6 +77,7 @@ GitHub Watcher → Job Parser → Job Queue (SQLite) → ATS Router → Handler 
 | `logs/application_report_*.json` | Session summary reports |
 | `config/master_config.yaml` | All personal info + answer templates |
 | `config/secrets.yaml` | API keys — NEVER COMMIT |
+| `data/response_summary.json` | Email response scan results |
 
 ## ATS Support Matrix
 
@@ -116,6 +118,11 @@ ALL PATHS → track in session_answers for reporting
 pending → in_progress → applied (success)
                       → failed (retry up to 3x)
                       → skipped (closed/login/captcha)
+
+Applied jobs get response_status from email tracking:
+applied → follow_up → assessment → interview_invite → offer
+                                                     → rejection
+(only upgrades — offer > interview > assessment > follow_up > rejection)
 ```
 
 ## Rate Limiting
@@ -150,6 +157,55 @@ python src/main.py export applications.csv
 
 # Reset failed jobs for retry
 python src/main.py reset_failed
+
+# Check email responses to applications (on-demand)
+python src/main.py check-responses --days 30
+python src/main.py check-responses --days 14 --category interview_invite
+
+# Continuously monitor email responses
+python src/main.py track --interval 48 --days 7
+```
+
+## Run Modes (flags for backfill and apply)
+
+| Flag | What it does | When to use |
+|------|-------------|-------------|
+| `--smart` | Gemini scans form after handler fails, fills missed fields via AI (DOM + vision) | Always-on for better success rate, costs ~$0.0004/job |
+| `--assist` | Bot fills what it can → **browser stays open** → shows missing fields → YOU fix manually → press Enter → bot submits + screenshots | For rescuing failed jobs that need 1-2 manual fields |
+| `--review` | Bot fills everything → pauses before submit → YOU inspect → press Enter to submit | When you want to double-check before submit |
+| `--with-simplify` | Loads Simplify Copilot Chrome extension for boilerplate autofill (name/email/phone) | Optional, needs first-time Simplify login |
+| `--workday-accounts` | Only apply to Workday tenants with saved accounts, slow mode (90s gaps, 4/hr) | For Workday batch runs |
+| `--dry-run` | Fill forms but never click submit | Testing |
+
+### Dedicated Commands
+
+```bash
+# ASSIST MODE — retry ONLY failed jobs with human help
+# Bot fills → browser stays open → you fix remaining fields → Enter → bot submits
+python src/main.py assist                          # all failed jobs
+python src/main.py assist --ats greenhouse         # only Greenhouse failures
+python src/main.py assist --max 5                  # limit to 5 jobs
+
+# SMART + ASSIST combo (recommended for rescuing failures)
+python src/main.py backfill --smart --assist --max 10
+
+# Workday accounts batch
+python src/main.py backfill --workday-accounts --max 20
+```
+
+### Assist Mode Flow
+```
+1. Bot picks a failed job, opens browser, navigates to form
+2. Handler fills everything it can (name, email, resume, etc.)
+3. If fields still empty → Gemini scanner tries to fill them
+4. If STILL empty → browser stays open, terminal shows:
+     ASSIST MODE — Company - Role
+     Empty required fields (2):
+       - What location? (select)
+       - How long internship? (checkbox)
+     [Enter] = Submit  [s] = Skip  [d] = Already submitted manually
+5. YOU fill the remaining 1-2 fields in the browser
+6. Press Enter → bot clicks Submit → takes screenshot → marks applied
 ```
 
 ## Pre-Run Checklist

@@ -14,10 +14,27 @@ from loguru import logger
 
 
 class GitHubWatcher:
-    """Watches a GitHub repository for changes."""
+    """Watches GitHub repositories for changes."""
 
-    SIMPLIFY_JOBS_URL = "https://raw.githubusercontent.com/SimplifyJobs/Summer2026-Internships/dev/README.md"
-    SIMPLIFY_JOBS_API = "https://api.github.com/repos/SimplifyJobs/Summer2026-Internships/commits?path=README.md&per_page=1"
+    # Multiple repos — priority order (Summer2026 highest)
+    REPOS = [
+        {
+            "name": "Summer2026-Internships",
+            "url": "https://raw.githubusercontent.com/SimplifyJobs/Summer2026-Internships/dev/README.md",
+            "api": "https://api.github.com/repos/SimplifyJobs/Summer2026-Internships/commits?path=README.md&per_page=1",
+            "priority": 200,  # Highest — user's top priority
+        },
+        {
+            "name": "New-Grad-Positions",
+            "url": "https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/README.md",
+            "api": "https://api.github.com/repos/SimplifyJobs/New-Grad-Positions/commits?path=README.md&per_page=1",
+            "priority": 150,  # Second priority
+        },
+    ]
+
+    # Keep legacy attrs for backward compat
+    SIMPLIFY_JOBS_URL = REPOS[0]["url"]
+    SIMPLIFY_JOBS_API = REPOS[0]["api"]
 
     def __init__(
         self,
@@ -37,6 +54,9 @@ class GitHubWatcher:
         self.last_commit_sha: Optional[str] = None
         self.running = False
         self._client: Optional[httpx.AsyncClient] = None
+        # Per-repo tracking
+        self._repo_hashes: dict[str, str] = {}
+        self._repo_shas: dict[str, str] = {}
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
@@ -50,12 +70,31 @@ class GitHubWatcher:
             )
         return self._client
 
-    async def fetch_readme(self) -> str:
+    async def fetch_readme(self, url: str = None) -> str:
         """Fetch the current README content."""
         client = await self._get_client()
-        response = await client.get(self.SIMPLIFY_JOBS_URL)
+        response = await client.get(url or self.SIMPLIFY_JOBS_URL)
         response.raise_for_status()
         return response.text
+
+    async def fetch_all_repos(self) -> list[tuple[str, str, int]]:
+        """Fetch READMEs from all configured repos.
+
+        Returns:
+            List of (repo_name, content, priority) tuples
+        """
+        results = []
+        client = await self._get_client()
+        for repo in self.REPOS:
+            try:
+                response = await client.get(repo["url"])
+                response.raise_for_status()
+                content = response.text
+                results.append((repo["name"], content, repo["priority"]))
+                logger.info(f"Fetched {repo['name']}: {len(content)} bytes")
+            except Exception as e:
+                logger.warning(f"Failed to fetch {repo['name']}: {e}")
+        return results
 
     async def get_latest_commit(self) -> Optional[str]:
         """Get the SHA of the latest commit affecting README.md."""

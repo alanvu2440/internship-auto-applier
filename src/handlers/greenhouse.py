@@ -49,6 +49,9 @@ class GreenhouseHandler(BaseHandler):
             # Dismiss any popups
             await self.dismiss_popups(page)
 
+            # Click Simplify autofill button NOW (on listing page — extension is visible here)
+            await self.wait_for_extension_autofill(page)
+
             # Check for CAPTCHA
             if not await self.handle_captcha(page):
                 return False
@@ -124,6 +127,21 @@ class GreenhouseHandler(BaseHandler):
                     logger.warning("POST-SUBMIT: Security/verification code field detected on page!")
             except Exception as debug_err:
                 logger.debug(f"Post-submit debug error: {debug_err}")
+
+            # Reset reCAPTCHA so user can manually submit this tab later
+            try:
+                await page.evaluate('''() => {
+                    // Reset grecaptcha so user gets a fresh token on manual submit
+                    if (window.grecaptcha && window.grecaptcha.reset) {
+                        try { window.grecaptcha.reset(); } catch(e) {}
+                    }
+                    // Also clear any stale response tokens
+                    const textarea = document.querySelector('#g-recaptcha-response, [name="g-recaptcha-response"]');
+                    if (textarea) textarea.value = '';
+                }''')
+                logger.info("Reset reCAPTCHA for manual submission")
+            except Exception:
+                pass
 
             return False
 
@@ -453,6 +471,14 @@ class GreenhouseHandler(BaseHandler):
             await self._fill_greenhouse_country(page)
             await self.browser_manager.human_delay(200, 400)
 
+            # Fill phone country code dropdown (React-Select)
+            await self._fill_greenhouse_phone_country_code(page)
+            await self.browser_manager.human_delay(200, 400)
+
+            # Fill source/referral dropdown
+            await self._fill_greenhouse_source_dropdown(page)
+            await self.browser_manager.human_delay(200, 400)
+
             # Fill location field specifically (handles hidden input sync)
             await self._fill_greenhouse_location(page)
             await self.browser_manager.human_delay(300, 600)
@@ -539,10 +565,23 @@ class GreenhouseHandler(BaseHandler):
                 if uploaded:
                     logger.info("Resume uploaded to iframe")
 
+            # Fill phone country code dropdown in iframe
+            await self._fill_greenhouse_phone_country_code(frame)
+            await self.browser_manager.human_delay(200, 400)
+
+            # Fill source/referral dropdown in iframe
+            await self._fill_greenhouse_source_dropdown(frame)
+            await self.browser_manager.human_delay(200, 400)
+
             # Upload cover letter if available
             cover_letter_path = self._resolve_file_path(self.form_filler.config.get("files", {}).get("cover_letter"))
             if cover_letter_path:
                 await self._upload_cover_letter_in_frame(frame, cover_letter_path)
+
+            # Upload transcript if available (was previously missing from iframe path)
+            transcript_path = self._resolve_file_path(self.form_filler.config.get("files", {}).get("transcript"))
+            if transcript_path:
+                await self._upload_transcript_in_frame(frame, transcript_path)
 
             # Handle custom questions
             await self._handle_custom_questions_in_frame(frame, job_data)
@@ -830,11 +869,19 @@ class GreenhouseHandler(BaseHandler):
             'input[name="phone"], #phone': self.form_filler.config.get("personal_info", {}).get("phone"),
         }
 
+        # Wait briefly for Simplify extension to autofill first
+        await self.browser_manager.human_delay(2000, 3000)
+
         for selector, value in field_mappings.items():
             if value:
                 try:
                     element = await page_or_frame.query_selector(selector)
                     if element and await element.is_visible():
+                        # Don't overwrite if extension already filled it
+                        current = await element.input_value()
+                        if current and current.strip():
+                            logger.info(f"Skipping {selector} — already filled: '{current[:30]}'")
+                            continue
                         await element.fill(str(value))
                         await self.browser_manager.human_delay(100, 300)
                 except Exception as e:
@@ -896,7 +943,7 @@ class GreenhouseHandler(BaseHandler):
     async def _upload_cover_letter(self, page: Page, cover_letter_path: str) -> bool:
         """Upload cover letter file if there's a field for it."""
         try:
-            # Look for cover letter specific file inputs
+            # Strategy 1: Look for cover letter specific file inputs
             file_input = await page.query_selector(
                 'input[type="file"][data-field*="cover"], '
                 'input[type="file"][name*="cover"], '
@@ -910,15 +957,27 @@ class GreenhouseHandler(BaseHandler):
                 await self.browser_manager.human_delay(500, 1000)
                 return True
 
-            # Try to find any second file input (first is usually resume)
-            all_file_inputs = await page.query_selector_all('input[type="file"]')
-            if len(all_file_inputs) >= 2:
-                # Second file input is often cover letter
-                await all_file_inputs[1].set_input_files(cover_letter_path)
-                logger.info("Cover letter uploaded to second file input")
-                return True
+            # Strategy 2: Find by label text containing "cover letter"
+            labels = await page.query_selector_all(
+                '.upload-label, label[class*="upload"], label, .field-label, '
+                '[class*="label"], legend, .attachment-label'
+            )
+            for label in labels:
+                label_text = ((await label.text_content()) or "").lower()
+                if "cover letter" in label_text or "cover_letter" in label_text:
+                    parent = await label.evaluate_handle(
+                        'el => el.closest(".field, .upload-field, .form-field, '
+                        '[class*=\\"attachment\\"], [class*=\\"upload\\"], div")'
+                    )
+                    if parent:
+                        fi = await parent.query_selector('input[type="file"]')
+                        if fi:
+                            await fi.set_input_files(cover_letter_path)
+                            logger.info("Cover letter uploaded via label match")
+                            await self.browser_manager.human_delay(500, 1000)
+                            return True
 
-            # Check for a labeled cover letter section
+            # Strategy 3: Check for a labeled cover letter section by attributes
             cover_sections = await page.query_selector_all('[data-field*="cover"], [class*="cover-letter"], [id*="cover"]')
             for section in cover_sections:
                 file_input = await section.query_selector('input[type="file"]')
@@ -926,6 +985,13 @@ class GreenhouseHandler(BaseHandler):
                     await file_input.set_input_files(cover_letter_path)
                     logger.info("Cover letter uploaded via labeled section")
                     return True
+
+            # Strategy 4: Second file input is often cover letter (first is resume)
+            all_file_inputs = await page.query_selector_all('input[type="file"]')
+            if len(all_file_inputs) >= 2:
+                await all_file_inputs[1].set_input_files(cover_letter_path)
+                logger.info("Cover letter uploaded to second file input")
+                return True
 
             logger.debug("No cover letter field found")
             return False
@@ -937,30 +1003,58 @@ class GreenhouseHandler(BaseHandler):
     async def _upload_transcript(self, page: Page, transcript_path: str) -> bool:
         """Upload transcript file if there's a field for it."""
         try:
-            # Look for transcript-specific upload labels
-            upload_labels = await page.query_selector_all('.upload-label, label[class*="upload"]')
-            for label in upload_labels:
-                label_text = ((await label.text_content()) or "").lower()
-                if "transcript" in label_text:
-                    # Find the file input in or near this label
-                    parent = await label.evaluate_handle('el => el.closest(".field, .upload-field, .form-field, div")')
-                    if parent:
-                        file_input = await parent.query_selector('input[type="file"]')
-                        if file_input:
-                            await file_input.set_input_files(transcript_path)
-                            logger.info(f"Transcript uploaded successfully")
-                            await self.browser_manager.human_delay(500, 1000)
-                            return True
-
-            # Try by data-field or name attributes
+            # Strategy 1: Find by transcript-specific attributes
             file_input = await page.query_selector(
                 'input[type="file"][data-field*="transcript"], '
                 'input[type="file"][name*="transcript"], '
-                'input[type="file"][id*="transcript"]'
+                'input[type="file"][id*="transcript"], '
+                'input[type="file"][aria-label*="transcript" i]'
             )
             if file_input:
                 await file_input.set_input_files(transcript_path)
                 logger.info("Transcript uploaded via attribute match")
+                await self.browser_manager.human_delay(500, 1000)
+                return True
+
+            # Strategy 2: Find by label text containing "transcript" (broad selector set)
+            labels = await page.query_selector_all(
+                '.upload-label, label[class*="upload"], label, .field-label, '
+                '[class*="label"], legend, .attachment-label, '
+                '[class*="upload-label"], [class*="error"]'
+            )
+            for label in labels:
+                label_text = ((await label.text_content()) or "").lower()
+                if "transcript" in label_text:
+                    parent = await label.evaluate_handle(
+                        'el => el.closest(".field, .upload-field, .form-field, '
+                        '[class*=\\"attachment\\"], [class*=\\"upload\\"], div")'
+                    )
+                    if parent:
+                        fi = await parent.query_selector('input[type="file"]')
+                        if fi:
+                            await fi.set_input_files(transcript_path)
+                            logger.info("Transcript uploaded via label match")
+                            await self.browser_manager.human_delay(500, 1000)
+                            return True
+
+            # Strategy 3: Find file inputs that are NOT resume and NOT cover letter
+            # and check their nearby text for transcript keywords
+            all_file_inputs = await page.query_selector_all('input[type="file"]')
+            for fi in all_file_inputs:
+                nearby_text = await fi.evaluate('''(el) => {
+                    let container = el.closest(".field, .upload-field, .form-field, div");
+                    return container ? container.textContent.toLowerCase() : "";
+                }''')
+                if "transcript" in nearby_text:
+                    await fi.set_input_files(transcript_path)
+                    logger.info("Transcript uploaded via nearby text match")
+                    await self.browser_manager.human_delay(500, 1000)
+                    return True
+
+            # Strategy 4: Third file input fallback (resume=1st, cover letter=2nd, transcript=3rd)
+            if len(all_file_inputs) >= 3:
+                await all_file_inputs[2].set_input_files(transcript_path)
+                logger.info("Transcript uploaded to third file input")
                 await self.browser_manager.human_delay(500, 1000)
                 return True
 
@@ -974,23 +1068,324 @@ class GreenhouseHandler(BaseHandler):
     async def _upload_cover_letter_in_frame(self, frame, cover_letter_path: str) -> bool:
         """Upload cover letter in iframe context."""
         try:
-            # Look for cover letter specific inputs
+            # Strategy 1: Find by specific cover letter attributes
+            cover_input = await frame.query_selector(
+                'input[type="file"][data-field*="cover"], '
+                'input[type="file"][name*="cover"], '
+                'input[type="file"][id*="cover"]'
+            )
+            if cover_input:
+                await cover_input.set_input_files(cover_letter_path)
+                logger.info("Cover letter uploaded in iframe via attribute match")
+                return True
+
+            # Strategy 2: Find by label text containing "cover letter"
+            labels = await frame.query_selector_all(
+                '.upload-label, label[class*="upload"], label, .field-label, '
+                '[class*="label"], legend, .attachment-label'
+            )
+            for label in labels:
+                label_text = ((await label.text_content()) or "").lower()
+                if "cover letter" in label_text or "cover_letter" in label_text:
+                    parent = await label.evaluate_handle(
+                        'el => el.closest(".field, .upload-field, .form-field, '
+                        '[class*=\\"attachment\\"], [class*=\\"upload\\"], div")'
+                    )
+                    if parent:
+                        file_input = await parent.query_selector('input[type="file"]')
+                        if file_input:
+                            await file_input.set_input_files(cover_letter_path)
+                            logger.info("Cover letter uploaded in iframe via label match")
+                            return True
+
+            # Strategy 3: Second file input is usually cover letter (resume is first)
             file_inputs = await frame.query_selector_all('input[type="file"]')
             if len(file_inputs) >= 2:
                 await file_inputs[1].set_input_files(cover_letter_path)
-                logger.info("Cover letter uploaded in iframe")
+                logger.info("Cover letter uploaded in iframe to second file input")
                 return True
 
-            # Try data-field attribute
-            cover_input = await frame.query_selector('input[type="file"][data-field*="cover"]')
-            if cover_input:
-                await cover_input.set_input_files(cover_letter_path)
-                logger.info("Cover letter uploaded in iframe via data-field")
-                return True
-
+            logger.debug("No cover letter field found in iframe")
         except Exception as e:
             logger.debug(f"Could not upload cover letter in iframe: {e}")
         return False
+
+    async def _upload_transcript_in_frame(self, frame, transcript_path: str) -> bool:
+        """Upload transcript file in iframe context."""
+        try:
+            # Strategy 1: Find by label text containing "transcript"
+            labels = await frame.query_selector_all(
+                '.upload-label, label[class*="upload"], label, .field-label, '
+                '[class*="label"], legend, .attachment-label'
+            )
+            for label in labels:
+                label_text = ((await label.text_content()) or "").lower()
+                if "transcript" in label_text:
+                    parent = await label.evaluate_handle(
+                        'el => el.closest(".field, .upload-field, .form-field, '
+                        '[class*=\\"attachment\\"], [class*=\\"upload\\"], div")'
+                    )
+                    if parent:
+                        file_input = await parent.query_selector('input[type="file"]')
+                        if file_input:
+                            await file_input.set_input_files(transcript_path)
+                            logger.info("Transcript uploaded in iframe via label match")
+                            return True
+
+            # Strategy 2: Find by data-field or name attributes
+            file_input = await frame.query_selector(
+                'input[type="file"][data-field*="transcript"], '
+                'input[type="file"][name*="transcript"], '
+                'input[type="file"][id*="transcript"]'
+            )
+            if file_input:
+                await file_input.set_input_files(transcript_path)
+                logger.info("Transcript uploaded in iframe via attribute match")
+                return True
+
+            # Strategy 3: Check for third file input (resume=1st, cover letter=2nd, transcript=3rd)
+            all_file_inputs = await frame.query_selector_all('input[type="file"]')
+            if len(all_file_inputs) >= 3:
+                await all_file_inputs[2].set_input_files(transcript_path)
+                logger.info("Transcript uploaded in iframe to third file input")
+                return True
+
+            logger.debug("No transcript field found in iframe")
+            return False
+
+        except Exception as e:
+            logger.debug(f"Could not upload transcript in iframe: {e}")
+        return False
+
+    async def _fill_greenhouse_phone_country_code(self, page_or_frame) -> None:
+        """Fill the phone country code React-Select dropdown in Greenhouse forms.
+
+        Handles field IDs like 'phoneNumber--countryPhoneCode' which is a separate
+        React-Select dropdown from the phone number input.
+        """
+        try:
+            # Check if the country code field exists (hidden input)
+            hidden = await page_or_frame.query_selector(
+                'input[type="hidden"][id*="countryPhoneCode"], '
+                'input[type="hidden"][name*="countryPhoneCode"]'
+            )
+
+            # Check if already filled
+            if hidden:
+                current = await hidden.get_attribute("value") or ""
+                if current and current.strip():
+                    logger.debug(f"Phone country code already filled: {current}")
+                    return
+
+            # Find the React-Select dropdown near a phone country code label
+            dropdowns = await page_or_frame.query_selector_all('.select__control, [role="combobox"]')
+            for dropdown in dropdowns:
+                if not await dropdown.is_visible():
+                    continue
+
+                # Check if this dropdown is associated with a phone country code field
+                is_phone_country = await dropdown.evaluate('''(el) => {
+                    // Check for countryPhoneCode in nearby hidden inputs or container IDs
+                    let container = el.closest('.field, .select, [class*="field"], [data-field]');
+                    if (!container) container = el.parentElement?.parentElement?.parentElement;
+                    if (!container) return false;
+
+                    // Check data-field attribute
+                    const dataField = container.getAttribute("data-field") || "";
+                    if (dataField.includes("countryPhoneCode") || dataField.includes("country_phone")) return true;
+
+                    // Check for hidden input with countryPhoneCode ID
+                    const hiddenInput = container.querySelector('input[type="hidden"][id*="countryPhoneCode"]');
+                    if (hiddenInput) return true;
+
+                    // Check label text
+                    const label = container.querySelector("label, .select__label, [class*='label']");
+                    const labelText = label ? label.textContent.toLowerCase().trim() : "";
+                    if (labelText.includes("country") && labelText.includes("phone")) return true;
+                    if (labelText.includes("phone") && labelText.includes("code")) return true;
+                    if (labelText.includes("country code")) return true;
+
+                    // Check if nearby a phone field
+                    const phoneField = container.querySelector('input[type="tel"], input[name="phone"], input#phone');
+                    if (phoneField && (labelText.includes("country") || labelText.includes("code"))) return true;
+
+                    return false;
+                }''')
+
+                if not is_phone_country:
+                    continue
+
+                # Check if already has a value selected
+                current_text = (await dropdown.text_content() or "").strip()
+                if current_text and "select" not in current_text.lower() and len(current_text) > 2:
+                    logger.debug(f"Phone country code dropdown already filled: {current_text}")
+                    return
+
+                logger.info("Filling phone country code dropdown with 'United States +1'")
+                await dropdown.click()
+                await self.browser_manager.human_delay(400, 600)
+
+                # Type to search for United States
+                await page_or_frame.keyboard.type("United States", delay=50)
+                await self.browser_manager.human_delay(600, 900)
+
+                # Try to find and click the +1 option
+                options = await page_or_frame.query_selector_all(
+                    '.select__option, [id*="option"], [role="option"]'
+                )
+                for option in options:
+                    text = (await option.text_content() or "").strip()
+                    if "united states" in text.lower() and "+1" in text:
+                        await option.click()
+                        logger.info(f"Selected phone country code: {text}")
+                        break
+                else:
+                    # Just press Enter to select the first search result
+                    await page_or_frame.keyboard.press("Enter")
+                    logger.info("Selected first phone country code search result")
+
+                await self.browser_manager.human_delay(200, 400)
+
+                # Sync hidden input
+                if hidden:
+                    await hidden.evaluate('''(el) => {
+                        el.value = "US";
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                    }''')
+                    logger.info("Synced phone country code hidden input")
+
+                return
+
+            # Fallback: force-set hidden input directly if it exists
+            if hidden:
+                await hidden.evaluate('''(el) => {
+                    el.value = "US";
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                }''')
+                logger.info("Force-set phone country code hidden input to US")
+
+        except Exception as e:
+            logger.debug(f"Error filling phone country code: {e}")
+
+    async def _fill_greenhouse_source_dropdown(self, page_or_frame) -> None:
+        """Fill the 'How did you hear about us?' source dropdown (id='source--source').
+
+        This is a standard Greenhouse field, not a custom question, so it needs
+        dedicated handling separate from the question_* inputs.
+        """
+        how_heard = self.form_filler._flat_config.get(
+            "common_answers.how_did_you_hear", "Online Job Board"
+        )
+
+        try:
+            # Check if hidden input for source exists
+            hidden = await page_or_frame.query_selector(
+                'input[type="hidden"][id="source--source"], '
+                'input[type="hidden"][name*="source"]'
+            )
+
+            if hidden:
+                current = await hidden.get_attribute("value") or ""
+                if current and current.strip():
+                    logger.debug(f"Source dropdown already filled: {current}")
+                    return
+            else:
+                # No hidden source field — this form probably doesn't have one
+                return
+
+            # Find the React-Select dropdown for source
+            dropdowns = await page_or_frame.query_selector_all('.select__control, [role="combobox"]')
+            for dropdown in dropdowns:
+                if not await dropdown.is_visible():
+                    continue
+
+                is_source = await dropdown.evaluate('''(el) => {
+                    let container = el.closest('.field, .select, [class*="field"]');
+                    if (!container) container = el.parentElement?.parentElement?.parentElement;
+                    if (!container) return false;
+
+                    // Check hidden input ID
+                    const hiddenInput = container.querySelector('input[type="hidden"][id*="source"]');
+                    if (hiddenInput) return true;
+
+                    // Check label text
+                    const label = container.querySelector("label, .select__label, [class*='label']");
+                    const labelText = label ? label.textContent.toLowerCase().trim() : "";
+                    if (labelText.includes("how did you hear") || labelText.includes("source") ||
+                        labelText.includes("where did you") || labelText.includes("find out about") ||
+                        labelText.includes("learn about")) return true;
+
+                    return false;
+                }''')
+
+                if not is_source:
+                    continue
+
+                # Check if already has a value
+                current_text = (await dropdown.text_content() or "").strip()
+                if current_text and "select" not in current_text.lower() and len(current_text) > 2:
+                    logger.debug(f"Source dropdown already filled: {current_text}")
+                    return
+
+                logger.info(f"Filling source dropdown with '{how_heard}'")
+                await dropdown.click()
+                await self.browser_manager.human_delay(400, 600)
+
+                # Type to search
+                await page_or_frame.keyboard.type(how_heard[:20], delay=50)
+                await self.browser_manager.human_delay(600, 900)
+
+                # Try to select matching option
+                found = await self.form_filler._select_dropdown_option(page_or_frame, how_heard)
+                if not found:
+                    # Try alternatives: LinkedIn, Internet, Other, Job Board
+                    alternatives = ["LinkedIn", "Internet", "Job Board", "Other"]
+                    for alt in alternatives:
+                        # Clear and try alternative
+                        await page_or_frame.keyboard.press("Escape")
+                        await self.browser_manager.human_delay(200, 300)
+                        await dropdown.click()
+                        await self.browser_manager.human_delay(300, 500)
+                        await page_or_frame.keyboard.type(alt, delay=50)
+                        await self.browser_manager.human_delay(500, 700)
+                        found = await self.form_filler._select_dropdown_option(page_or_frame, alt)
+                        if found:
+                            logger.info(f"Selected source alternative: {alt}")
+                            break
+
+                if not found:
+                    # Last resort: press Enter for first option
+                    await page_or_frame.keyboard.press("Enter")
+                    logger.info("Selected first available source option")
+
+                await self.browser_manager.human_delay(200, 400)
+
+                # Sync hidden input
+                if hidden:
+                    selected_text = how_heard
+                    await hidden.evaluate(f'''(el) => {{
+                        if (!el.value || el.value.trim() === "") {{
+                            el.value = "{selected_text}";
+                            el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                            el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                        }}
+                    }}''')
+
+                return
+
+            # Fallback: force-set hidden input
+            if hidden:
+                await hidden.evaluate(f'''(el) => {{
+                    el.value = "{how_heard}";
+                    el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                    el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                }}''')
+                logger.info(f"Force-set source hidden input: {how_heard}")
+
+        except Exception as e:
+            logger.debug(f"Error filling source dropdown: {e}")
 
     async def _handle_custom_questions(self, page: Page, job_data: Dict[str, Any]) -> None:
         """Handle custom application questions using AI."""
@@ -1163,9 +1558,29 @@ class GreenhouseHandler(BaseHandler):
                         logger.debug(f"Skipping {inp_id} - not visible")
                         continue
 
-                    # Skip hidden, file, and checkbox inputs (checkboxes handled separately)
-                    if inp_type in ("hidden", "file", "checkbox"):
+                    # Skip hidden and checkbox inputs (checkboxes handled separately)
+                    if inp_type in ("hidden", "checkbox"):
                         logger.debug(f"Skipping {inp_id} - type is {inp_type}")
+                        continue
+
+                    # Handle file inputs - upload transcript/portfolio if label matches
+                    if inp_type == "file":
+                        question_text_file = await self._get_question_label(page, inp, inp_id)
+                        if question_text_file and "transcript" in question_text_file.lower():
+                            transcript_path = self._resolve_file_path(
+                                self.form_filler.config.get("files", {}).get("transcript")
+                            )
+                            if transcript_path:
+                                await inp.set_input_files(transcript_path)
+                                logger.info(f"Transcript uploaded via question file input {inp_id}")
+                        elif question_text_file and any(x in question_text_file.lower() for x in ["portfolio", "work sample", "writing sample"]):
+                            # Try uploading resume as portfolio fallback
+                            resume_path = self._resolve_file_path(
+                                self.form_filler.config.get("files", {}).get("resume")
+                            )
+                            if resume_path:
+                                await inp.set_input_files(resume_path)
+                                logger.info(f"Resume uploaded as portfolio via question file input {inp_id}")
                         continue
 
                     # Check if already filled
@@ -1188,22 +1603,61 @@ class GreenhouseHandler(BaseHandler):
                     if tag_name == "select":
                         options = await inp.query_selector_all("option")
                         option_texts = []
+                        option_values = []
                         for opt in options:
                             text = (await opt.text_content() or "").strip()
-                            if text and text != "Select...":
+                            val = (await opt.get_attribute("value")) or ""
+                            if text and text != "Select..." and text != "Choose...":
                                 option_texts.append(text)
+                                option_values.append(val)
 
                         if option_texts:
                             answer = await self.ai_answerer.answer_question(
                                 question_text, "select", options=option_texts
                             )
                             if answer:
+                                filled_select = False
+                                # Try 1: exact label match
                                 try:
                                     await inp.select_option(label=answer)
                                     logger.info(f"AI filled select {inp_id}: {answer}")
+                                    filled_select = True
                                 except Exception:
-                                    # Try by value if label fails
                                     pass
+
+                                # Try 2: case-insensitive / partial match
+                                if not filled_select:
+                                    answer_lower = answer.lower().strip()
+                                    for i, opt_text in enumerate(option_texts):
+                                        opt_lower = opt_text.lower().strip()
+                                        if answer_lower == opt_lower or answer_lower in opt_lower or opt_lower in answer_lower:
+                                            try:
+                                                await inp.select_option(value=option_values[i])
+                                                logger.info(f"Fuzzy matched select {inp_id}: '{answer}' → '{opt_text}'")
+                                                filled_select = True
+                                                break
+                                            except Exception:
+                                                pass
+
+                                # Try 3: for Yes/No answers, find Yes/No in options
+                                if not filled_select and answer_lower in ("yes", "no"):
+                                    for i, opt_text in enumerate(option_texts):
+                                        if opt_text.lower().strip() == answer_lower:
+                                            try:
+                                                await inp.select_option(value=option_values[i])
+                                                logger.info(f"Yes/No matched select {inp_id}: {answer}")
+                                                filled_select = True
+                                                break
+                                            except Exception:
+                                                pass
+
+                                # Try 4: just select the best matching option by index
+                                if not filled_select:
+                                    try:
+                                        await inp.select_option(index=1)  # First non-placeholder option
+                                        logger.warning(f"Fallback: selected first option for {inp_id}")
+                                    except Exception:
+                                        pass
 
                     elif tag_name == "textarea":
                         answer = await self.ai_answerer.answer_question(
@@ -1482,8 +1936,8 @@ class GreenhouseHandler(BaseHandler):
                 except Exception:
                     pass
 
-            # Strategy 3: Acknowledgment/disclosure/policy fallback
-            if not found and any(x in question_text.lower() for x in ["california", "ccpa", "disclosure", "additional information", "acknowledgment", "policy", "usage policy", "employment history"]):
+            # Strategy 3: Acknowledgment/disclosure/policy/export controls fallback
+            if not found and any(x in question_text.lower() for x in ["california", "ccpa", "disclosure", "additional information", "acknowledgment", "policy", "usage policy", "employment history", "export control", "export controls", "itar", "u.s. citizen", "authorized to work", "legally authorized", "work authorization", "sponsorship", "require sponsorship"]):
                 try:
                     await react_select_elem.click()
                     await self.browser_manager.human_delay(400, 600)
@@ -1498,6 +1952,26 @@ class GreenhouseHandler(BaseHandler):
                             found = True
                             logger.info(f"Selected acknowledgment option: {opt_text[:50]}...")
                             break
+                        # Export controls / work authorization — pick affirmative US person/citizen option
+                        q_lower_s3 = question_text.lower()
+                        if any(x in q_lower_s3 for x in ["export control", "itar", "u.s. citizen", "authorized to work", "legally authorized", "work authorization"]):
+                            # Pick options that affirm US citizenship/authorization
+                            affirmative_keywords = ["u.s. citizen", "us citizen", "u.s. person", "us person",
+                                                     "green card", "permanent resident", "authorized", "i am a u.s.",
+                                                     "yes", "i meet", "i qualify", "i can"]
+                            if any(x in opt_lower for x in affirmative_keywords):
+                                await opt.click()
+                                found = True
+                                logger.info(f"Selected export/auth option: {opt_text[:50]}...")
+                                break
+                        # Sponsorship questions — answer No (don't require sponsorship)
+                        if any(x in q_lower_s3 for x in ["sponsorship", "require sponsorship"]):
+                            negative_keywords = ["no", "do not require", "don't require", "will not require"]
+                            if any(x in opt_lower for x in negative_keywords):
+                                await opt.click()
+                                found = True
+                                logger.info(f"Selected sponsorship option: {opt_text[:50]}...")
+                                break
                         # For employment history / policy with Yes/No options
                         if opt_lower in ("yes", "no"):
                             # For "employment history" → select "No"
@@ -1514,6 +1988,49 @@ class GreenhouseHandler(BaseHandler):
                                     found = True
                                     logger.info(f"Selected 'Yes' for policy/disclosure question")
                                     break
+                except Exception:
+                    pass
+
+            # Strategy 4: When answer is Yes/No but options are descriptive — pick best affirmative/negative
+            if not found and answer.lower() in ("yes", "no"):
+                try:
+                    await react_select_elem.click()
+                    await self.browser_manager.human_delay(300, 500)
+                    options = await page.query_selector_all('.select__option, [role="option"]')
+                    visible_opts = []
+                    for opt in options:
+                        if await opt.is_visible():
+                            t = (await opt.text_content() or "").strip()
+                            if t:
+                                visible_opts.append((opt, t))
+
+                    if visible_opts and not any(t.lower() in ("yes", "no") for _, t in visible_opts):
+                        # Options are descriptive — pick the most affirmative/negative one
+                        if answer.lower() == "yes":
+                            affirm = ["i am", "i have", "i do", "i can", "i meet", "i qualify",
+                                       "i acknowledge", "i agree", "yes", "authorized", "citizen",
+                                       "permanent resident", "u.s. person"]
+                            for opt, t in visible_opts:
+                                if any(x in t.lower() for x in affirm):
+                                    await opt.click()
+                                    found = True
+                                    logger.info(f"Strategy 4: Selected affirmative option: {t[:50]}")
+                                    break
+                        else:  # "No"
+                            negate = ["i am not", "i do not", "i don't", "no", "none",
+                                       "not authorized", "will require"]
+                            for opt, t in visible_opts:
+                                if any(x in t.lower() for x in negate):
+                                    await opt.click()
+                                    found = True
+                                    logger.info(f"Strategy 4: Selected negative option: {t[:50]}")
+                                    break
+
+                        # Last resort — just pick the first option
+                        if not found and visible_opts:
+                            await visible_opts[0][0].click()
+                            found = True
+                            logger.info(f"Strategy 4: Selected first option as fallback: {visible_opts[0][1][:50]}")
                 except Exception:
                     pass
 
@@ -1618,8 +2135,81 @@ class GreenhouseHandler(BaseHandler):
                         should_check = True
                         reason = "communication"
 
+                    # Visa sponsorship / work authorization checkboxes
+                    # "Do you now OR in the future require visa sponsorship" — check based on config
+                    elif "sponsor" in label_lower or "visa" in label_lower:
+                        work_auth = self.form_filler.config.get("work_authorization", {})
+                        need_sponsor = work_auth.get("require_sponsorship", False)
+                        need_sponsor_now = work_auth.get("require_sponsorship_now", False)
+                        need_sponsor_future = work_auth.get("require_sponsorship_future", False)
+                        # If the checkbox says "require sponsorship" — check it only if we need it
+                        if need_sponsor or need_sponsor_now or need_sponsor_future:
+                            should_check = True
+                        else:
+                            should_check = False  # Explicitly don't check
+                        reason = "sponsorship"
+
+                    # Work authorization checkboxes ("authorized to work in US")
+                    elif any(x in label_lower for x in ["authorized to work", "legally authorized", "eligible to work", "right to work"]):
+                        should_check = True
+                        reason = "work authorization"
+
+                    # Availability/willingness checkboxes
+                    elif any(x in label_lower for x in ["available to work", "willing to", "able to work", "can you commit", "full-time", "full time"]):
+                        should_check = True
+                        reason = "availability"
+
+                    # Relocation / in-office checkboxes
+                    elif any(x in label_lower for x in ["relocate", "relocation", "onsite", "on-site", "in person", "in-person", "office"]):
+                        should_check = True
+                        reason = "relocation/office"
+
+                    # Programming languages / technologies / skills checkbox groups
+                    elif not should_check:
+                        # Get the parent fieldset label to see if this is a skill question
+                        skill_parent_label = ""
+                        try:
+                            skill_fieldset = await checkbox.evaluate_handle('el => el.closest("fieldset, .field, .checkbox-grouping, [class*=\\"question\\"]")')
+                            if skill_fieldset:
+                                skill_legend = await skill_fieldset.query_selector("legend, label, .checkbox__description, [class*='label']")
+                                if skill_legend:
+                                    skill_parent_label = ((await skill_legend.text_content()) or "").lower()
+                        except Exception:
+                            pass
+
+                        if skill_parent_label and any(x in skill_parent_label for x in [
+                            "programming language", "coding language", "technologies",
+                            "technical skill", "which language", "proficient in",
+                            "comfortable using", "experience with", "familiar with",
+                            "what tools", "what technologies", "skills do you have",
+                        ]):
+                            # Match against configured skills
+                            skills_config = self.form_filler.config.get("skills", {})
+                            raw_langs = skills_config.get("programming_languages", [])
+                            # Handle both dict format ({name: "Java"}) and plain string format
+                            languages = []
+                            for l in raw_langs:
+                                if isinstance(l, dict):
+                                    languages.append(l.get("name", "").lower())
+                                else:
+                                    languages.append(str(l).lower())
+                            frameworks = [f.lower() for f in skills_config.get("frameworks", [])]
+                            tools = [t.lower() for t in skills_config.get("tools", [])]
+                            all_skills = languages + frameworks + tools
+
+                            if any(skill in label_lower for skill in all_skills):
+                                should_check = True
+                                reason = f"skill ({label_text[:20]})"
+                            # Common languages fallback if no config
+                            elif not all_skills and any(x in label_lower for x in [
+                                "python", "java", "javascript", "typescript", "c++",
+                                "sql", "html", "css", "react", "node",
+                            ]):
+                                should_check = True
+                                reason = f"common skill ({label_text[:20]})"
+
                     # Checkbox groups with "[]" in name — demographics or "how did you hear"
-                    elif not should_check and "[]" in checkbox_name:
+                    if not should_check and "[]" in checkbox_name:
                         # Check if parent fieldset/group is "how did you hear"
                         parent_label = ""
                         try:
@@ -1631,9 +2221,17 @@ class GreenhouseHandler(BaseHandler):
                         except Exception:
                             pass
 
-                        if parent_label and any(x in parent_label for x in ["how did you hear", "where did you hear", "source"]):
+                        if parent_label and any(x in parent_label for x in [
+                            "how did you hear", "where did you hear", "how did you learn",
+                            "how did you find", "source", "learn about us", "find out about",
+                            "hear about", "discover us", "referred",
+                        ]):
                             how_heard = self.form_filler._flat_config.get("common_answers.how_did_you_hear", "LinkedIn").lower()
-                            if any(x in label_lower for x in [how_heard, "linkedin", "online", "job board", "internet", "website"]):
+                            if any(x in label_lower for x in [
+                                how_heard, "linkedin", "online", "job board", "internet",
+                                "website", "social media", "search engine", "google",
+                                "indeed", "glassdoor", "career", "other",
+                            ]):
                                 should_check = True
                                 reason = f"source ({label_text[:20]})"
                         demographics = self.form_filler.config.get("demographics", {})
@@ -1653,7 +2251,8 @@ class GreenhouseHandler(BaseHandler):
                         # Ethnicity checkbox options — pick the FIRST match only
                         if not should_check:
                             ethnicity_matches = {
-                                "asian": ["east asian"],  # Pick "East Asian" as default for "Asian"
+                                "asian": ["east asian", "asian"],
+                                "east asian": ["east asian", "asian"],
                                 "black": ["black"],
                                 "hispanic": ["hispanic"],
                                 "white": ["white"],
@@ -1672,6 +2271,18 @@ class GreenhouseHandler(BaseHandler):
                                 # Only check "prefer not to say" for sexual orientation groups
                                 # Don't check it for ethnicity/gender groups (we want specific answers there)
                                 pass  # handled by ethnicity/gender above
+
+                        # Catch-all for checkbox groups: if parent label contains "select all"
+                        # or looks like a multi-select question, check any generic safe option
+                        if not should_check and parent_label:
+                            if any(x in parent_label for x in ["select all", "check all", "choose all"]):
+                                # For "select all that apply" questions, check the safest generic option
+                                if any(x in label_lower for x in [
+                                    "linkedin", "online", "job board", "other", "google",
+                                    "career site", "website", "search engine", "social media",
+                                ]):
+                                    should_check = True
+                                    reason = f"multi-select safe ({label_text[:20]})"
 
                     if should_check:
                         await checkbox.check()
@@ -1935,9 +2546,12 @@ class GreenhouseHandler(BaseHandler):
                 # (not the React-Select search input — that's type="text" and always empty)
                 hidden_has_value = await page.evaluate(f'''() => {{
                     // Check type="hidden" inputs first (the real value store)
+                    // Handles both standard IDs (school--0) and non-standard (education-7--school)
                     const selectors = [
                         'input[type="hidden"][id="{field_name}--0"]',
                         'input[type="hidden"][id$="--0"][id*="{field_name}"]',
+                        'input[type="hidden"][id*="--{field_name}"]',
+                        'input[type="hidden"][id*="education"][id*="{field_name}"]',
                         'input[type="hidden"][name*="{field_name}"]',
                     ];
                     for (const sel of selectors) {{
@@ -1989,17 +2603,42 @@ class GreenhouseHandler(BaseHandler):
                     # Dropdown is empty — fill it by clicking to open and selecting
                     logger.info(f"Filling education dropdown '{field_name}' with '{value}'")
 
-                    # For school, type to search (typeahead)
+                    # For school, type to search (typeahead) — try progressively shorter terms
                     if field_name == "school":
-                        await dropdown.click()
-                        await self.browser_manager.human_delay(500, 800)
-                        search_term = value.split(",")[0][:20]
-                        await page.keyboard.type(search_term, delay=50)
-                        await self.browser_manager.human_delay(800, 1200)
+                        # Try multiple search terms: full name → first 3 words → first 2 words → abbreviation
+                        school_name = value.split(",")[0].strip()
+                        words = school_name.split()
+                        search_terms = [school_name[:20]]
+                        if len(words) >= 3:
+                            search_terms.append(" ".join(words[:3]))
+                        if len(words) >= 2:
+                            search_terms.append(" ".join(words[:2]))
+                        # Add common abbreviation (e.g., "San Jose State University" → "SJSU")
+                        if len(words) >= 2:
+                            abbrev = "".join(w[0] for w in words if w[0].isupper())
+                            if len(abbrev) >= 2:
+                                search_terms.append(abbrev)
 
-                        found_match = await self.form_filler._select_dropdown_option(page, value)
+                        found_match = False
+                        for search_term in search_terms:
+                            await dropdown.click()
+                            await self.browser_manager.human_delay(500, 800)
+                            await page.keyboard.type(search_term, delay=50)
+                            await self.browser_manager.human_delay(800, 1200)
+
+                            found_match = await self.form_filler._select_dropdown_option(page, value)
+                            if found_match:
+                                logger.info(f"Selected school via search '{search_term}'")
+                                break
+                            await page.keyboard.press("Escape")
+                            await self.browser_manager.human_delay(200, 300)
+
                         if not found_match:
-                            # Select first search result
+                            # Last resort: type first term and press Enter for first result
+                            await dropdown.click()
+                            await self.browser_manager.human_delay(300, 500)
+                            await page.keyboard.type(search_terms[0], delay=50)
+                            await self.browser_manager.human_delay(500, 800)
                             await page.keyboard.press("Enter")
                             logger.info(f"Selected first search result for {field_name}")
                             found_match = True
@@ -2990,8 +3629,20 @@ class GreenhouseHandler(BaseHandler):
                     return label ? label.textContent.toLowerCase().trim() : "";
                 }''')
 
-                # Check if this is a location field
-                if not any(x in label_text for x in ["location", "city", "where", "state"]):
+                # Check if this is a location field (strict matching to avoid false positives)
+                import re as _re_loc
+                is_location_label = False
+                if _re_loc.search(r'\blocation\b', label_text):
+                    is_location_label = True
+                elif _re_loc.search(r'\bwhere\b.{0,20}\b(located|based|live|reside)\b', label_text):
+                    is_location_label = True
+                elif _re_loc.search(r'\bcity\b', label_text) and 'ethni' not in label_text:
+                    is_location_label = True
+                # Exclude known non-location fields
+                if any(x in label_text for x in ["ethnicity", "gender", "race", "disability", "veteran",
+                                                   "degree", "education", "sponsor", "authorized", "right to work"]):
+                    is_location_label = False
+                if not is_location_label:
                     continue
 
                 # Check if already filled
@@ -3442,6 +4093,103 @@ class GreenhouseHandler(BaseHandler):
         moment, giving React no time to re-render.
         """
         try:
+            # PHASE 1: Force-fill education fields by ID (school--0, degree--0, etc.)
+            # Also handles non-standard IDs like education-7--school, education-9--degree
+            edu = self.form_filler.config.get("education", {})
+            edu_fields = {
+                "school": edu.get("school", "San Jose State University"),
+                "degree": edu.get("degree", "Bachelor's Degree"),
+                "discipline": edu.get("major", edu.get("field_of_study", "Software Engineering")),
+            }
+            edu_injected = 0
+            for field_key, value in edu_fields.items():
+                try:
+                    # Try standard ID first, then wildcard for non-standard IDs
+                    inp = await page.query_selector(f'input#{field_key}--0')
+                    if not inp:
+                        inp = await page.query_selector(f'input[id*="--{field_key}"]')
+                    if not inp:
+                        inp = await page.query_selector(f'input[id*="education"][id*="{field_key}"]')
+                    if inp:
+                        current_val = await inp.input_value()
+                        if not current_val or current_val.strip() == "":
+                            # Also check if React-Select shows a display value
+                            display_val = await inp.evaluate('''(el) => {
+                                let container = el.closest('.field, .select, [class*="field"], [class*="education"]');
+                                if (!container) container = el.parentElement?.parentElement?.parentElement;
+                                if (!container) return null;
+                                const sv = container.querySelector('.select__single-value, [class*="singleValue"]');
+                                return sv ? sv.textContent.trim() : null;
+                            }''')
+                            inject_val = display_val if display_val and len(display_val) > 2 else value
+                            actual_id = await inp.get_attribute("id") or field_key
+                            await inp.evaluate('''(el, val) => {
+                                const nativeSetter = Object.getOwnPropertyDescriptor(
+                                    window.HTMLInputElement.prototype, 'value'
+                                ).set;
+                                nativeSetter.call(el, val);
+                                el.dispatchEvent(new Event('input', { bubbles: true }));
+                                el.dispatchEvent(new Event('change', { bubbles: true }));
+                                // Also trigger React's onChange via fiber if available
+                                const reactKey = Object.keys(el).find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+                                if (reactKey) {
+                                    let fiber = el[reactKey];
+                                    while (fiber) {
+                                        if (fiber.memoizedProps && fiber.memoizedProps.onChange) {
+                                            fiber.memoizedProps.onChange({ target: { value: val } });
+                                            break;
+                                        }
+                                        fiber = fiber.return;
+                                    }
+                                }
+                            }''', inject_val)
+                            logger.info(f"PRE-SUBMIT INJECT: Force-filled {actual_id} = {inject_val[:50]}")
+                            edu_injected += 1
+                except Exception as e:
+                    logger.debug(f"PRE-SUBMIT INJECT: Failed to force-fill {field_key}: {e}")
+
+            # Also handle date fields
+            grad_date = edu.get("graduation_date", "May 2026")
+            import re as _re_inject
+            year_match = _re_inject.search(r'20\d{2}', grad_date)
+            month_match = _re_inject.search(r'(January|February|March|April|May|June|July|August|September|October|November|December)', grad_date, _re_inject.IGNORECASE)
+            date_fields = {
+                "end-year--0": year_match.group() if year_match else "2026",
+                "end-month--0": month_match.group(1).capitalize() if month_match else "May",
+                "start-year--0": str(int((year_match.group() if year_match else "2026")) - 4),
+                "start-month--0": "August",
+            }
+            for field_id, value in date_fields.items():
+                try:
+                    inp = await page.query_selector(f'input#{field_id}')
+                    # Also try non-standard IDs (e.g., education-7--end-year)
+                    if not inp:
+                        base_name = field_id.replace("--0", "")
+                        inp = await page.query_selector(f'input[id*="--{base_name}"]')
+                    if not inp:
+                        base_name = field_id.replace("--0", "")
+                        inp = await page.query_selector(f'input[id*="education"][id*="{base_name}"]')
+                    if inp:
+                        current_val = await inp.input_value()
+                        if not current_val or current_val.strip() == "":
+                            await inp.evaluate('''(el, val) => {
+                                const nativeSetter = Object.getOwnPropertyDescriptor(
+                                    window.HTMLInputElement.prototype, 'value'
+                                ).set;
+                                nativeSetter.call(el, val);
+                                el.dispatchEvent(new Event('input', { bubbles: true }));
+                                el.dispatchEvent(new Event('change', { bubbles: true }));
+                            }''', value)
+                            actual_id = await inp.get_attribute("id") or field_id
+                            logger.info(f"PRE-SUBMIT INJECT: Force-filled date {actual_id} = {value}")
+                            edu_injected += 1
+                except Exception as e:
+                    logger.debug(f"PRE-SUBMIT INJECT: Failed to force-fill date {field_id}: {e}")
+
+            if edu_injected:
+                logger.info(f"PRE-SUBMIT INJECT: Force-filled {edu_injected} education/date fields")
+
+            # PHASE 2: Generic React-Select injection for other dropdowns
             injected = await page.evaluate('''() => {
                 const results = [];
                 // Find all visible React-Select controls
@@ -3746,9 +4494,17 @@ class GreenhouseHandler(BaseHandler):
             'button[type="submit"]',
             'input[type="submit"]',
             'button:has-text("Submit")',
+            'button:has-text("Submit Application")',
+            'button:has-text("Submit application")',
             'button:has-text("Apply")',
             '#submit_app',
             '.submit-button',
+            'a:has-text("Submit")',
+            'button:has-text("Send Application")',
+            'button:has-text("Send application")',
+            '[data-action="submit"]',
+            'button[id*="submit"]',
+            'button[class*="submit"]',
         ]
 
         for selector in submit_selectors:
@@ -3786,6 +4542,31 @@ class GreenhouseHandler(BaseHandler):
                     return True
             except Exception:
                 continue
+
+        # Fallback: find ANY visible button at the bottom that looks like submit
+        try:
+            all_buttons = await page.query_selector_all('button, input[type="submit"], a[role="button"]')
+            for btn in reversed(all_buttons):  # Start from bottom
+                if not await btn.is_visible():
+                    continue
+                text = (await btn.text_content() or "").strip().lower()
+                if any(w in text for w in ["submit", "apply", "send", "continue"]):
+                    await self.browser_manager.human_delay(500, 1000)
+                    await btn.scroll_into_view_if_needed()
+                    await btn.click()
+                    logger.info(f"Clicked fallback submit button: '{text}'")
+                    await self.browser_manager.human_delay(2000, 3000)
+                    # Click again (user requested double-click submit)
+                    try:
+                        if await btn.is_visible():
+                            await btn.click()
+                            logger.info("Double-clicked submit")
+                            await self.browser_manager.human_delay(2000, 3000)
+                    except Exception:
+                        pass
+                    return True
+        except Exception as e:
+            logger.debug(f"Fallback submit search failed: {e}")
 
         logger.warning("Could not find submit button")
         return False
@@ -3894,6 +4675,52 @@ class GreenhouseHandler(BaseHandler):
                         return True
                 except Exception:
                     continue
+
+            # Strategy 3: Find any visible text input in a modal/dialog/overlay
+            modal_selectors = [
+                '[role="dialog"] input[type="text"]',
+                '.modal input[type="text"]',
+                '[class*="modal"] input[type="text"]',
+                '[class*="overlay"] input[type="text"]',
+                '[class*="verification"] input',
+                '[class*="confirm"] input[type="text"]',
+            ]
+            for sel in modal_selectors:
+                try:
+                    inp = await page.query_selector(sel)
+                    if inp and await inp.is_visible():
+                        await inp.fill(code)
+                        logger.info(f"Entered verification code in modal input: {code}")
+                        await self.browser_manager.human_delay(500, 1000)
+                        return True
+                except Exception:
+                    continue
+
+            # Strategy 4: Find ANY visible empty text input (last resort — the modal may focus it)
+            all_text_inputs = await page.query_selector_all('input[type="text"]:not([type="hidden"])')
+            for inp in all_text_inputs:
+                try:
+                    if await inp.is_visible():
+                        val = await inp.input_value()
+                        if not val or not val.strip():
+                            await inp.fill(code)
+                            logger.info(f"Entered verification code in empty text input: {code}")
+                            await self.browser_manager.human_delay(500, 1000)
+                            return True
+                except Exception:
+                    continue
+
+            # Strategy 5: Just type it — the page might have focused the input already
+            try:
+                await page.keyboard.type(code, delay=100)
+                logger.info(f"Typed verification code via keyboard: {code}")
+                await self.browser_manager.human_delay(500, 1000)
+                # Press Enter to submit
+                await page.keyboard.press("Enter")
+                await self.browser_manager.human_delay(2000, 3000)
+                return True
+            except Exception:
+                pass
 
             logger.warning("Verification code prompt detected but could not find input field to enter code")
             return False
