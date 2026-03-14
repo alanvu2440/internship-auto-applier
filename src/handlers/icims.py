@@ -32,7 +32,7 @@ ICIMS_COOKIE_DIR.mkdir(parents=True, exist_ok=True)
 # Account tracker
 ICIMS_ACCOUNT_TRACKER = Path("data/icims_accounts.json")
 
-ICIMS_PASSWORD = "AutoApply2026!#Xk"
+_ICIMS_PASSWORD_FALLBACK = "CHANGE_ME"
 
 
 def _load_icims_accounts() -> Dict[str, Any]:
@@ -60,7 +60,7 @@ def _get_icims_subdomain(url: str) -> str:
 
 def _make_icims_alias(base_email: str, subdomain: str) -> str:
     """Create Gmail alias for iCIMS subdomain.
-    e.g. alanvu2440@gmail.com + careers-lmi -> alanvu2440+icims-careers-lmi@gmail.com
+    e.g. user@example.com + careers-lmi -> user+icims-careers-lmi@example.com
     """
     local, domain = base_email.split("@", 1)
     safe = subdomain.replace(".", "-").replace("_", "-")
@@ -71,6 +71,10 @@ class ICIMSHandler(BaseHandler):
     """Handler for iCIMS ATS applications."""
 
     name = "icims"
+
+    @property
+    def _icims_password(self):
+        return self.form_filler.config.get("accounts", {}).get("icims_password", "") or _ICIMS_PASSWORD_FALLBACK
 
     # Step indicators in the progress bar
     STEP_NAMES = [
@@ -441,7 +445,7 @@ class ICIMSHandler(BaseHandler):
                     pw_fields = await frame.query_selector_all('input[type="password"]')
                     for pw in pw_fields:
                         if await pw.is_visible():
-                            await pw.fill(ICIMS_PASSWORD)
+                            await pw.fill(self._icims_password)
                             await self.browser_manager.human_delay(200, 400)
 
                     # First name
@@ -596,7 +600,7 @@ class ICIMSHandler(BaseHandler):
                     # Password
                     pw = await frame.query_selector('input[type="password"]')
                     if pw and await pw.is_visible():
-                        await pw.fill(ICIMS_PASSWORD)
+                        await pw.fill(self._icims_password)
                         await self.browser_manager.human_delay(200, 400)
 
                     if filled:

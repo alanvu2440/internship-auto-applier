@@ -91,22 +91,27 @@ GitHub Watcher → Job Parser → Job Queue (SQLite) → ATS Router → Handler 
 | iCIMS | SKIPPED | 85 | 0% | YES (always) | N/A |
 | Unknown | generic.py | 701 | ~30% | Varies | Varies |
 
-## Question Answering Flow
+## Question Answering Flow (Golden Path)
 
 ```
 Question detected by handler
   ↓
-1. Check _get_config_answer() — 730+ regex patterns
-   ↓ no match
-2. Check _match_option_from_config() — for dropdowns
-   ↓ no match
-3. Check answer_cache (data/answer_cache.json)
-   ↓ no cache hit
-4. Call Gemini API (primary key first)
-   ↓ 429/quota error
-5. Auto-failover to backup Gemini key (if configured, budget not exceeded)
-   ↓ also fails
-6. Generic fallback (_generate_generic_answer)
+0. Is it required? → skip optional fields, skip social media (Facebook/Twitter/Instagram)
+   Exception: keep LinkedIn and GitHub (always fill from config)
+  ↓ required
+1. Check TEMPLATE BANK (config/question_banks/{ats_type}.yaml) — 95% hit rate
+  ↓ no match
+2. Check option matching for dropdowns (_match_option_from_config)
+  ↓ no match
+3. Check _get_config_answer() — 730+ regex patterns
+  ↓ no match
+4. Check answer cache (data/answer_cache.json)
+  ↓ no cache hit
+5. Call Gemini AI (primary key first, backup failover on 429/quota)
+  ↓ AI fails
+6. Generic fallback (only if confidence >= 85%)
+  ↓ still no answer
+7. Leave field empty → DON'T SUBMIT → leave tab open for manual intervention
 
 ALL PATHS → log to data/question_knowledge_base.md
 ALL PATHS → track in session_answers for reporting
@@ -173,9 +178,18 @@ python src/main.py track --interval 48 --days 7
 | `--smart` | Gemini scans form after handler fails, fills missed fields via AI (DOM + vision) | Always-on for better success rate, costs ~$0.0004/job |
 | `--assist` | Bot fills what it can → **browser stays open** → shows missing fields → YOU fix manually → press Enter → bot submits + screenshots | For rescuing failed jobs that need 1-2 manual fields |
 | `--review` | Bot fills everything → pauses before submit → YOU inspect → press Enter to submit | When you want to double-check before submit |
-| `--with-simplify` | Loads Simplify Copilot Chrome extension for boilerplate autofill (name/email/phone) | Optional, needs first-time Simplify login |
+| ~~`--with-simplify`~~ | **DEPRECATED** — Simplify Copilot is now ALWAYS loaded automatically | N/A |
 | `--workday-accounts` | Only apply to Workday tenants with saved accounts, slow mode (90s gaps, 4/hr) | For Workday batch runs |
 | `--dry-run` | Fill forms but never click submit | Testing |
+
+### Browser Behavior Rules
+
+- **Simplify is always loaded** — the `--with-simplify` flag is deprecated; Simplify fills first on every page
+- **Browser never closes automatically** — user presses Enter to close
+- **Tabs only close on success** — 10-second wait, screenshot, then close
+- **Failures leave tab open** — for manual inspection or assist mode
+- **Social media fields are always skipped** — Facebook, Twitter, Instagram
+- **Optional fields are skipped** — except LinkedIn and GitHub (always filled from config)
 
 ### Dedicated Commands
 

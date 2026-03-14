@@ -77,6 +77,14 @@ Role: {role}
         self._ai_available = True
         self._ai_timeout = 15  # 15 second timeout for AI calls
 
+        # Per-template question banks (loaded lazily)
+        self._template_banks = {}  # ats_type → {normalized_question → {answer, type}}
+        self._common_bank = None  # Cross-ATS common questions
+        self._banks_loaded = False
+
+        # Cached OptionMatcher (avoid re-instantiation on every call)
+        self._option_matcher = None
+
         # Backup Gemini key (GCP $300 credit account)
         self._secrets = secrets or {}
         self._backup_api_key = self._secrets.get("gemini_backup_api_key", "") or ""
@@ -245,6 +253,143 @@ Role: {role}
             return text.replace(company, "[Company]")
         return text
 
+    def _load_template_banks(self):
+        """Load per-ATS question banks from config/question_banks/."""
+        if self._banks_loaded:
+            return
+        self._banks_loaded = True
+        import yaml
+        banks_dir = Path("config/question_banks")
+        if not banks_dir.exists():
+            return
+        for yaml_file in banks_dir.glob("*.yaml"):
+            try:
+                with open(yaml_file) as f:
+                    data = yaml.safe_load(f) or {}
+                ats_type = data.get("ats_type", yaml_file.stem)
+                questions = data.get("questions", {})
+                self._template_banks[ats_type] = questions
+                if ats_type == "common" or yaml_file.stem == "common":
+                    self._common_bank = questions
+                logger.debug(f"Loaded {len(questions)} questions from {yaml_file.name}")
+            except Exception as e:
+                logger.debug(f"Failed to load {yaml_file}: {e}")
+
+    def _lookup_template_bank(self, question: str, ats_type: str = None) -> Optional[dict]:
+        """Look up a question in per-template banks.
+
+        Returns {answer, type} if found, None otherwise.
+        Priority: template-specific bank → common bank.
+        """
+        self._load_template_banks()
+        norm = re.sub(r'\s+', ' ', question.lower().strip())
+        norm = re.sub(r'[*\n\r]', '', norm).strip()
+
+        # 1. Try template-specific bank (exact match)
+        if ats_type and ats_type in self._template_banks:
+            bank = self._template_banks[ats_type]
+            if norm in bank:
+                return bank[norm]
+            # Try fuzzy: strip trailing punctuation and try prefix match
+            norm_clean = norm.rstrip('?. ')
+            for key, val in bank.items():
+                if key.startswith(norm_clean[:40]) or norm_clean.startswith(key[:40]):
+                    return val
+
+        # 2. Try common bank
+        if self._common_bank:
+            if norm in self._common_bank:
+                return self._common_bank[norm]
+            norm_clean = norm.rstrip('?. ')
+            for key, val in self._common_bank.items():
+                if key.startswith(norm_clean[:40]) or norm_clean.startswith(key[:40]):
+                    return val
+
+        return None
+
+    def _normalize_for_bank(self, question: str) -> str:
+        """Normalize question text for template bank storage/lookup."""
+        norm = re.sub(r'\s+', ' ', question.lower().strip())
+        norm = re.sub(r'[*\n\r]', '', norm).strip()
+        return norm
+
+    def _auto_learn_to_template_bank(self, question: str, answer: str, field_type: str, source: str):
+        """Auto-add successfully answered questions to the template bank.
+
+        Only adds high-confidence answers. The template bank grows continuously —
+        same question in different phrasings all map to the correct answer.
+        Like method overloading: multiple signatures, same behavior.
+        """
+        # Only learn from high-confidence sources
+        approved_sources = {"config_option", "config", "config_fallback", "ai", "ai_backup", "verified"}
+        if source not in approved_sources:
+            return
+
+        # Skip empty, placeholder, or too-short answers
+        if not answer or len(answer.strip()) < 1:
+            return
+        if len(question.strip()) < 5:
+            return
+
+        # Normalize
+        norm_q = self._normalize_for_bank(question)
+        if not norm_q:
+            return
+
+        # Determine which bank to write to
+        ats_type = self.job_context.get("ats_type", "")
+        bank_file = None
+        bank_dict = None
+
+        if ats_type:
+            bank_path = Path(f"config/question_banks/{ats_type}.yaml")
+            if bank_path.exists():
+                bank_file = bank_path
+                bank_dict = self._template_banks.get(ats_type, {})
+            else:
+                bank_file = Path("config/question_banks/common.yaml")
+                bank_dict = self._common_bank or {}
+        else:
+            bank_file = Path("config/question_banks/common.yaml")
+            bank_dict = self._common_bank or {}
+
+        # Check if already in bank (exact or prefix match)
+        if norm_q in bank_dict:
+            return
+        norm_clean = norm_q.rstrip('?. ')
+        for key in bank_dict:
+            if key.startswith(norm_clean[:40]) or norm_clean.startswith(key[:40]):
+                return  # Similar question already exists
+
+        # Templatize answer (replace company name with placeholder for reuse)
+        company = self.job_context.get("company", "")
+        templatized = answer
+        if company and len(company) > 2:
+            templatized = answer.replace(company, "[Company]")
+
+        # Add to in-memory bank
+        entry = {"answer": templatized, "type": field_type or "text"}
+        bank_dict[norm_q] = entry
+
+        # Update in-memory reference
+        if ats_type and ats_type in self._template_banks:
+            self._template_banks[ats_type][norm_q] = entry
+        elif self._common_bank is not None:
+            self._common_bank[norm_q] = entry
+
+        # Append to YAML file (append-only for performance)
+        try:
+            with open(bank_file, "a", encoding="utf-8") as f:
+                # YAML-safe: quote the answer to handle colons, special chars
+                safe_answer = templatized.replace("'", "''")
+                safe_question = norm_q.replace("'", "''")
+                f.write(f"\n  {safe_question}:\n")
+                f.write(f"    answer: '{safe_answer}'\n")
+                f.write(f"    type: {field_type or 'text'}\n")
+            logger.debug(f"Auto-learned question to {bank_file.name}: '{norm_q[:50]}' -> '{templatized[:30]}'")
+        except Exception as e:
+            logger.debug(f"Failed to auto-learn question: {e}")
+
     def _get_model(self):
         """Get or create Gemini model."""
         if not GENAI_AVAILABLE:
@@ -256,6 +401,9 @@ Role: {role}
     def set_profile(self, config: Dict[str, Any]):
         """Set the candidate profile from config."""
         self.config = config
+        # Invalidate cached objects that depend on config
+        self._option_matcher = None
+        self._config_sub_dicts = None
         profile_parts = []
 
         if "personal_info" in config:
@@ -289,39 +437,22 @@ Role: {role}
 
         self.profile_str = "\n".join(profile_parts)
 
-    def set_job_context(self, company: str, role: str, description: str = ""):
+    def set_job_context(self, company: str, role: str, description: str = "", ats_type: str = ""):
         """Set the current job being applied to."""
         self.job_context = {
             "company": company,
             "role": role,
             "description": description[:500] if description else "",
+            "ats_type": ats_type,
         }
 
     def _get_grad_date(self) -> str:
-        """Get graduation date from config, with sensible dynamic default."""
-        education = self.config.get("education", [{}])
-        if education and isinstance(education, list) and education[0]:
-            grad = education[0].get("graduation_date", "")
-            if grad:
-                return str(grad)
-        # Dynamic fallback: next May/June from current date
-        from datetime import datetime
-        now = datetime.now()
-        year = now.year if now.month <= 6 else now.year + 1
-        return f"May {year}"
+        """Get graduation date from config. Delegates to OptionMatcher (single source of truth)."""
+        return self._get_option_matcher()._get_grad_date()
 
     def _get_internship_term(self) -> str:
-        """Get current internship term dynamically."""
-        from datetime import datetime
-        now = datetime.now()
-        month = now.month
-        year = now.year
-        if month <= 4:
-            return f"Summer {year}"
-        elif month <= 8:
-            return f"Fall {year}"
-        else:
-            return f"Summer {year + 1}"
+        """Get current internship term. Delegates to OptionMatcher (single source of truth)."""
+        return self._get_option_matcher()._get_internship_term()
 
     def _get_language_years(self, tech: str) -> Optional[str]:
         """Look up years of experience for a specific language/technology from config."""
@@ -350,21 +481,38 @@ Role: {role}
         # Technology not in config — return "0" so it's honest
         return "0"
 
+    def _get_cached_config_dicts(self):
+        """Cache config sub-dicts to avoid re-extracting on every _get_config_answer call."""
+        if not hasattr(self, '_config_sub_dicts') or self._config_sub_dicts is None:
+            self._config_sub_dicts = {
+                "common": self.config.get("common_answers", {}),
+                "personal": self.config.get("personal_info", {}),
+                "work_auth": self.config.get("work_authorization", {}),
+                "screening": self.config.get("screening", {}),
+                "availability": self.config.get("availability", {}),
+                "skills": self.config.get("skills", {}),
+                "education": self.config.get("education", [{}])[0] if self.config.get("education") else {},
+                "experience": self.config.get("experience", [{}])[0] if self.config.get("experience") else {},
+                "demographics": self.config.get("demographics", {}),
+            }
+        return self._config_sub_dicts
+
     def _get_config_answer(self, question: str, field_type: str = "text") -> Optional[str]:
         """
         Try to answer from config without AI.
         Returns None if no matching config answer found.
         """
         q = question.lower().strip()
-        common = self.config.get("common_answers", {})
-        personal = self.config.get("personal_info", {})
-        work_auth = self.config.get("work_authorization", {})
-        screening = self.config.get("screening", {})
-        availability = self.config.get("availability", {})
-        skills = self.config.get("skills", {})
-        education = self.config.get("education", [{}])[0] if self.config.get("education") else {}
-        experience = self.config.get("experience", [{}])[0] if self.config.get("experience") else {}
-        demographics = self.config.get("demographics", {})
+        cd = self._get_cached_config_dicts()
+        common = cd["common"]
+        personal = cd["personal"]
+        work_auth = cd["work_auth"]
+        screening = cd["screening"]
+        availability = cd["availability"]
+        skills = cd["skills"]
+        education = cd["education"]
+        experience = cd["experience"]
+        demographics = cd["demographics"]
 
         # Pattern matching for common questions
         patterns = [
@@ -828,7 +976,8 @@ Role: {role}
              "Prefer not to say"),
 
             # UK employment status / location questions
-            (r"employment.*(status|category|type)",
+            # MUST NOT match "sponsorship for employment visa status"
+            (r"^(?!.*sponsor).*employment\s+(status|category|type)",
              "Full-time student"),
             (r"(please indicate|indicate|describe).*(employment|working|work status|currently)",
              "Full-time student"),
@@ -840,7 +989,7 @@ Role: {role}
             # Company name (current/previous employer)
             (r"^company\s*name\*?$",
              experience.get("company", "N/A") if experience else "N/A"),
-            (r"(current|most recent|previous|last).*(employer|company)",
+            (r"(current|most recent|previous|last)\s+(employer|company)\b",
              experience.get("company", "N/A") if experience else "N/A"),
 
             # City (standalone question)
@@ -959,9 +1108,9 @@ Role: {role}
             (r"^website\*?$",
              personal.get("portfolio", "") or personal.get("github", "")),
 
-            # Twitter / X URL — return empty, we don't have one
+            # Twitter / X URL — N/A (we don't have one)
             (r"(twitter|^x\s*url|^x$)\s*(url|profile)?",
-             ""),
+             "N/A"),
 
             # Portfolio URL / Other website — return empty or portfolio
             (r"(portfolio|other\s*website|personal\s*website)\s*(url)?",
@@ -1263,10 +1412,14 @@ Role: {role}
             (r"(reasonable accommodation|with or without)",
              True),
 
-            # Non-compete / restrictive covenant
+            # Non-compete / restrictive covenant / conflict of interest / outside business
             (r"(non.?compete|non.?solicitation|restrictive covenant|restrictive agreement)",
              False),
             (r"subject to.*(agreement|covenant|restriction|non)",
+             False),
+            (r"(conflict.*(interest|company)|outside.*(business|activit)|appearance.*conflict)",
+             False),
+            (r"(party to|bound by).*(employment|consulting|personal services).*(agreement|contract)",
              False),
 
             # Government/regulatory disqualification
@@ -1365,14 +1518,48 @@ Role: {role}
     ) -> str:
         """
         Generate an answer for a question.
-        First tries config-based fallback, then AI if needed.
+        Priority: template bank → option matching → config patterns → cache → Gemini → fallback
         """
-        # For dropdowns with options, try option matching FIRST (knows actual menu items)
+        # STEP 0: Per-template question bank (exact/fuzzy match from known questions)
+        ats_type = self.job_context.get("ats_type", "")
+        bank_result = self._lookup_template_bank(question, ats_type)
+        if bank_result:
+            answer = bank_result["answer"]
+            # For dropdowns with options, verify the bank answer matches an actual option
+            if options and field_type in ("dropdown", "select", "radio"):
+                answer_lower = answer.lower().strip()
+                option_match = any(
+                    answer_lower == o.lower().strip() or
+                    answer_lower in o.lower() or
+                    o.lower().strip() in answer_lower
+                    for o in options if o.strip()
+                )
+                if not option_match:
+                    # Bank answer doesn't match any dropdown option — skip bank, use option matching
+                    logger.info(f"Template bank answer '{answer[:30]}' doesn't match options {options[:5]} — falling through to option matching")
+                    # Don't return — continue to next step
+                else:
+                    if max_length and len(answer) > max_length:
+                        answer = answer[:max_length-3] + "..."
+                    logger.info(f"Template bank hit ({ats_type}): '{question[:40]}...' -> '{answer[:40]}...'")
+                    self.session_answers.append({"question": question, "answer": answer, "source": "template_bank"})
+                    self._log_to_kb(question, answer, "template_bank", field_type=field_type)
+                    return answer
+            else:
+                if max_length and len(answer) > max_length:
+                    answer = answer[:max_length-3] + "..."
+                logger.info(f"Template bank hit ({ats_type}): '{question[:40]}...' -> '{answer[:40]}...'")
+                self.session_answers.append({"question": question, "answer": answer, "source": "template_bank"})
+                self._log_to_kb(question, answer, "template_bank", field_type=field_type)
+                return answer
+
+        # STEP 1: For dropdowns with options, try option matching (knows actual menu items)
         if options and field_type in ("dropdown", "select", "radio"):
             matched = self._match_option_from_config(question, options)
             if matched:
                 self.session_answers.append({"question": question, "answer": matched, "source": "config_option"})
                 self._log_to_kb(question, matched, "config_option", field_type=field_type)
+                self._auto_learn_to_template_bank(question, matched, field_type, "config_option")
                 return matched
 
         # Try config-based answer
@@ -1382,15 +1569,8 @@ Role: {role}
                 config_answer = config_answer[:max_length-3] + "..."
             self.session_answers.append({"question": question, "answer": config_answer, "source": "config"})
             self._log_to_kb(question, config_answer, "config", field_type=field_type)
+            self._auto_learn_to_template_bank(question, config_answer, field_type, "config")
             return config_answer
-
-        # If options provided and config answer didn't match, try option matching as fallback
-        if options:
-            matched = self._match_option_from_config(question, options)
-            if matched:
-                self.session_answers.append({"question": question, "answer": matched, "source": "config_option"})
-                self._log_to_kb(question, matched, "config_option", field_type=field_type)
-                return matched
 
         # Check verified answers database (human-approved)
         verified = self.verifier.get_verified_answer(question, field_type, options)
@@ -1401,6 +1581,7 @@ Role: {role}
             logger.info(f"Verified answer: '{question[:40]}...' -> '{answer[:40]}...'")
             self.session_answers.append({"question": question, "answer": answer, "source": verified["source"]})
             self._log_to_kb(question, answer, verified["source"], field_type=field_type)
+            self._auto_learn_to_template_bank(question, answer, field_type, "verified")
             return answer
 
         # Check answer cache before calling AI
@@ -1414,9 +1595,10 @@ Role: {role}
             self._log_to_kb(question, cached, "cache", field_type=field_type)
             return cached
 
-        # Try generic fallback BEFORE AI — most questions match config patterns
+        # Try generic fallback BEFORE AI — only use if HIGH confidence (85+)
+        # Lower confidence answers should go to AI for better quality
         generic_answer, generic_confidence = self._generate_generic_answer_with_confidence(question, field_type, max_length)
-        if generic_confidence >= 60:
+        if generic_confidence >= 85:
             # Good config-based answer — skip AI entirely
             source = "config_fallback" if generic_confidence >= 85 else "config_fallback_broad"
             logger.info(f"Config fallback (confidence={generic_confidence}): '{question[:50]}...' -> '{generic_answer[:50]}...'")
@@ -1425,14 +1607,15 @@ Role: {role}
             # Cache it for instant reuse next time
             self._answer_cache[cache_key] = self._to_template(generic_answer)
             self._save_answer_cache()
+            self._auto_learn_to_template_bank(question, generic_answer, field_type, "config_fallback")
             return generic_answer
 
         # Generic confidence is low (0) — try AI for a better answer
         if not GENAI_AVAILABLE or not self._ai_available or not self.api_key or not isinstance(self.api_key, str):
-            logger.warning(f"AI unavailable, using low-confidence generic for: '{question[:50]}...'")
-            self.session_answers.append({"question": question, "answer": generic_answer, "source": "generic_fallback", "confidence": 0})
-            self._log_to_kb(question, generic_answer, "generic_fallback", field_type=field_type)
-            return generic_answer
+            logger.warning(f"AI unavailable — leaving unsolved for manual: '{question[:50]}...'")
+            self.session_answers.append({"question": question, "answer": "", "source": "unsolved", "confidence": 0})
+            self._log_to_kb(question, f"[UNSOLVED - AI unavailable] generic_suggestion={generic_answer}", "unsolved", field_type=field_type)
+            return ""
 
         for attempt in range(self._retry_count):
             try:
@@ -1463,16 +1646,6 @@ Role: {role}
                 full_prompt = f"{system}\n\n{user_prompt}"
 
                 # Use asyncio.wait_for with timeout to prevent long hangs
-                async def _call_ai():
-                    response = model.generate_content(
-                        full_prompt,
-                        generation_config=genai.types.GenerationConfig(
-                            max_output_tokens=500,
-                            temperature=0.7,
-                        )
-                    )
-                    return response.text.strip()
-
                 try:
                     answer = await asyncio.wait_for(
                         asyncio.get_running_loop().run_in_executor(
@@ -1505,6 +1678,7 @@ Role: {role}
                 logger.info(f"{'Backup ' if self._using_backup else ''}AI answered: '{question[:50]}...' -> '{answer[:50]}...'")
                 self.session_answers.append({"question": question, "answer": answer, "source": source})
                 self._log_to_kb(question, answer, source, field_type=field_type)
+                self._auto_learn_to_template_bank(question, answer, field_type, source)
                 return answer
 
             except Exception as e:
@@ -1545,6 +1719,7 @@ Role: {role}
                                 logger.info(f"Backup AI answered: '{question[:50]}...' -> '{answer[:50]}...'")
                                 self.session_answers.append({"question": question, "answer": answer, "source": "ai_backup"})
                                 self._log_to_kb(question, answer, "ai_backup", field_type=field_type)
+                                self._auto_learn_to_template_bank(question, answer, field_type, "ai_backup")
                                 return answer
                             except Exception as backup_e:
                                 logger.error(f"Backup AI also failed: {backup_e}")
@@ -1553,657 +1728,33 @@ Role: {role}
                 logger.error(f"AI answering failed: {e}")
                 break
 
-        # AI failed — use the generic answer we already computed (confidence was 0)
-        logger.info(f"AI failed, using generic fallback: '{question[:50]}...' -> '{generic_answer[:50]}...'")
-        self.session_answers.append({"question": question, "answer": generic_answer, "source": "generic_fallback", "confidence": 0})
-        self._log_to_kb(question, generic_answer, "generic_fallback", field_type=field_type)
+        # AI failed and generic confidence is low — leave field EMPTY for manual review
+        # Don't fill garbage answers that hurt the application
+        logger.warning(f"UNSOLVED QUESTION — leaving empty for manual: '{question[:80]}...'")
+        self.session_answers.append({"question": question, "answer": "", "source": "unsolved", "confidence": 0})
+        self._log_to_kb(question, f"[UNSOLVED - needs manual answer] generic_suggestion={generic_answer}", "unsolved", field_type=field_type)
         self.verifier.queue_for_review(
             question=question,
             proposed_answer=generic_answer,
-            source="generic_fallback",
+            source="unsolved",
             confidence=QuestionVerifier.CONFIDENCE_GENERIC,
             field_type=field_type,
             options=options,
             company=self.job_context.get("company", ""),
         )
-        return generic_answer
+        # Return empty — handler will leave field empty, won't submit if required
+        return ""
+
+    def _get_option_matcher(self):
+        """Get cached OptionMatcher instance (lazy-init)."""
+        if self._option_matcher is None:
+            from form.option_matcher import OptionMatcher
+            self._option_matcher = OptionMatcher(self.config)
+        return self._option_matcher
 
     def _match_option_from_config(self, question: str, options: List[str]) -> Optional[str]:
         """Try to match an option based on config values and question context."""
-        q = question.lower()
-        options_lower = [o.lower() for o in options]
-
-        work_auth = self.config.get("work_authorization", {})
-        screening = self.config.get("screening", {})
-        availability = self.config.get("availability", {})
-        demographics = self.config.get("demographics", {})
-
-        # Authorization questions - including "unrestricted right to work"
-        if any(x in q for x in ["authorized", "eligible", "legally", "right to work", "unrestricted"]):
-            if work_auth.get("us_work_authorized", True):
-                for i, opt in enumerate(options_lower):
-                    if "yes" in opt:
-                        return options[i]
-                # If no "yes" option, look for "permanently authorized" type options
-                for i, opt in enumerate(options_lower):
-                    if "permanent" in opt or "authorized" in opt:
-                        return options[i]
-
-        # Work permit type / authorization type (conditional follow-up)
-        if any(x in q for x in ["work permit", "permit type", "authorization type", "work authorization"]):
-            if work_auth.get("us_citizen", False) or work_auth.get("us_work_authorized", True):
-                for i, opt in enumerate(options_lower):
-                    if "permanent" in opt or "citizen" in opt or "authorized" in opt:
-                        return options[i]
-                # Fallback: first non-"select one" that isn't "temporary"
-                for i, opt in enumerate(options_lower):
-                    if "select" not in opt and "temporary" not in opt and opt.strip():
-                        return options[i]
-
-        # Sponsorship / immigration support questions
-        if any(x in q for x in ["sponsor", "visa", "h1b", "h-1b", "immigration"]):
-            need_sponsor = work_auth.get("require_sponsorship_now", False)
-            for i, opt in enumerate(options_lower):
-                if need_sponsor and "yes" in opt:
-                    return options[i]
-                elif not need_sponsor and "no" in opt:
-                    return options[i]
-
-        # Relocation questions
-        if "relocat" in q:
-            if availability.get("willing_to_relocate", True):
-                for i, opt in enumerate(options_lower):
-                    if "yes" in opt:
-                        return options[i]
-
-        # Age questions
-        if any(x in q for x in ["18", "eighteen", "legal age", "21", "twenty"]):
-            for i, opt in enumerate(options_lower):
-                if "yes" in opt:
-                    return options[i]
-
-        # Gender
-        if "gender" in q:
-            gender = demographics.get("gender", "Prefer not to say")
-            gender_lower = gender.lower()
-            # Exact match first (avoid "male" matching "female")
-            for i, opt in enumerate(options_lower):
-                if opt.strip() == gender_lower or opt.strip() == f"{gender_lower} ":
-                    return options[i]
-            # Word-boundary match
-            import re as _re
-            for i, opt in enumerate(options_lower):
-                if _re.search(r'\b' + _re.escape(gender_lower) + r'\b', opt):
-                    return options[i]
-            # Fallback to "prefer not to say"
-            for i, opt in enumerate(options_lower):
-                if "prefer not" in opt or "decline" in opt:
-                    return options[i]
-
-        # Ethnicity
-        if any(x in q for x in ["ethnic", "race", "racial"]):
-            ethnicity = demographics.get("ethnicity", "Prefer not to say")
-            race = demographics.get("race", "Asian")
-            # Try exact match first ("East Asian"), then broader ("Asian")
-            for candidate in [ethnicity.lower(), race.lower()]:
-                for i, opt in enumerate(options_lower):
-                    if candidate in opt:
-                        return options[i]
-            for i, opt in enumerate(options_lower):
-                if "prefer not" in opt or "decline" in opt:
-                    return options[i]
-
-        # Hispanic/Latino
-        if "hispanic" in q or "latino" in q:
-            ethnicity = demographics.get("ethnicity", "Prefer not to say")
-            target = "yes" if "hispanic" in ethnicity.lower() or "latino" in ethnicity.lower() else "no"
-            for i, opt in enumerate(options_lower):
-                if target in opt:
-                    return options[i]
-            # Fallback to "no" or "prefer not to say"
-            for i, opt in enumerate(options_lower):
-                if "no" in opt or "prefer not" in opt or "decline" in opt:
-                    return options[i]
-
-        # Veteran status — detect by question text OR option text mentioning "veteran"
-        options_joined = " ".join(options_lower)
-        if "veteran" in q or ("veteran" in options_joined and ("government contractor" in q or "protected" in options_joined)):
-            # Priority 1: "I am not a protected veteran" (exact non-veteran answer)
-            for i, opt in enumerate(options_lower):
-                if "i am not a protected veteran" in opt:
-                    return options[i]
-            # Priority 2: "I am not a veteran" or similar clear negation
-            for i, opt in enumerate(options_lower):
-                if opt.strip().startswith("i am not") and "veteran" in opt:
-                    return options[i]
-            # Priority 3: Any option with "not a veteran" that doesn't start with "I identify"
-            for i, opt in enumerate(options_lower):
-                if "not" in opt and "veteran" in opt and not opt.strip().startswith("i identify"):
-                    return options[i]
-            # Priority 4: Generic "no" or "not" option
-            for i, opt in enumerate(options_lower):
-                if "not" in opt or "no" in opt:
-                    return options[i]
-
-        # Polygraph / security clearance type — default to "None" option
-        if "polygraph" in q or "clearance" in q and "type" in q:
-            for i, opt in enumerate(options_lower):
-                if opt.strip() == "none" or "no clearance" in opt or "never" in opt:
-                    return options[i]
-
-        # Disability — detect by question text OR option text mentioning "disability"
-        # User confirmed: NO disability. Prioritize "No" answers over "prefer not to say"
-        if "disab" in q or "disab" in options_joined:
-            for i, opt in enumerate(options_lower):
-                if "do not have" in opt or "no, i don" in opt or opt.strip() == "no":
-                    return options[i]
-            for i, opt in enumerate(options_lower):
-                if "do not want" in opt or "don't want" in opt or "don't wish" in opt or "i do not wish" in opt:
-                    return options[i]
-            for i, opt in enumerate(options_lower):
-                if "prefer not" in opt or "decline" in opt:
-                    return options[i]
-
-        # How did you hear / referral source
-        if any(x in q for x in ["hear", "find out", "learn about", "source", "referral"]):
-            source = self.config.get("common_answers", {}).get("how_did_you_hear", "LinkedIn")
-            source_lower = source.lower()
-            for i, opt in enumerate(options_lower):
-                # Exact match
-                if source_lower in opt:
-                    return options[i]
-                # LinkedIn variations
-                if "linkedin" in source_lower and any(x in opt for x in ["linkedin", "social", "online", "job board", "internet"]):
-                    return options[i]
-            # Fallback to first reasonable option
-            for i, opt in enumerate(options_lower):
-                if any(x in opt for x in ["online", "job board", "internet", "social", "linkedin"]):
-                    return options[i]
-
-        # Office location / onsite preference questions
-        # When options are office locations (NYC, SF, London, etc.), pick based on config location
-        if any(x in q for x in ["onsite", "on-site", "in-person", "office", "days a week", "open to working"]):
-            personal = self.config.get("personal_info", {})
-            city = personal.get("city", "").lower()
-            state = personal.get("state", "").lower()
-
-            # Check if options look like office locations (not yes/no)
-            has_yes_no = any("yes" in o for o in options_lower)
-            has_city_options = any(len(o) < 30 and any(c in o for c in ["nyc", "sf", "london", "austin", "seattle", "chicago", "la", "boston", "denver", "remote"]) for o in options_lower)
-
-            if has_city_options and not has_yes_no:
-                # Map config city to common abbreviations
-                city_map = {
-                    "san francisco": ["sf", "san francisco"],
-                    "new york": ["nyc", "new york"],
-                    "los angeles": ["la", "los angeles"],
-                    "chicago": ["chicago"],
-                    "boston": ["boston"],
-                    "seattle": ["seattle"],
-                    "austin": ["austin"],
-                    "denver": ["denver"],
-                }
-                for city_name, aliases in city_map.items():
-                    if city_name in city or city in city_name:
-                        for i, opt in enumerate(options_lower):
-                            if any(alias in opt for alias in aliases):
-                                return options[i]
-                        break
-
-            # Fallback to yes for yes/no style questions
-            if has_yes_no:
-                for i, opt in enumerate(options_lower):
-                    if "yes" in opt:
-                        return options[i]
-
-        # Work arrangement/onsite questions (yes/no style)
-        if any(x in q for x in ["comfortable"]):
-            for i, opt in enumerate(options_lower):
-                if "yes" in opt:
-                    return options[i]
-
-        # Current employee question
-        if "current" in q and "employee" in q:
-            for i, opt in enumerate(options_lower):
-                if "no" in opt:
-                    return options[i]
-
-        # Government/defense contractor negative questions — always "No"
-        neg_keywords = [
-            "performed services", "performed work",
-            "suspended or debarred", "been suspended", "proposed for debarment",
-            "private sector organization",
-            "worked for u.s. government", "seta", "a&as",
-            "found liable", "found guilty",
-            "citizen of another country", "dual citizen",
-        ]
-        if any(kw in q for kw in neg_keywords):
-            for i, opt in enumerate(options_lower):
-                if "no" in opt:
-                    return options[i]
-
-        # Have you completed an internship before
-        if any(x in q for x in ["complet", "done", "had", "previous"]) and "internship" in q:
-            for i, opt in enumerate(options_lower):
-                if "yes" in opt:
-                    return options[i]
-
-        # Academic year / class standing
-        if any(x in q for x in ["junior", "senior", "masters", "class", "year", "standing"]):
-            grad_date = self._get_grad_date()
-            import re as _re3
-            from datetime import datetime as _dt3
-            _ym3 = _re3.search(r'20\d{2}', str(grad_date))
-            _gy3 = int(_ym3.group()) if _ym3 else _dt3.now().year
-            _diff = _gy3 - _dt3.now().year
-            target = "senior" if _diff <= 0 else "junior" if _diff == 1 else "sophomore" if _diff == 2 else "freshman"
-            for i, opt in enumerate(options_lower):
-                if target in opt:
-                    return options[i]
-            # Fallback to senior
-            for i, opt in enumerate(options_lower):
-                if "senior" in opt:
-                    return options[i]
-
-        # Location/city questions (all caps cities)
-        if q.strip().isupper() or any(city in q.upper() for city in ["ATLANTA", "AUSTIN", "NEW YORK", "SAN FRANCISCO", "SEATTLE", "CHICAGO", "BOSTON"]):
-            for i, opt in enumerate(options_lower):
-                if "yes" in opt:
-                    return options[i]
-
-        # California residents / additional information acknowledgments
-        if any(x in q for x in ["california", "ccpa", "additional information", "disclosure"]):
-            for i, opt in enumerate(options_lower):
-                # Look for acknowledgment options
-                if any(x in opt for x in ["acknowledge", "i have read", "i understand", "yes", "agree"]):
-                    return options[i]
-            # If no clear acknowledgment option, try first option
-            if options:
-                return options[0]
-
-        # General consent / agree / acknowledge questions
-        if any(x in q for x in ["consent", "agree", "acknowledge", "do you accept"]):
-            for i, opt in enumerate(options_lower):
-                if any(x in opt for x in ["yes", "i agree", "i accept", "agree", "accept", "i consent"]):
-                    return options[i]
-
-        # Phone/SMS/text consent questions
-        if any(x in q for x in ["sms", "text message", "phone number"]) and any(x in q for x in ["receive", "communication", "follow", "contact"]):
-            for i, opt in enumerate(options_lower):
-                if "yes" in opt:
-                    return options[i]
-
-        # Hybrid/remote work arrangement
-        if any(x in q for x in ["hybrid", "remote", "arrangement", "open to"]):
-            for i, opt in enumerate(options_lower):
-                if "yes" in opt:
-                    return options[i]
-
-        # Degree type / education level
-        if any(x in q for x in ["degree", "education level", "level of education"]):
-            education = self.config.get("education", [{}])
-            if isinstance(education, list) and education:
-                degree = education[0].get("degree", "Bachelor's")
-                degree_lower = degree.lower()
-                for i, opt in enumerate(options_lower):
-                    if "bachelor" in degree_lower and "bachelor" in opt:
-                        return options[i]
-                    if "master" in degree_lower and "master" in opt:
-                        return options[i]
-                    if "phd" in degree_lower and ("phd" in opt or "doctor" in opt):
-                        return options[i]
-
-        # Background check consent
-        if "background" in q and any(x in q for x in ["check", "screen", "investigation"]):
-            for i, opt in enumerate(options_lower):
-                if "yes" in opt:
-                    return options[i]
-
-        # Drug test consent
-        if "drug" in q and any(x in q for x in ["test", "screen"]):
-            for i, opt in enumerate(options_lower):
-                if "yes" in opt:
-                    return options[i]
-
-        # Internship term (Summer 2025, etc.)
-        if "term" in q and "internship" in q:
-            target_term = self._get_internship_term().lower()
-            for i, opt in enumerate(options_lower):
-                if target_term in opt:
-                    return options[i]
-            # Fallback to any summer option
-            for i, opt in enumerate(options_lower):
-                if "summer" in opt:
-                    return options[i]
-
-        # Graduation year dropdown
-        if "graduation" in q and "year" in q:
-            grad_date = self._get_grad_date()
-            import re
-            year_match = re.search(r'20\d{2}', str(grad_date))
-            target_year = year_match.group() if year_match else str(
-                __import__('datetime').datetime.now().year
-            )
-            for i, opt in enumerate(options_lower):
-                if target_year in options[i]:
-                    return options[i]
-
-        # Previously applied / ever applied
-        if ("previously" in q and "applied" in q) or ("ever" in q and "applied" in q) or "applied for work" in q:
-            for i, opt in enumerate(options_lower):
-                if "no" in opt:
-                    return options[i]
-
-        # Referred by employee
-        if "referred" in q or "referral" in q:
-            for i, opt in enumerate(options_lower):
-                if "no" in opt:
-                    return options[i]
-
-        # Criminal history
-        if any(x in q for x in ["convicted", "felony", "criminal", "misdemeanor"]):
-            for i, opt in enumerate(options_lower):
-                if "no" in opt:
-                    return options[i]
-
-        # Non-compete agreement
-        if "non-compete" in q or "noncompete" in q:
-            for i, opt in enumerate(options_lower):
-                if "no" in opt:
-                    return options[i]
-
-        # Tobacco / smoking
-        if any(x in q for x in ["tobacco", "smok", "nicotine", "vape"]):
-            for i, opt in enumerate(options_lower):
-                if "no" in opt:
-                    return options[i]
-
-        # Relatives / family / friends at company
-        if any(x in q for x in ["relative", "family", "close friend"]) and any(x in q for x in ["work", "employ", "parsons", "company", "organization", "subcontract", "supplier", "vendor", "client"]):
-            for i, opt in enumerate(options_lower):
-                if "no" in opt:
-                    return options[i]
-        # Broader: "are you a relative or close friend of any [Company]"
-        if ("relative" in q or "close friend" in q) and "are you" in q:
-            for i, opt in enumerate(options_lower):
-                if "no" in opt:
-                    return options[i]
-
-        # Previously employed / ever worked at company
-        if (("previously" in q and ("employed" in q or "worked" in q))
-            or ("ever" in q and ("worked" in q or "employed" in q or "employee" in q or "been" in q))
-            or "worked for" in q):
-            for i, opt in enumerate(options_lower):
-                if "no" in opt:
-                    return options[i]
-
-        # Military service dropdown (including "Current Military Status" which has no "No" option)
-        if any(x in q for x in ["military", "armed forces", "served"]) and any(x in q for x in ["ever", "current", "have you", "status"]):
-            # Check if "No" option exists
-            for i, opt in enumerate(options_lower):
-                if "no" in opt:
-                    return options[i]
-            # No "No" option (e.g. Current Military Status: Active/Terminal Leave/Retired/Other)
-            # Return __SKIP__ to tell handler to leave this field alone
-            return "__SKIP__"
-
-        # Desired salary / annualized salary range — pick lowest for intern
-        if any(x in q for x in ["desired annualized", "salary range", "desired salary", "salary expectation", "compensation range", "what is your desired salary"]):
-            # Pick the lowest non-"Select One" range (intern-level)
-            for i, opt in enumerate(options_lower):
-                if "select" in opt or opt == "":
-                    continue
-                # Return first real option (usually lowest range)
-                return options[i]
-
-        # Desired hourly rate — pick the highest range
-        if "hourly rate" in q or ("hourly" in q and "rate" in q) or "desired rate" in q:
-            # Pick highest pay range available
-            best_idx = -1
-            best_val = 0
-            for i, opt in enumerate(options_lower):
-                import re as _re_hr
-                nums = _re_hr.findall(r'\d+', opt)
-                if nums:
-                    max_num = max(int(n) for n in nums)
-                    if max_num > best_val:
-                        best_val = max_num
-                        best_idx = i
-            if best_idx >= 0:
-                return options[best_idx]
-            # Fallback: last option (usually highest)
-            if options:
-                return options[-1]
-
-        # Hourly vs salary position
-        if ("hourly" in q or "salary" in q) and ("desire" in q or "prefer" in q or "position" in q):
-            for i, opt in enumerate(options_lower):
-                if "hourly" in opt:
-                    return options[i]
-            # Fallback: pick "salary" if no hourly
-            for i, opt in enumerate(options_lower):
-                if "salary" in opt:
-                    return options[i]
-
-        # Type of employment desired
-        if "type of employment" in q or "employment desired" in q:
-            # Priority order: intern > both > full-time > part-time
-            for i, opt in enumerate(options_lower):
-                if "intern" in opt:
-                    return options[i]
-            for i, opt in enumerate(options_lower):
-                if "both" in opt or "open to" in opt:
-                    return options[i]
-            for i, opt in enumerate(options_lower):
-                if "full" in opt and "part" not in opt:
-                    return options[i]
-            for i, opt in enumerate(options_lower):
-                if "part" in opt:
-                    return options[i]
-
-        # Education level (highest level of education)
-        if any(x in q for x in ["highest level", "level of education", "education.*completed", "education.*attained"]):
-            for i, opt in enumerate(options_lower):
-                if "some college" in opt or "currently attending" in opt or "college" in opt:
-                    return options[i]
-            for i, opt in enumerate(options_lower):
-                if "bachelor" in opt:
-                    return options[i]
-
-        # Security clearance — "Do you currently hold a clearance?" with descriptive options
-        if "clearance" in q and ("hold" in q or "have" in q or "currently" in q or "possess" in q):
-            work_auth = self.config.get("work_authorization", {})
-            if not work_auth.get("has_security_clearance", False):
-                # Priority 1: "No, Never Held" or "No, I do not" (best answer for no clearance)
-                for i, opt in enumerate(options_lower):
-                    if "never" in opt and ("held" in opt or "clearance" in opt):
-                        return options[i]
-                # Priority 2: "do not have" WITHOUT "held" (never held before)
-                for i, opt in enumerate(options_lower):
-                    if "do not have" in opt and "held" not in opt:
-                        return options[i]
-                # Priority 3: "do not" or "not" + "clearance" (without "held in the past")
-                for i, opt in enumerate(options_lower):
-                    if ("do not" in opt or "not" in opt) and "clearance" in opt and "held" not in opt and "past" not in opt:
-                        return options[i]
-                # Priority 4: Exact "No"
-                for i, opt in enumerate(options_lower):
-                    if opt.strip() == "no":
-                        return options[i]
-                # Priority 5: "No" as first word
-                for i, opt in enumerate(options_lower):
-                    if opt.strip().startswith("no"):
-                        return options[i]
-                # Priority 6: Any option with "do not" (even if "held in past")
-                for i, opt in enumerate(options_lower):
-                    if "do not" in opt:
-                        return options[i]
-
-        # Security clearance level — if we don't have clearance, pick "None" or first option
-        if "clearance" in q and any(x in q for x in ["highest", "level", "type", "previously obtained"]):
-            work_auth = self.config.get("work_authorization", {})
-            if not work_auth.get("has_security_clearance", False):
-                for i, opt in enumerate(options_lower):
-                    if "none" in opt or "n/a" in opt or "not applicable" in opt or "never" in opt:
-                        return options[i]
-                # If no "none" option and all are clearance levels, select first (required field)
-                for i, opt in enumerate(options_lower):
-                    if "select" not in opt and opt.strip():
-                        return options[i]
-
-        # Government employment history — "employment history with the U.S. Government"
-        if ("government" in q and "employ" in q) or ("federal" in q and "employ" in q):
-            for i, opt in enumerate(options_lower):
-                if "never" in opt and ("employ" in opt or "government" in opt):
-                    return options[i]
-            # Fallback: option with "no" or "not"
-            for i, opt in enumerate(options_lower):
-                if opt.strip().startswith("i have never") or opt.strip().startswith("no") or opt.strip().startswith("not"):
-                    return options[i]
-
-        # Commitments / obligations to another employer
-        if "commitment" in q and ("employer" in q or "organization" in q or "company" in q):
-            for i, opt in enumerate(options_lower):
-                if "no" in opt:
-                    return options[i]
-
-        # Name prefix (Mr./Mrs./Ms./Miss)
-        if q.strip().rstrip("*. ") == "prefix" or ("prefix" in q and len(q) < 30):
-            for i, opt in enumerate(options_lower):
-                if "mr." in opt or opt.strip() == "mr":
-                    return options[i]
-
-        # Name suffix (Jr./Sr./II/III) — skip (optional)
-        if q.strip().rstrip("*. ") == "suffix" or ("suffix" in q and len(q) < 30):
-            # Don't select anything — suffix is optional
-            return None
-
-        # Notice period — pick shortest option (for internship applicants not currently employed)
-        if "notice period" in q:
-            for i, opt in enumerate(options_lower):
-                if "15" in opt or "immediate" in opt or "none" in opt or "0" in opt:
-                    return options[i]
-            # Pick first non-placeholder option
-            for i, opt in enumerate(options_lower):
-                if opt.strip() != "select one" and opt.strip() != "" and opt.strip() != "select":
-                    return options[i]
-
-        # "Indicate the entity you work for" — not employed, pick "N/A" or first option
-        if "entity you work for" in q or "indicate the entity" in q:
-            for i, opt in enumerate(options_lower):
-                if "n/a" in opt or "not applicable" in opt or "none" in opt or "other" in opt:
-                    return options[i]
-
-        # School/academic status questions (final year, second to last year, etc.)
-        if "best describes your status" in q or ("which" in q and "status" in q and "school" in q):
-            grad_date = self._get_grad_date()
-            import re as _re_stat
-            from datetime import datetime as _dt_stat
-            ym = _re_stat.search(r'20\d{2}', str(grad_date))
-            gy = int(ym.group()) if ym else _dt_stat.now().year
-            diff = gy - _dt_stat.now().year
-            if diff <= 0:
-                # Already graduated
-                for i, opt in enumerate(options_lower):
-                    if "earned" in opt or "past 12" in opt or "graduated" in opt:
-                        return options[i]
-            elif diff == 1:
-                # Graduating next year = final year
-                for i, opt in enumerate(options_lower):
-                    if "final year" in opt or "last year" in opt:
-                        return options[i]
-            else:
-                # 2+ years left = second to last or earlier
-                for i, opt in enumerate(options_lower):
-                    if "second to last" in opt or "earlier" in opt:
-                        return options[i]
-            # Fallback to "final year"
-            for i, opt in enumerate(options_lower):
-                if "final" in opt:
-                    return options[i]
-
-        # Graduation term/season (Spring, Summer, Fall, Winter)
-        if ("term" in q or "when" in q or "season" in q) and ("graduat" in q or "finish" in q or "complet" in q):
-            grad_date = self._get_grad_date()
-            # Determine season from grad date
-            grad_lower = str(grad_date).lower()
-            if "may" in grad_lower or "june" in grad_lower or "apr" in grad_lower:
-                target = "spring"
-            elif "dec" in grad_lower or "nov" in grad_lower or "oct" in grad_lower:
-                target = "fall"
-            elif "aug" in grad_lower or "jul" in grad_lower or "sep" in grad_lower:
-                target = "summer"
-            else:
-                target = "spring"  # Default to spring
-            for i, opt in enumerate(options_lower):
-                if target in opt:
-                    return options[i]
-
-        # Type of opportunity (Internship / New College Graduate / etc.)
-        if "type of opportunity" in q or ("looking for" in q and "opportun" in q):
-            for i, opt in enumerate(options_lower):
-                if "intern" in opt:
-                    return options[i]
-
-        # Major / Field of study dropdown (not the typeahead — preset values)
-        if any(x in q for x in ["major", "field of study"]):
-            education = self.config.get("education", [{}])
-            if isinstance(education, list) and education:
-                fos = education[0].get("field_of_study", "Software Engineering").lower()
-                # Try exact match first
-                for i, opt in enumerate(options_lower):
-                    if fos in opt:
-                        return options[i]
-                # Try individual words (e.g. "software" matches "Software Engineering")
-                for word in fos.split():
-                    if len(word) > 3:
-                        for i, opt in enumerate(options_lower):
-                            if word in opt:
-                                return options[i]
-                # Fallback: try related CS fields
-                related = ["computer science", "engineering", "software", "information technology", "computer"]
-                for r in related:
-                    for i, opt in enumerate(options_lower):
-                        if r in opt:
-                            return options[i]
-
-        # Questions where "No" is almost always the correct answer for an applicant
-        no_patterns = [
-            "currently work for",           # "Do you currently work for X company?"
-            "serve as a director",          # "Do you serve as a director, officer..."
-            "serve as an officer",
-            "serve as a consultant",
-            "government official",          # "Are you a government official?"
-            "non-compete",                  # "Do you have a non-compete?"
-            "relative.*work",               # "Do you have a relative who works here?"
-            "family.*work",
-            "currently employed",           # "Are you currently employed by..."
-            "previously worked for",        # Covered by radio too, but catch dropdown version
-        ]
-        if any(p in q for p in no_patterns):
-            for i, opt in enumerate(options_lower):
-                if opt.strip() == "no" or ("no" in opt and len(opt) < 20):
-                    return options[i]
-
-        # Option-based matching: when question text is generic but options reveal context
-        # Work authorization options (e.g. "permanently authorized" / "temporary work permit")
-        has_perm_auth = any("authorized" in opt and "permanent" in opt for opt in options_lower)
-        has_temp_permit = any("temporary" in opt and ("permit" in opt or "work" in opt) for opt in options_lower)
-        if has_perm_auth or has_temp_permit:
-            if work_auth.get("us_citizen", False) or work_auth.get("us_work_authorized", True):
-                for i, opt in enumerate(options_lower):
-                    if "permanent" in opt:
-                        return options[i]
-
-        # Yes/No questions without specific patterns - generic catch-all (MUST BE LAST)
-        yes_no_keywords = ["do you", "are you", "can you", "will you", "have you", "is your", "would you"]
-        if any(k in q for k in yes_no_keywords):
-            # Default to "Yes" for most yes/no questions (usually affirmative is what they want)
-            for i, opt in enumerate(options_lower):
-                if opt.strip() == "yes" or opt == "yes, i agree" or ("yes" in opt and len(opt) < 20):
-                    return options[i]
-
-        return None
+        return self._get_option_matcher().match_option(question, options)
 
     def _generate_generic_answer_with_confidence(self, question: str, field_type: str, max_length: Optional[int] = None) -> tuple:
         """Try generic answer and return (answer, confidence).
@@ -2249,6 +1800,8 @@ Role: {role}
                         "ever worked", "ever served",
                         "currently serving or have you",
                         "employment history",
+                        "discharged", "asked to resign", "terminated from",
+                        "fired from", "let go from", "involuntarily separated",
                         "non-compete", "restrictive", "criminal", "convicted",
                         "felony", "debarred", "ineligible", "disqualif", "excluded",
                         "suspended or debarred", "been suspended",
@@ -2257,6 +1810,9 @@ Role: {role}
                         "refer you", "referred you", "someone refer",
                         "family member", "relative work", "know anyone",
                         "know of anyone",
+                        "conflict of interest", "outside business", "party to any",
+                        "restrict your right", "cuba, iran",
+                        "close friend",
                         "certif", "license",
                         "cuba", "iran", "north korea", "syria", "crimea",
                         "national origin one of", "itar",
@@ -2289,6 +1845,25 @@ Role: {role}
             if any(x in q for x in ["hear about", "how did you", "source", "find out"]):
                 logger.info(f"Generic fallback (select→source): '{question[:40]}...'")
                 return self.config.get("common_answers", {}).get("how_did_you_hear", "Online Job Board")
+            if any(x in q for x in ["job title", "your title", "current title", "most recent title", "position title"]):
+                work = self.config.get("work_experience", [{}])
+                title = work[0].get("title", "Data Engineer") if work else "Data Engineer"
+                logger.info(f"Generic fallback (select→job_title): '{question[:40]}...' -> '{title}'")
+                return title
+            if any(x in q for x in ["current employer", "most recent employer", "employer name", "company name"]):
+                work = self.config.get("work_experience", [{}])
+                employer = work[0].get("company", "Kruiz") if work else "Kruiz"
+                logger.info(f"Generic fallback (select→employer): '{question[:40]}...' -> '{employer}'")
+                return employer
+            if any(x in q for x in ["reason for leaving", "reason for seeking", "why are you leaving", "why are you looking"]):
+                logger.info(f"Generic fallback (select→reason): '{question[:40]}...'")
+                return "Seeking internship opportunity to apply my skills"
+            if any(x in q for x in ["referred by", "referral name", "who referred", "referral source"]):
+                logger.info(f"Generic fallback (select→referral): '{question[:40]}...'")
+                return "N/A"
+            if any(x in q for x in ["reside in", "do you live in", "located in"]):
+                logger.info(f"Generic fallback (select→reside): '{question[:40]}...'")
+                return "No"
             if any(x in q for x in ["gpa", "grade point"]):
                 logger.info(f"Generic fallback (select→gpa): '{question[:40]}...'")
                 return str(education.get("gpa", "3.6"))
@@ -2388,20 +1963,20 @@ Role: {role}
             logger.info(f"Generic fallback (twitter/x): '{question[:40]}...' -> empty")
             return ""
 
-        # Facebook — return empty (no Facebook profile to share)
+        # Facebook — N/A (no Facebook profile to share)
         if q.strip().rstrip("*") in ["facebook", "facebook url", "facebook profile"] or "facebook" in q:
-            logger.info(f"Generic fallback (facebook): '{question[:40]}...' -> empty")
-            return ""
+            logger.info(f"Generic fallback (facebook): '{question[:40]}...' -> N/A")
+            return "N/A"
 
-        # Instagram — return empty
+        # Instagram — N/A
         if q.strip().rstrip("*") in ["instagram", "instagram url"] or "instagram" in q:
-            logger.info(f"Generic fallback (instagram): '{question[:40]}...' -> empty")
-            return ""
+            logger.info(f"Generic fallback (instagram): '{question[:40]}...' -> N/A")
+            return "N/A"
 
-        # TikTok / Snapchat / other social — return empty
+        # TikTok / Snapchat / other social — N/A
         if any(x in q for x in ["tiktok", "snapchat", "social media", "other social"]):
-            logger.info(f"Generic fallback (social): '{question[:40]}...' -> empty")
-            return ""
+            logger.info(f"Generic fallback (social): '{question[:40]}...' -> N/A")
+            return "N/A"
 
         # Any URL-looking field — return empty rather than garbage text
         if "url" in q and not any(x in q for x in ["linkedin", "github"]):

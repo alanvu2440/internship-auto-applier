@@ -1,0 +1,21 @@
+language: en-US
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+  high_level_summary: true
+  poem: false
+  review_status: true
+  auto_review:
+    enabled: true
+    drafts: false
+  path_instructions:
+    - path: "src/handlers/**"
+      instructions: "Review for: proper Simplify-first flow (check if field filled before overwriting), template bank usage, required field detection, and browser stability. Never spawn multiple Chrome windows."
+    - path: "src/ai_answerer.py"
+      instructions: "Review for: golden path order (template bank → config → cache → AI → leave empty), auto-learn to template banks, no generic fallback answers."
+    - path: "src/browser_manager.py"
+      instructions: "Review for: dual browser architecture (nodriver for SR, Playwright for others), no CDP bridge, separate profiles."
+    - path: "config/question_banks/**"
+      instructions: "Review for: correct answers, proper YAML formatting, no duplicate questions."
+chat:
+  auto_reply: true
