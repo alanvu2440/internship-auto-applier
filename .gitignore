@@ -65,3 +65,17 @@ build/
 htmlcov/
 src/data/
 data/question_knowledge_base.md
+config/master_config.yaml
+
+# Personal data - NEVER commit
+config/master_config.yaml
+data/question_knowledge_base.md
+data/answer_cache.json
+data/gemini_cost_tracker.json
+data/response_summary.json
+data/verified_answers.db
+data/screenshots/
+data/applications/
+data/browser_profiles/
+data/extensions/
+logs/

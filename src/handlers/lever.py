@@ -76,6 +76,11 @@ class LeverHandler(BaseHandler):
             if not await self.handle_captcha(page):
                 return False
 
+            # Guard: check page still open after Simplify/CAPTCHA
+            if page.is_closed():
+                logger.warning("Page closed after Simplify/CAPTCHA — job may be expired")
+                return False
+
             # Fill the application form
             success = await self._fill_application(page, job_data)
             if not success:
@@ -642,6 +647,10 @@ class LeverHandler(BaseHandler):
     async def _run_dry_run_validation(self, page: Page) -> bool:
         """Validate form fill quality in dry-run mode."""
         logger.info("DRY RUN: Running Lever validation checks...")
+        # Guard: check if page is still open (Simplify or redirect may close it)
+        if page.is_closed():
+            logger.warning("DRY RUN: Page was closed before validation — likely Simplify redirect or expired job")
+            return False
         await self.take_screenshot(page, "lever_dry_run")
 
         filled_fields = {}

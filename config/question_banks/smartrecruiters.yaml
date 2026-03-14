@@ -1,0 +1,521 @@
+ats_type: smartrecruiters
+description: Pre-mapped questions for smartrecruiters forms
+questions:
+  ? 1. in the past three years from today’s date, have you been employed by a private sector organization/company & personally participated in a bid, proposal, capture, or competition for any program(s)
+    in which northrop grumman may be/has been a competitor?
+  : answer: 'Yes'
+    type: dropdown
+  ? 2. are you currently employed or have you been employed in the past five years by a state or local government entity (other than temporary summer or part-time positions, e.g. lifeguard, emt, not involved
+    in government contracting/procurement activities)?
+  : answer: 'No'
+    type: dropdown
+  ? 3. in the past five years, have you worked for the u.s. government in a seta, a&as, special government employee, or similar capacity, or as part of the information technology exchange program or similar
+    u.s. government program?
+  : answer: Yes, and I do not have an NDA in this capacity
+    type: dropdown
+  3.7 - 4.0:
+    answer: 3.3 - 3.69
+    type: select
+  ? 4. have you ever been employed by the u.s. government in either a civilian or military capacity, or served in the reserve or guard component of the u.s. armed services?
+  : answer: 'No'
+    type: dropdown
+  ? 5. while employed by the u.s. government (in either a civilian or military capacity), did you work personally and substantially on a particular matter that involved northrop grumman?
+  : answer: 'No'
+    type: dropdown
+  ? '6. are you currently employed by the u.s. government (civilian or military) (note: employees on terminal leave are considered current government employees)?'
+  : answer: 'No'
+    type: dropdown
+  address line 2:
+    answer: N/A
+    type: input
+  'american indian or alaskan native: hispanic or latinx':
+    answer: 'No'
+    type: select
+  ? any offer of employment with rocket lab is contingent on a successful criminal background check, drug screen, and professional reference check. please indicate below if you can meet these hiring requirements
+  : answer: 'Yes'
+    type: select
+  are you a current employee at caci? if yes, do not apply here. instead, apply through caci’s internal career hub.:
+    answer: 'No'
+    type: dropdown
+  are you a current or former employee of the us government, us military (active national guard or reserves)?:
+    answer: 'No'
+    type: dropdown
+  are you a relative or close friend of a parsons employee?:
+    answer: 'No'
+    type: dropdown
+  are you a relative or close friend of any parsons customer, subcontractor or vendor?:
+    answer: 'Yes'
+    type: dropdown
+  ? are you a tobacco user? tobacco products include, but are not limited to; cigarettes (of any kind including herbal/spice cigarettes), cigars, pipes, electronic cigarettes/vaping, smokeless tobacco,
+    snuff, and chewing tobacco. please note that swbc does not hire tobacco users as allowed by law.
+  : answer: 'No'
+    type: dropdown
+  are you able to work onsite in either our miami or new york office for the full duration of the internship?:
+    answer: 'Yes'
+    type: select
+  are you authorized to work in the country or a citizen of the country within which you are applying for a job?:
+    answer: 'Yes'
+    type: dropdown
+  are you authorized to work in us?:
+    answer: 'Yes'
+    type: select
+  ? are you currently based in any of these countries? please note these are the only countries where we are accepting applications
+  : answer: San Jose, CA
+    type: select
+  are you currently enrolled in a bachelors or masters program and will be returning back to school fall/winter 2026?:
+    answer: 'Yes'
+    type: select
+  are you currently enrolled in a graudate program and will be returning back to school fall/winter 2026?:
+    answer: 'Yes'
+    type: select
+  ? are you currently enrolled in and in pursuit of a collegiate or university degree and will be for the full duration of the internship position you are applying to?
+  : answer: 'Yes'
+    type: dropdown
+  ? are you currently serving or have you ever served as a government employee in any of the following capacities:• official responsibility over an amentum (or any of its affiliated entities) matter.• decision-maker
+    and/or participated personally and substantially in a procurement or contract valued at more than $10 million.• executive service position• senior executive service position• general or flag officer
+    at pay grade o7 or above• program manager• deputy program manager• procuring contracting officer• administrative contracting officer• source selection official/authority/member of a source selection
+    evaluation board• chief of a technical or financial evaluation team
+  : answer: 'Yes'
+    type: dropdown
+  are you currently the owner or employee of any outside company that is currently or formerly doing business with parsons?:
+    answer: 'No'
+    type: dropdown
+  are you in school?:
+    answer: 'Yes'
+    type: dropdown
+  are you legally authorized to work in the country in which this job is located?:
+    answer: 'Yes'
+    type: dropdown
+  ? are you legally eligible for employment in this country? (all new hires will be required to provide proof of eligibility to work in the u.s.)
+  : answer: 'Yes'
+    type: dropdown
+  are you legally permitted to work in the country where this job is located?:
+    answer: 'Yes'
+    type: dropdown
+  ? at astranis, we value in-person collaboration and a strong work ethic. are you comfortable with working onsite at our san francisco hq 5 days a week?
+  : answer: 'Yes'
+    type: select
+  ? based on the description above in our jd, is your experience/interest better aligned with data engineering or data platform engineering?
+  : answer: My recent experience as a Data Engineer at Kruiz strongly aligns with Data Engineering, where I've
+    type: textarea
+  ? by checking this box, i consent to receive text messages in regards to my application, and understand that i can opt out at any time by replying stop to the texts that i receive from seekwell.
+  : answer: 'Yes'
+    type: select
+  ? by submitting my application, i acknowledge that i have read and understand vercel’s job applicant privacy notice - https://vercel.com/legal/job-applicant-privacy-notice
+  : answer: 'Yes'
+    type: select
+  can you relocate to san francisco, ca, los angeles, ca or new york, ny for this internship?:
+    answer: San Francisco, CA
+    type: select
+  can you relocate to san francisco, los angeles, or new york city for this internship?:
+    answer: 'Yes'
+    type: select
+  current company:
+    answer: Kruiz
+    type: text
+  current company ✱:
+    answer: Kruiz
+    type: text
+  current location no location found. try entering a different locationloading:
+    answer: San Jose, CA
+    type: text
+  current location ✱no location found. try entering a different locationloading:
+    answer: San Jose, CA
+    type: text
+  current military status:
+    answer: 'No'
+    type: dropdown
+  date available for work.:
+    answer: May 2026
+    type: text
+  december 2027 or later:
+    answer: December 2026
+    type: select
+  do you currently hold a us security clearance?:
+    answer: 'Yes'
+    type: dropdown
+  ? 'do you currently need – or will you need in the future – any immigration support or sponsorship from applied materials, inc. to work here? this includes the following: (1) j-1 or f-1 (cpt or stem opt);
+    (2) employment visas (h-1b, h-1b1, e-3, o-1, tn); or (3) ead holders who will need long-term work authorization (like a temporary work visa or green card).'
+  : answer: 'No'
+    type: dropdown
+  do you currently possess an active security clearance?:
+    answer: No, I do not possess an active security clearance.
+    type: dropdown
+  do you currently work for a news corp company? if you select “yes” see the question below.:
+    answer: 'Yes'
+    type: dropdown
+  do you have a current security clearance?:
+    answer: 'No'
+    type: dropdown
+  do you have a signed non-compete with a previous or current employer?:
+    answer: 'No'
+    type: dropdown
+  ? do you have any commitments to another employer or organization which might interfere with our affect your employment with us?
+  : answer: 'Yes'
+    type: dropdown
+  do you have any relatives employed at cadence?:
+    answer: 'No'
+    type: dropdown
+  do you have any relatives or acquaintances employed at northrop grumman or its subsidiaries/affiliates?:
+    answer: 'No'
+    type: dropdown
+  do you have any relatives working for swbc?:
+    answer: 'No'
+    type: dropdown
+  do you identify as hispanic or latino?:
+    answer: 'No'
+    type: dropdown
+  do you live in one of the following states?:
+    answer: 'No'
+    type: select
+  do you meet all the essential qualifications that are listed under the "you'll bring these qualifications" section?:
+    answer: 'Yes'
+    type: select
+  ? do you serve as a director, officer, adviser, consultant, partner or investor of greater than 5% of any for-profit company or venture?
+  : answer: 'Yes'
+    type: dropdown
+  'doctorate gpa: please convert your gpa to a 4.0 scale. select "not applicable" if you do not have a doctorate gpa':
+    answer: '3.6'
+    type: select
+  does your school require academic credit for this internship?:
+    answer: 'No'
+    type: select
+  ? 'engineering organization involvement: indicate if you are an active participant in any of the following engineering student groups or competitions listed below:'
+  : answer: Given the lack of specific information in the c...
+    type: select
+  enter website. this input is for robots only, do not enter if you're human.:
+    answer: '**Source:** config_fallback | **Type:** textarea | **Company:** Unknown'
+    type: textarea
+  facebook:
+    answer: N/A
+    type: input
+  'for purposes of complying with federal export control laws, please select one of the following:':
+    answer: United States — citizen since birth
+    type: dropdown
+  for purposes of obtaining a u.s. security clearance, are you a u.s. citizen?:
+    answer: 'Yes'
+    type: dropdown
+  github url:
+    answer: GITHUB_FROM_CONFIG
+    type: text
+  government separation from service date:
+    answer: 'No'
+    type: input
+  government start date:
+    answer: May 2026
+    type: text
+  'graduate gpa: please convert your gpa to a 4.0 scale. select "not applicable" if you do not have a graduate gpa':
+    answer: '3.6'
+    type: select
+  ? have you been convicted of a misdemeanor in the last seven (7) years?a conviction does not necessarily disqualify you from employment. the nature and circumstances of the conviction, how long ago, and
+    the position for which you are applying will be considered in the employment decision.
+  : answer: 'No'
+    type: dropdown
+  ? have you been suspended or debarred (or proposed to be suspended or debarred) from doing business with any governmental entity, including a state, federal or international entity?
+  : answer: 'Yes'
+    type: dropdown
+  have you ever applied for work at cadence?:
+    answer: 'Yes'
+    type: dropdown
+  ? have you ever been an amentum employee? please include employment by any of the companies or businesses that ultimately became part of amentum by virtue of mergers, acquisitions, joint ventures, or
+    other corporate transactions.
+  : answer: 'Yes'
+    type: dropdown
+  ? have you ever been convicted of a felony, or a misdemeanor involving any violent act, use or possession of a weapon or act of dishonesty for which the record has not been sealed or expunged?
+  : answer: 'No'
+    type: select
+  ? have you ever been convicted of a felony?a conviction does not necessarily disqualify you from employment. the nature and circumstances of the conviction, how long ago, and the position for which you
+    are applying will be considered in the employment decision.
+  : answer: 'No'
+    type: dropdown
+  have you ever been employed by northrop grumman, its subsidiaries or affiliates (not as a contractor or consultant)?:
+    answer: 'No'
+    type: dropdown
+  have you ever been employed by the walt disney company or any of its affiliated companies?:
+    answer: 'No'
+    type: radio
+  have you ever been found liable for a violation of the civil false claims act (31 u.s.c. §§ 3729-3733)?:
+    answer: 'No'
+    type: dropdown
+  have you ever held a security clearance?:
+    answer: No, never held a clearance
+    type: dropdown
+  have you ever performed services for northrop grumman as a contractor or as a consultant?:
+    answer: 'Yes'
+    type: dropdown
+  have you ever served or are you currently serving in the united states military?:
+    answer: 'Yes'
+    type: dropdown
+  have you ever worked at applied materials as a regular employee, contingent worker, intern, etc.?:
+    answer: 'No'
+    type: radio
+  have you ever worked at cadence?:
+    answer: 'Yes'
+    type: dropdown
+  have you previously been employed by, or worked as a contractor or temporary employee for, swbc?:
+    answer: 'No'
+    type: dropdown
+  ? have you previously been employed by, or worked as a contractor or temporary employee, for swbc? if so, please answer each of the questions below to the best of your recollection.
+  : answer: 'No'
+    type: radio
+  have you previously interviewed at rocket lab?:
+    answer: 'No'
+    type: select
+  have you previously worked for a news corp company?:
+    answer: Kruiz
+    type: radio
+  have you previously worked for caci (including subsidiaries or affiliates)?:
+    answer: 'No'
+    type: dropdown
+  have you used vercel, next.js, or any of our products? if so, how — and if not, what drew you to this role specifically?:
+    answer: While I haven't directly used Vercel or Next.js, I have extensive experience with
+    type: textarea
+  'highest level clearance previously obtained/currently held:':
+    answer: 'No'
+    type: dropdown
+  how did you hear about this role?:
+    answer: Online Job Board
+    type: select
+  how many hours per week can you reliably commit? are there specific days or times you are unavailable?:
+    answer: I can reliably commit 40 hours per week. I am generally available during standard business
+    type: select
+  i have the right to work in the country of employment on a permanent basis:
+    answer: I will require sponsorship or other immigration support to obtain the right to work in the country of employment
+    type: select
+  if hired for this position, are you willing to self-relocate?:
+    answer: 'Yes'
+    type: select
+  if needed, are you willing to relocate for this position?:
+    answer: 'Yes'
+    type: select
+  ? if yes, please briefly describe the nature of the crime(s), the date and place of conviction and the legal disposition of the case. this company will not deny employment to any applicant solely because
+    the person has been convicted of a crime. the company however, may consider the nature, date and circumstances of the offense as well as whether the offense is relevant to the duties of the position
+    applied for.
+  : answer: 'No'
+    type: textarea
+  if yes, specify name and relationship.:
+    answer: N/A
+    type: textarea
+  if you are a foreign national, will you now or in the future require visa sponsorship for employment at news corp?:
+    answer: 'No'
+    type: dropdown
+  if you do require visa sponsorship, please provide details including type and expiration of current visa.:
+    answer: 'No'
+    type: textarea
+  ? if you have selected yes to the question above, please provide further details. if you choose to share this information with maven, you consent to the processing of the data provided for the purposes
+    of enabling maven to facilitate any required support or adjustments.
+  : answer: 'Yes'
+    type: select
+  if you selected 'other', please use the space below to add the institution you currently attend/most recently attended.:
+    answer: Online Job Board
+    type: select
+  if you were referred by an ultima genomics employee, please list their name.:
+    answer: No referral.
+    type: select
+  linkedin url:
+    answer: LINKEDIN_FROM_CONFIG
+    type: text
+  linkedin url✱:
+    answer: LINKEDIN_FROM_CONFIG
+    type: text
+  list days and times you are available to work, please specify am or pm.:
+    answer: Monday through Friday, 8:00 AM - 5:00 PM
+    type: textarea
+  'military dates of service: from':
+    answer: 'No'
+    type: input
+  'military dates of service: to':
+    answer: 'No'
+    type: input
+  ? outside of university coursework, what amount of software engineering experience do you have? this can include research/ laboratory work, and/or personal/team project experience.
+  : answer: I built Scorecard, an AI boxing prediction engi...
+    type: select
+  overall result (gpa):
+    answer: '3.6'
+    type: input
+  password:
+    answer: As an AI, I cannot provide a password for you. Please choose a strong, unique password for your account to ensure security.
+    type: input
+  phone number:
+    answer: PHONE_FROM_CONFIG
+    type: input
+  ? please double-check all the information provided above. ensuring accuracy is crucial, as any errors or omissions may impact the review of your application.
+  : answer: Confirmed.
+    type: select
+  please list name(s) and nature of relationship(s).:
+    answer: Professional references from former supervisors, professors, and colleagues are available upon request. These individuals can speak to my strong technical skills, collaborative spirit, and dedication
+      to software engineering.
+    type: textarea
+  please select the ethnicity which most accurately describes how you identify yourself.:
+    answer: Asian (Not Hispanic or Latino) (United States of America)
+    type: dropdown
+  please select the option below which most applies to you.:
+    answer: Student
+    type: select
+  please specify:
+    answer: As the question "Please specify" is incomplete and lacks context or options, I cannot provide
+    type: select
+  ? please tell us in a few sentences about the most impressive thing that you have built or achieved. (if you are describing a team effort or group project, please be specific about your personal contribution.)
+  : answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy
+    type: textarea
+  ? 'preferred internship/co-op duration: confirm the number of consecutive weeks you are available to work full-time and in-person.'
+  : answer: 'Yes'
+    type: select
+  ? relocation assistance may be available for this role. if you would need to relocate, please tell us the city, state, and zip code you’d be moving from
+  : answer: 'Yes'
+    type: textarea
+  ? select the highest level of education that you have completed. please note that swbc will verify this information as a part of the background check process if selected for employment. degrees/diplomas
+    will only be accepted from fully accredited institutions.
+  : answer: Bachelor of Science
+    type: dropdown
+  ? 'solely for the purpose of determining if an export control license is needed, please indicate “yes” if you are currently a citizen of any of the following countries: iran, syria, n. korea, cuba, ukraine,
+    people’s republic of china, hong kong (china), macau (china) or russia.'
+  : answer: 'Yes'
+    type: dropdown
+  terminal leave date, if applicable:
+    answer: N/A, I am a student graduating May 2026 and seeking new opportunities
+    type: input
+  ? 'the below survey requests information from you so that caci can fulfill its obligations to mitigate, avoid or eliminate any conflict before assigning you to support one of caci''s federal government
+    projects. please select the appropriate value regarding your employment history with the u.s. government:'
+  : answer: I have never been a U.S. Government employee
+    type: dropdown
+  ? 'this employer is a government contractor subject to the vietnam era veterans'' readjustment assistance act of 1974, as amended by the jobs for veterans act of 2002, 38 u.s.c. 4212 (vevraa), which requires
+    government contractors to take affirmative action to employ and advance in employment: (1) disabled veterans; (2) recently separated veterans; (3) active duty wartime or campaign badge veterans; and
+    (4) armed forces service medal veterans. these classifications are defined as follows: • a “disabled veteran” is one of the following: • a veteran of the u.s. military, ground, naval or air service
+    who is entitled to compensation (or who but for the receipt of military retired pay would be entitled to compensation) under laws administered by the secretary of veterans affairs; or • a person who
+    was discharged or released from active duty because of a service-connected disability. • a “recently separated veteran” means any veteran during the three-year period beginning on the date of such veteran''s
+    discharge or release from active duty in the u.s. military, ground, naval, or air service. • an “active duty wartime or campaign badge veteran” means a veteran who served on active duty in the u.s.
+    military, ground, naval or air service during a war, or in a campaign or expedition for which a campaign badge has been authorized under the laws administered by the department of defense. • an “armed
+    forces service medal veteran” means a veteran who, while serving on active duty in the u.s. military, ground, naval or air service, participated in a united states military operation for which an armed
+    forces service medal was awarded pursuant to executive order 12985. protected veterans may have additional rights under userra—the uniformed services employment and reemployment rights act. in particular,
+    if you were absent from employment in order to perform service in the uniformed service, you may be entitled to be reemployed by your employer in the position you would have obtained with reasonable
+    certainty if not for the absence due to service. for more information, call the u.s. department of labor''s veterans employment and training service (vets), toll-free, at 1-866-4-usa-dol. submission
+    of this information is voluntary and refusal to provide it will not subject you to any adverse treatment. the information provided will be used only in ways that are not inconsistent with the vietnam
+    era veterans'' readjustment assistance act of 1974, as amended. the information you submit will be kept confidential, except that (i) supervisors and managers may be informed regarding restrictions
+    on the work or duties of disabled veterans, and regarding necessary accommodations; (ii) first aid and safety personnel may be informed, when and to the extent appropriate, if you have a condition that
+    might require emergency treatment; and (iii) government officials engaged in enforcing laws administered by the office of federal contract compliance programs, or enforcing the americans with disabilities
+    act, may be informed. if you believe you belong to any of the categories of protected veterans listed above, please indicate by checking the appropriate box below. as a government contractor subject
+    to vevraa, we request this information in order to measure the effectiveness of the outreach and positive recruitment efforts we undertake pursuant to vevraa.'
+  : answer: I IDENTIFY AS A VETERAN, JUST NOT A PROTECTED VETERAN
+    type: dropdown
+  ? this is a full time internship role for 3 months starting may-august 2026. are you able to commit to a full time work schedule (8 hours per day) during this time frame.
+  : answer: 'Yes'
+    type: select
+  ? this is a full time internship role for 3 months starting may-august 2026. are you able to commit to a full time work schedule (8 hours per day) during this time frame?
+  : answer: 'Yes'
+    type: select
+  ? this position follows an in-person work schedule, requiring five days per week in office. are you comfortable with this arrangement?
+  : answer: 'Yes'
+    type: select
+  to (actual or expected):
+    answer: May 2026
+    type: text
+  ? to help us avoid conflicts of interest in administering our employment policies regarding work assignments, please indicate if you have relatives or significant relationships with someone currently
+    working at amentum?
+  : answer: 'No'
+    type: dropdown
+  ? to help us comply with company policies, do you have any family members, relatives, or close relationships with individuals currently employed by any news corp entity? if yes, please enter the name(s)
+    of those you have a relationship with.
+  : answer: 'Yes'
+    type: textarea
+  transition leave date, if applicable:
+    answer: Not applicable, as I am not currently on transition leave.
+    type: input
+  twitter share:
+    answer: N/A
+    type: input
+  type of employment desired.:
+    answer: Intern
+    type: dropdown
+  verify new password:
+    answer: As an AI, I do not have access to Alan's personal security information. Please enter
+    type: input
+  what intrigues you the most about being a data engineer?:
+    answer: I'm drawn to the innovative work being done at this company and see a strong
+    type: textarea
+  what is the highest level of education you are pursuing or have completed?:
+    answer: Bachelor's degree
+    type: dropdown
+  what is the name of the school or institution you currently attend or most recently attended?:
+    answer: SCHOOL_FROM_CONFIG
+    type: textarea
+  what is your (estimated or actual) graduation date? if you do not know your graduation day, input the first of the month.:
+    answer: May 2026
+    type: text
+  what is your current academic status? (i.e rising junior, rising senior etc.):
+    answer: Rising Junior
+    type: select
+  ? what is your current base salary/hourly rate? did you receive any bonus, commission, or other additional compensation in the prior 12 months?
+  : answer: I'm a U.S. citizen available to start full-time in May 2026 and flexible on location.
+    type: textarea
+  ? what is your desired annual base salary? please specify currency before the amount. (e.g. aud 50,000 or gbp 50,000 or usd 50,000 or inr 50,000)
+  : answer: N/A
+    type: textarea
+  what is your desired salary?:
+    answer: Up to $40,000
+    type: dropdown
+  what is your desired start date?:
+    answer: May 2026
+    type: text
+  what is your highest degree (including in progress degrees)?:
+    answer: Bachelor
+    type: dropdown
+  what is/was your major or field of study?:
+    answer: Software Engineer - Computer Science, Computer Engineering
+    type: dropdown
+  what type of opportunity are you looking for?:
+    answer: 'Yes'
+    type: dropdown
+  ? what year will you be graduating or expecting to graduate? this includes any anticipated, but not yet commenced studies e.g. a masters (even if you are still in the process of applying or awaiting confirmation).
+  : answer: 'No'
+    type: select
+  when could you start?:
+    answer: May 2026
+    type: input
+  ? which available location(s) on the posting are you open to relocating to? please only select locations that are listed on the posting. type city and states below (e.g. palmdale, ca).
+  : answer: '3.6'
+    type: textarea
+  which of the following describes your gender?:
+    answer: Female
+    type: dropdown
+  will you consent to a background check? (all offers of employment are contingent on passing a background check):
+    answer: 'Yes'
+    type: select
+  will you now or in the future require legal sponsorship?:
+    answer: 'No'
+    type: select
+  will you now or in the future require sponsorship for employment visa status (e.g. h-1b visa status)?:
+    answer: 'No'
+    type: select
+  will you now or in the future require sponsorship for employment visa status (e.g., h-1b visa)?:
+    answer: 'No'
+    type: select
+  ? will you now or in the future require sponsorship for employment visa status such as h-1b, h-1b1, e-3, o-1, tn status and/or will you require issuance of an f-1 curricular practical training letter
+    or completion/signature of a form i-983 stem opt training plan?
+  : answer: 'No'
+    type: dropdown
+  ? will you now or in the future require tatari to commence ("sponsor") an immigration case in order to employ you (for example, h-1b or other employment-based immigration case)? this is sometimes called
+    "sponsorship" for an employment-based visa status.
+  : answer: 'No'
+    type: select
+  will you now or in the future, require sponsorship for employment status?:
+    answer: 'No'
+    type: dropdown
+  will you require immigration support to maintain work authorization:
+    answer: 'Yes'
+    type: dropdown
+  would you be willing to consent to a background check?:
+    answer: 'Yes'
+    type: select
+  x (fka twitter):
+    answer: N/A
+    type: text
+  ? 'yes, veeva systems can contact me about future job opportunities for up to 2 yearsprivacy policy: yes, veeva systems can contact me about future job opportunities for up to 2 yearsprivacy policy'
+  : answer: 'No'
+    type: select
+  you answered 'yes' to the previous question. please choose the answer below which most accurately fits your situation.:
+    answer: I am authorized to work permanently in the country
+    type: dropdown
+  your authorization to work in the country where you live. please choose the option that describes your work authorization.:
+    answer: San Jose, CA
+    type: select

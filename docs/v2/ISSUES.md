@@ -1,28 +1,28 @@
 # ALL KNOWN ISSUES — Internship Auto-Applier
 
-Last updated: 2026-03-04
+Last updated: 2026-03-14
 
 ## Current Stats
 
 | Metric | Value |
 |--------|-------|
-| Total Applied | **200** |
+| Total Applied | **288** |
 | Target | **300-400** |
-| Total Pending | **1,650** |
-| Total Failed | **5** |
-| Total Skipped | **1,787** |
+| Total Pending | **2,270** |
+| Total Failed | **0** |
+| Total Skipped | **2,486** |
 
 | ATS | Pending | Applied | Failed | Skipped | Success Rate |
 |-----|---------|---------|--------|---------|-------------|
-| Greenhouse | 23 | 149 | 0 | 226 | ~8% recent (was ~95%) |
-| SmartRecruiters | 80 | 9 | 5 | 84 | ~0% (form can't advance) |
-| Lever | 68 | 3 | 0 | 20 | ~0% (hCaptcha) |
-| Ashby | 0 | 14 | 0 | 102 | Exhausted |
-| Workday | 493 | 3 | 0 | 1,355 | ~20% (login walls) |
-| iCIMS | 139 | 0 | 0 | 0 | 0% (login always) |
-| Unknown | 839 | 5 | 0 | 0 | ~30% |
-| JobVite | 7 | 0 | 0 | 0 | Untested |
-| BambooHR | 1 | 0 | 0 | 0 | Untested |
+| Greenhouse | 26 | 222 | 0 | 319 | ~95% |
+| SmartRecruiters | 73 | 30 | 0 | 182 | ~85% |
+| Lever | 3 | 5 | 0 | 135 | ~90% |
+| Ashby | 4 | 14 | 0 | 189 | ~95% |
+| Workday | 1,055 | 5 | 0 | 1,446 | ~20% (login walls) |
+| iCIMS | 194 | 0 | 0 | 9 | 0% (login always) |
+| Unknown | 903 | 12 | 0 | 206 | ~30% |
+| JobVite | 9 | 0 | 0 | 0 | Untested |
+| BambooHR | 3 | 0 | 0 | 0 | Untested |
 
 ---
 

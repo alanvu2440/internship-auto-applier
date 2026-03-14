@@ -19,14 +19,21 @@ Flow:
 """
 
 import asyncio
+import fcntl
 import os
 import re
+import signal
 from pathlib import Path
 from typing import Dict, Any, Optional
 from playwright.async_api import Page
 from loguru import logger
+from detection.job_status import is_job_closed as _shared_is_job_closed
 
 from .base import BaseHandler
+
+# File lock to ensure only ONE nodriver Chrome instance across ALL processes
+_BROWSER_LOCK_PATH = Path("data/browser_profiles/nodriver.lock")
+_BROWSER_PID_PATH = Path("data/browser_profiles/nodriver.pid")
 
 # Lazy-import nodriver to avoid ImportError if not installed
 _nodriver = None
@@ -46,6 +53,31 @@ def _get_nodriver():
     return _nodriver
 
 
+def _normalize_nd_result(val):
+    """Normalize nodriver evaluate() results.
+
+    nodriver sometimes returns dicts as list-of-pairs:
+      [['x', {'type':'number','value':629.5}], ['y', ...]]
+    instead of plain dicts: {'x': 629.5, 'y': ...}
+
+    This converts the nested format to a plain dict.
+    """
+    if isinstance(val, dict):
+        return val
+    if isinstance(val, list) and val and isinstance(val[0], (list, tuple)):
+        result = {}
+        for item in val:
+            if isinstance(item, (list, tuple)) and len(item) == 2:
+                key = item[0] if isinstance(item[0], str) else str(item[0])
+                v = item[1]
+                if isinstance(v, dict) and 'value' in v:
+                    result[key] = v['value']
+                elif isinstance(v, (int, float, str, bool)):
+                    result[key] = v
+        return result if result else None
+    return val
+
+
 class SmartRecruitersHandler(BaseHandler):
     """Handler for SmartRecruiters ATS applications.
 
@@ -55,12 +87,152 @@ class SmartRecruitersHandler(BaseHandler):
 
     name = "smartrecruiters"
 
+    # Shared browser instance — ONE browser, never closes, new tabs per job
+    _shared_nd_browser = None
+    _keeper_tab = None
+    _lock_fd = None  # File descriptor for exclusive lock
+    _simplify_extension_path = None  # Set by main.py --with-simplify
+
+    @staticmethod
+    def _kill_existing_nodriver():
+        """Kill any existing nodriver Chrome process owned by a different/dead process."""
+        if _BROWSER_PID_PATH.exists():
+            try:
+                old_pid = int(_BROWSER_PID_PATH.read_text().strip())
+                # Check if the old process is still alive
+                try:
+                    os.kill(old_pid, 0)  # Signal 0 = check if alive
+                    # Process exists — kill it and its children
+                    logger.warning(f"Killing stale nodriver Chrome (PID {old_pid})")
+                    os.kill(old_pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass  # Already dead
+                except OSError:
+                    pass
+                _BROWSER_PID_PATH.unlink(missing_ok=True)
+            except (ValueError, FileNotFoundError):
+                pass
+
+    @staticmethod
+    def _acquire_browser_lock() -> bool:
+        """Acquire exclusive file lock — prevents multiple Chrome instances.
+        Returns True if lock acquired, False if another process holds it."""
+        _BROWSER_LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            fd = open(_BROWSER_LOCK_PATH, "w")
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fd.write(str(os.getpid()))
+            fd.flush()
+            SmartRecruitersHandler._lock_fd = fd
+            return True
+        except (IOError, OSError):
+            # Another process holds the lock
+            return False
+
+    @staticmethod
+    def _release_browser_lock():
+        """Release the file lock."""
+        if SmartRecruitersHandler._lock_fd:
+            try:
+                fcntl.flock(SmartRecruitersHandler._lock_fd, fcntl.LOCK_UN)
+                SmartRecruitersHandler._lock_fd.close()
+            except Exception:
+                pass
+            SmartRecruitersHandler._lock_fd = None
+
+    async def _ensure_browser(self):
+        """Get the shared nodriver browser from BrowserManager.
+
+        In dual-browser mode, BrowserManager runs two separate Chrome instances:
+        - nodriver Chrome for SmartRecruiters (DataDome bypass)
+        - Playwright Chrome for GH/Lever/Ashby/Workday
+        This handler uses the nodriver browser exclusively.
+
+        Falls back to launching its own nodriver if BrowserManager didn't
+        provide one.
+        """
+        # Try to get nodriver browser from BrowserManager (unified mode)
+        if SmartRecruitersHandler._shared_nd_browser is not None:
+            try:
+                tabs = SmartRecruitersHandler._shared_nd_browser.tabs
+                if tabs:
+                    logger.info(f"Reusing shared nodriver browser ({len(tabs)} tabs open)")
+                    return SmartRecruitersHandler._shared_nd_browser
+            except Exception:
+                logger.info("Shared nodriver browser died — will try to get new one")
+                SmartRecruitersHandler._shared_nd_browser = None
+                SmartRecruitersHandler._keeper_tab = None
+
+        # Check if BrowserManager has a nodriver browser we can use
+        if hasattr(self, 'browser_manager') and self.browser_manager and self.browser_manager.nd_browser:
+            SmartRecruitersHandler._shared_nd_browser = self.browser_manager.nd_browser
+            SmartRecruitersHandler._keeper_tab = self.browser_manager.nd_keeper_tab
+            logger.info("Using unified nodriver browser from BrowserManager — ONE window for everything")
+            return SmartRecruitersHandler._shared_nd_browser
+
+        # Fallback: launch own nodriver browser (legacy behavior)
+        logger.info("No unified browser available — launching standalone nodriver for SmartRecruiters")
+        if not SmartRecruitersHandler._acquire_browser_lock():
+            raise RuntimeError(
+                "Another process already has nodriver Chrome open. "
+                "Only ONE Chrome instance is allowed."
+            )
+
+        SmartRecruitersHandler._kill_existing_nodriver()
+
+        uc = _get_nodriver()
+        browser_args = ["--window-size=1920,1080"]
+
+        ext_path = SmartRecruitersHandler._simplify_extension_path
+        if ext_path and Path(ext_path).exists():
+            browser_args.append(f"--load-extension={ext_path}")
+            browser_args.append(f"--disable-extensions-except={ext_path}")
+
+        nd_profile = Path("data/browser_profiles/nodriver_persistent")
+        nd_profile.mkdir(parents=True, exist_ok=True)
+
+        for lock_file in ["SingletonLock", "SingletonCookie", "SingletonSocket"]:
+            lock_path = nd_profile / lock_file
+            if lock_path.exists():
+                try:
+                    lock_path.unlink()
+                except Exception:
+                    pass
+
+        for attempt in range(2):
+            try:
+                SmartRecruitersHandler._shared_nd_browser = await uc.start(
+                    headless=False,
+                    browser_args=browser_args,
+                    user_data_dir=str(nd_profile),
+                )
+                break
+            except Exception as e:
+                logger.warning(f"Browser start attempt {attempt + 1} failed: {e}")
+                SmartRecruitersHandler._shared_nd_browser = None
+                if attempt == 0:
+                    import shutil
+                    try:
+                        shutil.rmtree(nd_profile, ignore_errors=True)
+                        nd_profile.mkdir(parents=True, exist_ok=True)
+                        await asyncio.sleep(2)
+                    except Exception:
+                        pass
+                else:
+                    SmartRecruitersHandler._release_browser_lock()
+                    raise
+
+        SmartRecruitersHandler._keeper_tab = await SmartRecruitersHandler._shared_nd_browser.get("about:blank")
+        logger.info("Started standalone nodriver browser with keeper tab")
+        return SmartRecruitersHandler._shared_nd_browser
+
     async def apply(self, page: Page, job_url: str, job_data: Dict[str, Any]) -> bool:
         """Apply to a SmartRecruiters job using nodriver."""
         self._last_status = "failed"
         self._fields_filled = {}
         self._fields_missed = {}
         nd_browser = None
+        nd_page = None
 
         try:
             logger.info(
@@ -68,17 +240,10 @@ class SmartRecruitersHandler(BaseHandler):
                 f"{job_data.get('company')} - {job_data.get('role')}"
             )
 
-            # --- Use nodriver for the entire SR flow ---
-            uc = _get_nodriver()
-            nd_browser = await uc.start(
-                headless=False,
-                browser_args=[
-                    "--window-size=1920,1080",
-                    "--window-position=10000,10000",
-                ],
-            )
+            # --- Use shared nodriver browser (ONE window, new tab per job) ---
+            nd_browser = await self._ensure_browser()
 
-            nd_page = await nd_browser.get(job_url)
+            nd_page = await nd_browser.get(job_url, new_tab=True)
             await asyncio.sleep(4)
 
             # Check if job is closed
@@ -123,15 +288,17 @@ class SmartRecruitersHandler(BaseHandler):
 
             logger.info("SmartRecruiters oneclick-ui form loaded")
 
+            # Click Simplify autofill button if it appears
+            await self._click_simplify_autofill(nd_page)
+
             config = self.form_filler.config
 
             # Handle screening/custom questions with AI (before field fill)
             await self._nd_handle_screening_questions(nd_page, job_data)
 
-            # Fill the form fields
-            filled = await self._nd_fill_form(nd_page, config, job_data)
-
-            # Upload resume LAST — after form fill so Angular re-renders don't clear the dropzone
+            # Upload resume FIRST — the resume parser fills name/email/phone into
+            # Angular's model. If we fill fields before upload, the parser's re-render
+            # wipes our DOM-only values for confirm-email, city, linkedin, etc.
             resume_path = config.get("files", {}).get("resume")
             if resume_path:
                 try:
@@ -139,8 +306,14 @@ class SmartRecruitersHandler(BaseHandler):
                         self._nd_upload_resume(nd_page, resume_path),
                         timeout=30
                     )
+                    # Wait for resume parser to fill fields and Angular to re-render
+                    await asyncio.sleep(5)
+                    logger.info("Resume uploaded — waiting for parser to fill fields")
                 except asyncio.TimeoutError:
                     logger.warning("Resume upload timed out after 30s — continuing without resume")
+
+            # Fill the form fields AFTER resume parser has run
+            filled = await self._nd_fill_form(nd_page, config, job_data)
             if not filled:
                 return False
 
@@ -157,6 +330,16 @@ class SmartRecruitersHandler(BaseHandler):
                 logger.info("DRY RUN: Form filled, running validation")
                 validation = await self._nd_validate(nd_page)
                 self._last_status = "success" if validation else "failed"
+                if validation:
+                    # Screenshot after validation
+                    try:
+                        company = job_data.get("company", "unknown").replace(" ", "_")[:30]
+                        ts = __import__("datetime").datetime.now().strftime("%Y%m%d_%H%M%S")
+                        ss_path = f"data/screenshots/PASS_{company}_{ts}.png"
+                        await nd_page.save_screenshot(ss_path)
+                        logger.info(f"Screenshot saved: {ss_path}")
+                    except Exception:
+                        pass
                 return validation
 
             # Log all visible buttons before submit for debugging
@@ -298,6 +481,17 @@ class SmartRecruitersHandler(BaseHandler):
             submitted = await self._nd_handle_multistep_submit(nd_page, job_data)
             if submitted:
                 self._last_status = "success"
+                # Wait 10s for confirmation page to fully load, then screenshot
+                logger.info("Submitted! Waiting 10s for confirmation page...")
+                await asyncio.sleep(10)
+                try:
+                    company = job_data.get("company", "unknown").replace(" ", "_")[:30]
+                    ts = __import__("datetime").datetime.now().strftime("%Y%m%d_%H%M%S")
+                    ss_path = f"data/screenshots/PASS_{company}_{ts}.png"
+                    await nd_page.save_screenshot(ss_path)
+                    logger.info(f"Screenshot saved: {ss_path}")
+                except Exception as ss_e:
+                    logger.debug(f"Post-submit screenshot failed: {ss_e}")
                 return True
 
             logger.warning("SmartRecruiters form submission failed — multi-step navigation exhausted")
@@ -307,14 +501,16 @@ class SmartRecruitersHandler(BaseHandler):
             logger.error(f"SmartRecruiters application failed: {e}")
             return False
         finally:
-            # Only close nodriver browser on SUCCESS — on failure, leave open for manual help
-            if nd_browser and self._last_status == "success":
+            # NEVER close the browser — only close the job TAB
+            # Browser stays alive with keeper tab for next job
+            if nd_page and self._last_status == "success":
                 try:
-                    nd_browser.stop()
+                    logger.info("[BROWSER] SUCCESS — closing job tab, browser stays open")
+                    await nd_page.close()
                 except Exception as e:
-                    logger.debug(f"Error closing nodriver browser: {e}")
-            elif nd_browser:
-                logger.info("[BROWSER] SmartRecruiters nodriver browser left OPEN for manual help")
+                    logger.debug(f"Error closing job tab: {e}")
+            elif nd_page:
+                logger.info("[BROWSER] SmartRecruiters tab left OPEN for manual help — browser stays open")
 
     async def detect_form_type(self, page: Page) -> str:
         """Detect SmartRecruiters form type."""
@@ -324,21 +520,272 @@ class SmartRecruitersHandler(BaseHandler):
     # nodriver helpers
     # ------------------------------------------------------------------
 
+    async def _nd_fill_city_autocomplete(self, nd_page, city: str, cdp) -> bool:
+        """Fill the spl-autocomplete city field by typing and clicking a suggestion.
+
+        Strategy:
+        1. Focus the input inside the shadow DOM
+        2. Clear existing value
+        3. Type city name char-by-char via CDP dispatchKeyEvent (triggers Angular)
+        4. Wait for autocomplete suggestions to appear
+        5. Click the first matching suggestion via JS
+        6. Verify the value was set
+        """
+        try:
+            # Step 1: Focus the autocomplete input
+            focus_result = await nd_page.evaluate("""
+                (function() {
+                    var host = document.querySelector('spl-autocomplete');
+                    if (!host || !host.shadowRoot) return 'NO_HOST';
+                    function findInput(root) {
+                        var inp = root.querySelector('input');
+                        if (inp) return inp;
+                        var all = root.querySelectorAll('*');
+                        for (var i = 0; i < all.length; i++) {
+                            if (all[i].shadowRoot) {
+                                var f = findInput(all[i].shadowRoot);
+                                if (f) return f;
+                            }
+                        }
+                        return null;
+                    }
+                    var input = findInput(host.shadowRoot);
+                    if (!input) return 'NO_INPUT';
+                    host.scrollIntoView({behavior: 'instant', block: 'center'});
+                    input.value = '';
+                    input.focus();
+                    input.click();
+                    input.dispatchEvent(new Event('input', {bubbles: true, composed: true}));
+                    return 'FOCUSED';
+                })()
+            """)
+            logger.info(f"City autocomplete focus: {focus_result}")
+            if focus_result != 'FOCUSED':
+                return False
+
+            await asyncio.sleep(0.5)
+
+            # Step 2: Type city via CDP Input.insertText (browser dispatches real events)
+            # For autocomplete, type char-by-char to trigger suggestion dropdown
+            for char in city:
+                await nd_page.send(cdp.input_.insert_text(text=char))
+                await asyncio.sleep(0.06)
+
+            logger.info(f"City: typed '{city}', waiting for suggestions...")
+            await asyncio.sleep(2.5)  # Wait for API/autocomplete suggestions to load
+
+            # Step 3: Find suggestion coordinates and click via CDP mouse events
+            # (JS .click() doesn't trigger Angular's change detection through shadow DOM)
+            # Prefer suggestions containing "CA, US" or ", US" to avoid Costa Rica etc.
+            suggestion_coords = await nd_page.evaluate("""
+                (function() {
+                    function collectSuggestions(root, depth) {
+                        if (depth > 5) return [];
+                        var results = [];
+                        var selectors = [
+                            'li', '[role="option"]', '[role="listbox"] > *',
+                            'mat-option', '.suggestion', '[class*="suggestion"]',
+                            '[class*="option"]', '[class*="result"]'
+                        ];
+                        for (var s = 0; s < selectors.length; s++) {
+                            var items = root.querySelectorAll(selectors[s]);
+                            for (var i = 0; i < items.length; i++) {
+                                var r = items[i].getBoundingClientRect();
+                                var txt = (items[i].textContent || '').trim();
+                                if (r.width > 0 && r.height > 0 && r.height < 200 && txt.length > 2) {
+                                    results.push({x: r.x + r.width/2, y: r.y + r.height/2, text: txt.substring(0, 80)});
+                                }
+                            }
+                        }
+                        var all = root.querySelectorAll('*');
+                        for (var j = 0; j < all.length; j++) {
+                            if (all[j].shadowRoot) {
+                                results = results.concat(collectSuggestions(all[j].shadowRoot, depth + 1));
+                            }
+                        }
+                        return results;
+                    }
+                    var host = document.querySelector('spl-autocomplete');
+                    if (!host || !host.shadowRoot) return null;
+                    var all = collectSuggestions(host.shadowRoot, 0);
+                    if (all.length === 0) return null;
+                    // Prefer US suggestions
+                    for (var i = 0; i < all.length; i++) {
+                        if (all[i].text.indexOf(', US') !== -1 || all[i].text.indexOf('United States') !== -1) {
+                            return all[i];
+                        }
+                    }
+                    return all[0];  // fallback to first
+                })()
+            """)
+            logger.info(f"City suggestion coords: {suggestion_coords}")
+
+            # nodriver may return dict OR list-of-pairs; normalize
+            coords = _normalize_nd_result(suggestion_coords)
+
+            if coords and isinstance(coords, dict) and 'x' in coords and 'y' in coords:
+                x, y = coords['x'], coords['y']
+                # CDP mouse click at exact coordinates — Angular WILL pick this up
+                await nd_page.send(cdp.input_.dispatch_mouse_event(
+                    type_="mousePressed", x=x, y=y,
+                    button=cdp.input_.MouseButton.LEFT, click_count=1))
+                await asyncio.sleep(0.05)
+                await nd_page.send(cdp.input_.dispatch_mouse_event(
+                    type_="mouseReleased", x=x, y=y,
+                    button=cdp.input_.MouseButton.LEFT, click_count=1))
+                await asyncio.sleep(1)
+
+                city_val = await self._nd_get_city_value(nd_page)
+                logger.info(f"City value after CDP mouse click: '{city_val}'")
+                if city_val and len(str(city_val)) > 2:
+                    # Trigger zone.js spl-change on the autocomplete host
+                    # to update Angular's FormControl (DOM value alone isn't enough)
+                    # Pass the actual city value in the event detail
+                    escaped_city = str(city_val).replace("'", "\\'").replace('"', '\\"')
+                    await nd_page.evaluate(f"""
+                        (function() {{
+                            var host = document.querySelector('spl-autocomplete');
+                            if (!host) return;
+                            var cityValue = '{escaped_city}';
+                            // Trigger spl-change zone.js listeners with actual city value
+                            var key = '__zone_symbol__spl-changefalse';
+                            if (host[key] && Array.isArray(host[key])) {{
+                                for (var i = 0; i < host[key].length; i++) {{
+                                    try {{
+                                        var handler = host[key][i].handler || host[key][i];
+                                        if (typeof handler === 'function') {{
+                                            handler(new CustomEvent('spl-change', {{
+                                                detail: {{value: cityValue}}, bubbles: true
+                                            }}));
+                                        }}
+                                    }} catch(e) {{}}
+                                }}
+                            }}
+                            // Also dispatch native change/input events
+                            host.dispatchEvent(new Event('change', {{bubbles: true, composed: true}}));
+                            host.dispatchEvent(new Event('input', {{bubbles: true, composed: true}}));
+                            // Try spl-touched to mark as touched
+                            var touchedKey = '__zone_symbol__spl-touchedfalse';
+                            if (host[touchedKey] && Array.isArray(host[touchedKey])) {{
+                                for (var j = 0; j < host[touchedKey].length; j++) {{
+                                    try {{
+                                        var th = host[touchedKey][j].handler || host[touchedKey][j];
+                                        if (typeof th === 'function') {{
+                                            th(new CustomEvent('spl-touched', {{bubbles: true}}));
+                                        }}
+                                    }} catch(e) {{}}
+                                }}
+                            }}
+                        }})()
+                    """)
+                    await asyncio.sleep(0.5)
+
+                    # Verify Angular validity
+                    ng_valid = await nd_page.evaluate("""
+                        (function() {
+                            var host = document.querySelector('spl-autocomplete');
+                            if (!host) return 'no host';
+                            return host.className.toString();
+                        })()
+                    """)
+                    logger.info(f"City autocomplete Angular classes: {ng_valid}")
+                    return True
+
+            # Fallback: ArrowDown + Enter
+            logger.info("City: CDP mouse click failed, trying ArrowDown+Enter")
+            await nd_page.send(cdp.input_.dispatch_key_event(
+                type_="keyDown", key="ArrowDown", code="ArrowDown"))
+            await nd_page.send(cdp.input_.dispatch_key_event(
+                type_="keyUp", key="ArrowDown", code="ArrowDown"))
+            await asyncio.sleep(0.4)
+            await nd_page.send(cdp.input_.dispatch_key_event(
+                type_="keyDown", key="Enter", code="Enter"))
+            await nd_page.send(cdp.input_.dispatch_key_event(
+                type_="keyUp", key="Enter", code="Enter"))
+            await asyncio.sleep(1)
+
+            city_val = await self._nd_get_city_value(nd_page)
+            logger.info(f"City value after ArrowDown+Enter: '{city_val}'")
+            return bool(city_val and len(str(city_val)) > 2)
+
+        except Exception as e:
+            logger.warning(f"City autocomplete fill error: {e}")
+            return False
+
+    async def _nd_get_city_value(self, nd_page) -> str:
+        """Get the current value of the city autocomplete input."""
+        return await nd_page.evaluate("""
+            (function() {
+                var host = document.querySelector('spl-autocomplete');
+                if (!host || !host.shadowRoot) return '';
+                function findInput(root) {
+                    var inp = root.querySelector('input');
+                    if (inp) return inp;
+                    var all = root.querySelectorAll('*');
+                    for (var i = 0; i < all.length; i++) {
+                        if (all[i].shadowRoot) {
+                            var f = findInput(all[i].shadowRoot);
+                            if (f) return f;
+                        }
+                    }
+                    return null;
+                }
+                var input = findInput(host.shadowRoot);
+                return input ? input.value : '';
+            })()
+        """)
+
+    async def _click_simplify_autofill(self, nd_page):
+        """Click the Simplify Copilot autofill button if it appears on the page.
+
+        Simplify shows a green 'Autofill' overlay button on job forms.
+        We click it first and wait for it to fill, then verify/fix fields ourselves.
+        """
+        try:
+            # Simplify's autofill button selectors (common patterns)
+            autofill_selectors = [
+                # Simplify overlay button
+                '[class*="simplify"]',
+                '#simplify-autofill',
+                'button[class*="simplify"]',
+                '[id*="simplify"]',
+                # The extension injects elements with "simplify" in class/id
+            ]
+            for sel in autofill_selectors:
+                try:
+                    btn = await nd_page.query_selector(sel)
+                    if btn:
+                        logger.info(f"Found Simplify autofill element: {sel}")
+                        await btn.click()
+                        await asyncio.sleep(3)
+                        logger.info("Clicked Simplify autofill — waiting 5s for fields to populate")
+                        await asyncio.sleep(5)
+                        return
+                except Exception:
+                    pass
+
+            # Also try finding by text content
+            for text in ["Autofill", "Fill with Simplify", "Auto-fill"]:
+                try:
+                    btn = await nd_page.find(text, best_match=True)
+                    if btn:
+                        tag = getattr(btn, 'tag_name', getattr(btn, 'tag', ''))
+                        if tag and tag.lower() in ('button', 'div', 'span', 'a'):
+                            logger.info(f"Found Simplify button by text: '{text}'")
+                            await btn.click()
+                            await asyncio.sleep(5)
+                            logger.info("Clicked Simplify autofill button")
+                            return
+                except Exception:
+                    pass
+
+            logger.debug("No Simplify autofill button found — extension may autofill automatically")
+        except Exception as e:
+            logger.debug(f"Simplify autofill click attempt: {e}")
+
     def _is_closed_content(self, content: str) -> bool:
-        """Check if page content indicates the job is closed."""
-        content_lower = content.lower()
-        closed_indicators = [
-            "this job has expired",
-            "sorry, this job has expired",
-            "oops, you've gone too far",
-            "position has been filled",
-            "no longer accepting",
-            "job has been closed",
-            "this position is closed",
-            "this job is no longer available",
-            "page not found",
-        ]
-        return any(ind in content_lower for ind in closed_indicators)
+        """Check if page content indicates job is closed. Delegates to shared detection module."""
+        return _shared_is_job_closed(content)
 
     async def _nd_click_apply(self, nd_page) -> bool:
         """Click the Apply / 'I'm interested' button using nodriver."""
@@ -391,9 +838,20 @@ class SmartRecruitersHandler(BaseHandler):
             "website-input": personal.get("portfolio", "") or personal.get("github", ""),
         }
 
-        # Wait for Simplify extension to autofill first (if loaded)
+        # Wait for Simplify extension + resume parser to autofill
+        # If Simplify is loaded, it fills fields through Angular (gold standard)
+        # Resume parser also fills name/email/phone through Angular
         import asyncio as _asyncio
-        await _asyncio.sleep(3)
+        await _asyncio.sleep(5)
+
+        # Brief diagnostic to confirm form is loaded
+        try:
+            field_count = await nd_page.evaluate("""
+                document.querySelectorAll('spl-input, spl-select, spl-textarea, spl-phone-field, spl-autocomplete').length
+            """)
+            logger.info(f"SmartRecruiters form: {field_count} spl-* components found")
+        except Exception:
+            pass
 
         # Check what's already filled by the extension — DON'T overwrite those
         prefilled = await nd_page.evaluate("""
@@ -435,23 +893,37 @@ class SmartRecruitersHandler(BaseHandler):
                 return filled;
             })()
         """)
-        logger.info(f"Extension pre-filled: {prefilled}")
+        # Normalize prefilled — nodriver may return list of pairs instead of dict
+        prefilled = _normalize_nd_result(prefilled) or {}
+        if isinstance(prefilled, list):
+            try:
+                prefilled = {k: v for k, v in prefilled}
+            except (ValueError, TypeError):
+                prefilled = {}
+        if not isinstance(prefilled, dict):
+            prefilled = {}
+        logger.info(f"Pre-filled by resume parser: {list(prefilled.keys())}")
 
-        # Fill order: Phone → City → Message → spl-input fields (LAST)
-        # Phone/city use JS focus + CDP insertText which triggers Angular re-renders
-        # that clear spl-input values. So spl-inputs must be filled AFTER phone/city.
+        # Fill order: Phone → Message → spl-input fields → City (ABSOLUTE LAST)
+        # City MUST be last because filling spl-inputs triggers Angular re-renders
+        # that clear the city autocomplete value. Phone/message go first because
+        # they also trigger re-renders that clear spl-inputs.
         import nodriver.cdp as cdp
         fill_results = {}
+
+        # CRITICAL: Activate this tab before sending any CDP Input events.
+        # CDP mouse/key events go to the FOCUSED tab, not necessarily this one.
+        try:
+            await nd_page.activate()
+            await asyncio.sleep(0.3)
+        except Exception:
+            pass
 
         # Fill phone — skip if extension already filled it
         phone = personal.get("phone", "").replace("-", "").replace(" ", "").replace("+1", "").replace("+", "")
         if phone and 'phone' not in prefilled:
             try:
-                # JS focus + CDP insertText is the ONLY approach that works for spl-phone-field.
-                # CDP char-by-char key events and mouse-click approaches don't persist values
-                # because Angular's ControlValueAccessor on the nested component doesn't process them.
                 phone_filled = await self._nd_click_and_type_phone(nd_page, phone)
-
                 if phone_filled:
                     fill_results["phone"] = True
                     logger.info("Filled phone via CDP")
@@ -472,166 +944,10 @@ class SmartRecruitersHandler(BaseHandler):
             )
             if msg_filled:
                 fill_results["message"] = True
-                logger.debug("Filled hiring manager message via CDP typing")
-            else:
-                logger.debug("Message CDP typing failed")
         except Exception as e:
             logger.debug(f"Error filling message: {e}")
 
-        # Fill City/location autocomplete — skip if extension already filled it
-        city = personal.get("city", "") or personal.get("location", "")
-        if city and 'city' not in prefilled:
-            try:
-                # Step 1: JS focus + insertText into the autocomplete input
-                city_focus = await nd_page.evaluate("""
-                    (function() {
-                        var host = document.querySelector('spl-autocomplete');
-                        if (!host || !host.shadowRoot) return 'NO_HOST';
-                        function findInput(root) {
-                            var inp = root.querySelector('input');
-                            if (inp) return inp;
-                            var all = root.querySelectorAll('*');
-                            for (var i = 0; i < all.length; i++) {
-                                if (all[i].shadowRoot) {
-                                    var f = findInput(all[i].shadowRoot);
-                                    if (f) return f;
-                                }
-                            }
-                            return null;
-                        }
-                        var input = findInput(host.shadowRoot);
-                        if (!input) return 'NO_INPUT';
-                        // Scroll into view
-                        host.scrollIntoView({behavior: 'instant', block: 'center'});
-                        // Clear and focus
-                        input.value = '';
-                        input.focus();
-                        return 'FOCUSED';
-                    })()
-                """)
-                logger.info(f"City JS focus: {city_focus}")
-
-                if city_focus == 'FOCUSED':
-                    await asyncio.sleep(0.3)
-                    # Type city char-by-char with CDP dispatchKeyEvent
-                    # (insertText doesn't trigger Angular change detection)
-                    for char in city:
-                        await nd_page.send(cdp.input_.dispatch_key_event(
-                            type_="keyDown", key=char, code="Key" + char.upper() if char.isalpha() else "Space"))
-                        await nd_page.send(cdp.input_.dispatch_key_event(
-                            type_="char", text=char, key=char))
-                        await nd_page.send(cdp.input_.dispatch_key_event(
-                            type_="keyUp", key=char, code="Key" + char.upper() if char.isalpha() else "Space"))
-                        await asyncio.sleep(0.05)
-                    await asyncio.sleep(2)  # Wait for autocomplete suggestions
-
-                    # ArrowDown + Enter to select first suggestion
-                    await nd_page.send(cdp.input_.dispatch_key_event(
-                        type_="keyDown", key="ArrowDown", code="ArrowDown"))
-                    await nd_page.send(cdp.input_.dispatch_key_event(
-                        type_="keyUp", key="ArrowDown", code="ArrowDown"))
-                    await asyncio.sleep(0.3)
-                    await nd_page.send(cdp.input_.dispatch_key_event(
-                        type_="keyDown", key="Enter", code="Enter"))
-                    await nd_page.send(cdp.input_.dispatch_key_event(
-                        type_="keyUp", key="Enter", code="Enter"))
-                    await asyncio.sleep(0.5)
-
-                    # Verify
-                    city_verify = await nd_page.evaluate("""
-                        (function() {
-                            var host = document.querySelector('spl-autocomplete');
-                            if (host && host.shadowRoot) {
-                                var input = host.shadowRoot.querySelector('input');
-                                if (input) return input.value;
-                                // Try nested
-                                function findInput(root) {
-                                    var inp = root.querySelector('input');
-                                    if (inp) return inp;
-                                    var all = root.querySelectorAll('*');
-                                    for (var i = 0; i < all.length; i++) {
-                                        if (all[i].shadowRoot) {
-                                            var f = findInput(all[i].shadowRoot);
-                                            if (f) return f;
-                                        }
-                                    }
-                                    return null;
-                                }
-                                var inp2 = findInput(host.shadowRoot);
-                                if (inp2) return inp2.value;
-                            }
-                            return '';
-                        })()
-                    """)
-                    logger.info(f"City value after insertText+ArrowDown+Enter: '{city_verify}'")
-
-                    # Dispatch events so Angular picks up the city value
-                    if city_verify and len(str(city_verify)) > 2:
-                        await nd_page.evaluate("""
-                            (function() {
-                                var host = document.querySelector('spl-autocomplete');
-                                if (!host || !host.shadowRoot) return;
-                                function findInput(root) {
-                                    var inp = root.querySelector('input');
-                                    if (inp) return inp;
-                                    var all = root.querySelectorAll('*');
-                                    for (var i = 0; i < all.length; i++) {
-                                        if (all[i].shadowRoot) {
-                                            var f = findInput(all[i].shadowRoot);
-                                            if (f) return f;
-                                        }
-                                    }
-                                    return null;
-                                }
-                                var input = findInput(host.shadowRoot);
-                                if (input) {
-                                    input.dispatchEvent(new Event('input', {bubbles: true, composed: true}));
-                                    input.dispatchEvent(new Event('change', {bubbles: true, composed: true}));
-                                    input.dispatchEvent(new Event('blur', {bubbles: true, composed: true}));
-                                }
-                            })()
-                        """)
-                        await asyncio.sleep(0.2)
-
-                    if city_verify and len(str(city_verify)) > 2:
-                        fill_results["city"] = True
-                    else:
-                        # Fallback: click suggestion elements inside spl-autocomplete shadow
-                        select_result = await nd_page.evaluate("""
-                            (function() {
-                                function findSuggestions(root) {
-                                    var items = root.querySelectorAll(
-                                        'li, [role="option"], [role="listbox"] > *'
-                                    );
-                                    for (var i = 0; i < items.length; i++) {
-                                        var r = items[i].getBoundingClientRect();
-                                        if (r.width > 0 && r.height > 0 && r.height < 100) {
-                                            items[i].click();
-                                            return 'CLICKED:' + (items[i].textContent || '').trim().substring(0, 40);
-                                        }
-                                    }
-                                    var hosts = root.querySelectorAll('*');
-                                    for (var j = 0; j < hosts.length; j++) {
-                                        if (hosts[j].shadowRoot) {
-                                            var result = findSuggestions(hosts[j].shadowRoot);
-                                            if (result !== 'NONE') return result;
-                                        }
-                                    }
-                                    return 'NONE';
-                                }
-                                var host = document.querySelector('spl-autocomplete');
-                                if (host && host.shadowRoot) {
-                                    return findSuggestions(host.shadowRoot);
-                                }
-                                return 'NO_HOST';
-                            })()
-                        """)
-                        logger.info(f"City fallback click: {select_result}")
-                        fill_results["city"] = select_result and 'CLICKED' in str(select_result)
-            except Exception as e:
-                logger.info(f"Error filling city: {e}")
-
-        # === PHASE 2: Fill spl-input fields LAST (after phone/city/message) ===
+        # === PHASE 2: Fill spl-input fields (before city) ===
         # Skip fields already filled by the Simplify extension
         for element_id, value in fields.items():
             if not value:
@@ -651,37 +967,16 @@ class SmartRecruitersHandler(BaseHandler):
                 logger.debug(f"Error filling {element_id}: {e}")
                 fill_results[element_id] = False
 
-        # Click neutral to trigger blur, then verify
+        # Click neutral to trigger blur (spl-change already synced Angular model)
         try:
             await nd_page.evaluate("document.querySelector('h2, h3, .section-title, body').click()")
         except Exception:
             pass
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.5)
 
-        # Verify and re-fill any spl-input fields that got cleared
-        for element_id, value in fields.items():
-            if not value:
-                continue
-            try:
-                current_val = await nd_page.evaluate(f"""
-                    (function() {{
-                        var host = document.querySelector('#{element_id}');
-                        if (!host || !host.shadowRoot) return '';
-                        var input = host.shadowRoot.querySelector('input');
-                        return input ? input.value : '';
-                    }})()
-                """)
-                if not current_val or len(str(current_val).strip()) < 2:
-                    logger.info(f"Re-filling {element_id} (was cleared by Angular)")
-                    filled = await self._nd_cdp_type_into_shadow(
-                        nd_page, f"#{element_id}", value, input_selector='input'
-                    )
-                    fill_results[element_id] = filled
-                    await asyncio.sleep(0.5)
-                else:
-                    fill_results[element_id] = True
-            except Exception as e:
-                logger.debug(f"Error verifying {element_id}: {e}")
+        # NOTE: Intermediate verify+refill pass removed — _nd_cdp_type_into_shadow now
+        # dispatches spl-change on the host element, which syncs Angular's FormControl.
+        # Values survive re-renders. Only the post-city verify (Phase 5) is needed.
 
         # === PHASE 3: Detect and fill unknown spl-input fields (spl-form-element_* IDs) ===
         # These are custom company-specific fields not in our standard fields dict
@@ -757,6 +1052,64 @@ class SmartRecruitersHandler(BaseHandler):
         except Exception as e:
             logger.debug(f"Error detecting unknown spl-input fields: {e}")
 
+        # === PHASE 4: Fill City LAST (autocomplete gets cleared by other field fills) ===
+        city = personal.get("city", "") or personal.get("location", "")
+        if city and 'city' not in prefilled:
+            city_filled = await self._nd_fill_city_autocomplete(nd_page, city, cdp)
+            fill_results["city"] = city_filled
+
+        # === PHASE 5: FINAL RE-FILL — city selection triggers Angular re-render ===
+        # Angular clears text fields when the city autocomplete value changes.
+        # Re-check and re-fill everything one more time.
+        await asyncio.sleep(0.5)
+        for field_id, value in fields.items():
+            if not value:
+                continue
+            try:
+                curr = await nd_page.evaluate(f"""
+                    (function() {{
+                        var host = document.querySelector('#{field_id}');
+                        if (!host || !host.shadowRoot) return '';
+                        var inp = host.shadowRoot.querySelector('input');
+                        return inp ? inp.value : '';
+                    }})()
+                """)
+                if not curr or len(str(curr).strip()) < 2:
+                    logger.info(f"Final re-fill: {field_id} (cleared by Angular after city)")
+                    await self._nd_cdp_type_into_shadow(
+                        nd_page, f"#{field_id}", value, input_selector='input'
+                    )
+                    fill_results[field_id] = True
+                    await asyncio.sleep(0.2)
+            except Exception:
+                pass
+
+        # Re-check phone after city fill
+        if phone and fill_results.get("phone"):
+            try:
+                phone_val = await nd_page.evaluate("""
+                    (function() {
+                        var host = document.querySelector('spl-phone-field');
+                        if (!host || !host.shadowRoot) return '';
+                        function findTel(root) {
+                            var inp = root.querySelector('input[type="tel"]');
+                            if (inp) return inp;
+                            var all = root.querySelectorAll('*');
+                            for (var i = 0; i < all.length; i++) {
+                                if (all[i].shadowRoot) { var f = findTel(all[i].shadowRoot); if (f) return f; }
+                            }
+                            return null;
+                        }
+                        var tel = findTel(host.shadowRoot);
+                        return tel ? tel.value : '';
+                    })()
+                """)
+                if not phone_val or len(str(phone_val).strip()) < 5:
+                    logger.info("Final re-fill: phone (cleared by Angular after city)")
+                    await self._nd_click_and_type_phone(nd_page, phone)
+            except Exception:
+                pass
+
         # Log summary and track fields
         filled_count = sum(1 for v in fill_results.values() if v)
         total = len(fields) + 2  # +phone +message
@@ -796,27 +1149,24 @@ class SmartRecruitersHandler(BaseHandler):
         return True
 
     async def _nd_click_and_type_phone(self, nd_page, phone: str) -> bool:
-        """Fill phone by JS-focusing the tel input, then CDP Input.insertText.
+        """Fill phone by CDP mouse click on tel input coordinates, then CDP key events.
 
-        The spl-phone-field has nested shadow DOM:
-          spl-phone-field → shadow → [country-code-selector (has input[type="text"])]
-                                      [spl-input or similar → shadow → input[type="tel"]]
-        We must search ONLY for input[type="tel"] to avoid hitting the country code text input.
+        Uses coordinate-based approach (like city autocomplete) because CDP DOM.focus
+        targets the wrong element when multiple tabs share the same persistent context.
+        CDP mouse events always target the correct element at the correct coordinates.
         """
         import nodriver.cdp as cdp
 
         try:
-            # Use JS to find and focus ONLY the tel input (not the country code text input)
-            focus_result = await nd_page.evaluate("""
+            # Step 1: Get tel input coordinates via JS (works reliably through shadow DOM)
+            coords_result = await nd_page.evaluate("""
                 (function() {
                     var host = document.querySelector('spl-phone-field');
-                    if (!host || !host.shadowRoot) return 'NO_HOST';
-                    // ONLY search for input[type="tel"] — do NOT fall back to generic inputs
+                    if (!host || !host.shadowRoot) return null;
                     function findTelInput(root) {
                         if (!root) return null;
                         var inp = root.querySelector('input[type="tel"]');
                         if (inp) return inp;
-                        // Recurse into nested shadow roots
                         var all = root.querySelectorAll('*');
                         for (var i = 0; i < all.length; i++) {
                             if (all[i].shadowRoot) {
@@ -827,42 +1177,93 @@ class SmartRecruitersHandler(BaseHandler):
                         return null;
                     }
                     var input = findTelInput(host.shadowRoot);
-                    if (!input) return 'NO_TEL_INPUT';
-                    // Clear any existing value
+                    if (!input) return null;
                     input.value = '';
-                    // Focus it via JS
-                    input.focus();
-                    return 'FOCUSED:' + input.type + ':' + input.tagName;
+                    input.dispatchEvent(new Event('input', {bubbles: true, composed: true}));
+                    input.scrollIntoView({behavior: 'instant', block: 'center'});
+                    var rect = input.getBoundingClientRect();
+                    return {x: rect.x + rect.width/2, y: rect.y + rect.height/2, w: rect.width};
                 })()
             """)
-
-            logger.info(f"Phone JS focus result: {focus_result}")
-
-            if not focus_result or 'FOCUSED' not in str(focus_result):
+            coords = _normalize_nd_result(coords_result)
+            if not coords or not isinstance(coords, dict) or coords.get('w', 0) <= 0:
+                logger.info("Phone: no tel input coordinates found")
                 return False
 
+            # Step 2: Focus the inner tel input via JS, then CDP click for realism
+            x, y = coords['x'], coords['y']
+
+            # JS focus the inner tel input directly
+            await nd_page.evaluate("""
+                (function() {
+                    var host = document.querySelector('spl-phone-field');
+                    if (!host || !host.shadowRoot) return;
+                    function findTelInput(root) {
+                        if (!root) return null;
+                        var inp = root.querySelector('input[type="tel"]');
+                        if (inp) return inp;
+                        var all = root.querySelectorAll('*');
+                        for (var i = 0; i < all.length; i++) {
+                            if (all[i].shadowRoot) {
+                                var found = findTelInput(all[i].shadowRoot);
+                                if (found) return found;
+                            }
+                        }
+                        return null;
+                    }
+                    var input = findTelInput(host.shadowRoot);
+                    if (input) input.focus();
+                })()
+            """)
+            await asyncio.sleep(0.1)
+
+            # CDP mouse click for realistic interaction
+            await nd_page.send(cdp.input_.dispatch_mouse_event(
+                type_="mousePressed", x=x, y=y,
+                button=cdp.input_.MouseButton.LEFT, click_count=1))
+            await asyncio.sleep(0.05)
+            await nd_page.send(cdp.input_.dispatch_mouse_event(
+                type_="mouseReleased", x=x, y=y,
+                button=cdp.input_.MouseButton.LEFT, click_count=1))
+            await asyncio.sleep(0.2)
+
+            # Re-focus inner input (click may have moved focus to host)
+            await nd_page.evaluate("""
+                (function() {
+                    var host = document.querySelector('spl-phone-field');
+                    if (!host || !host.shadowRoot) return;
+                    function findTelInput(root) {
+                        if (!root) return null;
+                        var inp = root.querySelector('input[type="tel"]');
+                        if (inp) return inp;
+                        var all = root.querySelectorAll('*');
+                        for (var i = 0; i < all.length; i++) {
+                            if (all[i].shadowRoot) {
+                                var found = findTelInput(all[i].shadowRoot);
+                                if (found) return found;
+                            }
+                        }
+                        return null;
+                    }
+                    var input = findTelInput(host.shadowRoot);
+                    if (input) { input.value = ''; input.focus(); }
+                })()
+            """)
+            await asyncio.sleep(0.1)
+            logger.info(f"Phone: CDP click at ({x:.0f}, {y:.0f}), inner input focused")
+
+            # Step 3: Use Input.insertText — browser dispatches real events
+            await nd_page.send(cdp.input_.insert_text(text=phone))
             await asyncio.sleep(0.3)
 
-            # Type char-by-char with CDP dispatchKeyEvent — triggers real browser keyboard
-            # events that Angular's zone.js picks up (insertText does NOT trigger these)
-            for char in phone:
-                await nd_page.send(cdp.input_.dispatch_key_event(
-                    type_="keyDown", key=char, code=f"Digit{char}" if char.isdigit() else "Space"))
-                await nd_page.send(cdp.input_.dispatch_key_event(
-                    type_="char", text=char, key=char))
-                await nd_page.send(cdp.input_.dispatch_key_event(
-                    type_="keyUp", key=char, code=f"Digit{char}" if char.isdigit() else "Space"))
-                await asyncio.sleep(0.05)
-            await asyncio.sleep(0.5)
-
-            # Tab out to trigger blur/validation on the Angular component
+            # Tab out
             await nd_page.send(cdp.input_.dispatch_key_event(
                 type_="keyDown", key="Tab", code="Tab"))
             await nd_page.send(cdp.input_.dispatch_key_event(
                 type_="keyUp", key="Tab", code="Tab"))
             await asyncio.sleep(0.3)
 
-            # Verify the value was set on the tel input specifically
+            # Step 5: Verify the value was set
             verify = await nd_page.evaluate("""
                 (function() {
                     var host = document.querySelector('spl-phone-field');
@@ -896,15 +1297,16 @@ class SmartRecruitersHandler(BaseHandler):
         self, nd_page, host_selector: str, text: str,
         input_selector: str = 'input', js_finder: str = None
     ) -> bool:
-        """Type into a shadow DOM input using hybrid JS-find + CDP-focus + CDP-type.
+        """Type into a shadow DOM input using JS focus + CDP Input.insertText.
 
         Strategy:
-        1. JS runtime.evaluate finds the input (JS is great at recursive shadow traversal)
-        2. CDP DOM.requestNode converts RemoteObject → nodeId
-        3. CDP DOM.focus gives REAL browser-level focus (not just JS focus)
-        4. CDP Input.insertText sends real keyboard input
-
-        This triggers Angular's event listeners naturally.
+        1. JS finds the inner input inside shadow DOM and focuses it
+        2. CDP mouse click at coordinates for realistic browser interaction
+        3. Verify inner input has focus (document.activeElement.shadowRoot.activeElement)
+        4. CDP Select All + Delete to clear
+        5. CDP Input.insertText — browser inserts text and dispatches real events
+           that go through zone.js → Angular change detection
+        6. Verify value was actually set
         """
         import nodriver.cdp as cdp
 
@@ -952,87 +1354,229 @@ class SmartRecruitersHandler(BaseHandler):
                     }})()
                 """
 
-            # Get RemoteObject reference to the input element
-            result = await nd_page.send(
-                cdp.runtime.evaluate(
-                    expression=js_code,
-                    return_by_value=False,
-                )
-            )
-            remote_obj = result[0] if isinstance(result, tuple) else result
+            # Step 2: Get coordinates, focus inner input via JS, then use CDP to type
+            escaped = text.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n")
 
-            if not remote_obj or not hasattr(remote_obj, 'object_id') or not remote_obj.object_id:
-                logger.info(f"CDP type: element not found via JS for '{host_selector}' (type={type(remote_obj).__name__})")
-                return False
-
-            logger.info(f"CDP type: found element for '{host_selector}', object_id={remote_obj.object_id[:30]}...")
-
-            # Step 2: Convert RemoteObject → DOM nodeId
-            # Need DOM.enable() first so DOM.requestNode works
-            try:
-                await nd_page.send(cdp.dom.enable())
-            except Exception:
-                pass  # Already enabled
-
-            node_id = await nd_page.send(
-                cdp.dom.request_node(object_id=remote_obj.object_id)
-            )
-            if not node_id:
-                logger.debug(f"CDP type: could not get nodeId for '{host_selector}'")
-                return False
-
-            logger.info(f"CDP type: got nodeId={node_id} for '{host_selector}'")
-
-            # Step 3: Focus via CDP DOM.focus (gives REAL browser-level focus)
-            await nd_page.send(cdp.dom.focus(node_id=node_id))
-            await asyncio.sleep(0.2)
-            logger.info(f"CDP type: focused nodeId={node_id}")
-
-            # Step 4: Clear any existing value via JS (Cmd+A doesn't work with delegatesFocus)
-            await nd_page.evaluate(f"""
+            # Find inner input, scroll into view, focus it, and get coordinates
+            setup_result = await nd_page.evaluate(f"""
                 (function() {{
-                    var host = document.querySelector('{host_selector}');
-                    if (host && host.shadowRoot) {{
-                        var input = host.shadowRoot.querySelector('{input_selector}');
-                        if (input) {{
-                            input.value = '';
-                            input.dispatchEvent(new Event('input', {{bubbles: true}}));
-                        }}
-                    }}
-                    // Also try findExact for nested shadow DOM
-                    function findExact(root) {{
+                    function findInput(root) {{
                         if (!root) return null;
                         var inp = root.querySelector('{input_selector}');
                         if (inp) return inp;
                         var all = root.querySelectorAll('*');
                         for (var i = 0; i < all.length; i++) {{
-                            if (all[i].shadowRoot) {{ var f = findExact(all[i].shadowRoot); if (f) return f; }}
+                            if (all[i].shadowRoot) {{ var f = findInput(all[i].shadowRoot); if (f) return f; }}
                         }}
                         return null;
                     }}
-                    if (host && host.shadowRoot) {{
-                        var inp = findExact(host.shadowRoot);
-                        if (inp) {{ inp.value = ''; inp.dispatchEvent(new Event('input', {{bubbles: true}})); }}
+                    var host = document.querySelector('{host_selector}');
+                    if (!host) return {{error: 'NO_HOST'}};
+                    var inp = host.shadowRoot ? findInput(host.shadowRoot) : null;
+                    if (!inp) return {{error: 'NO_INPUT'}};
+                    inp.scrollIntoView({{behavior: 'instant', block: 'center'}});
+                    // Focus the INNER input directly — critical for CDP events to target it
+                    inp.focus();
+                    var rect = inp.getBoundingClientRect();
+                    var focused = document.activeElement;
+                    var shadowFocused = focused && focused.shadowRoot ? focused.shadowRoot.activeElement : null;
+                    return {{
+                        x: rect.x + rect.width/2,
+                        y: rect.y + rect.height/2,
+                        w: rect.width,
+                        h: rect.height,
+                        activeTag: focused ? focused.tagName : 'none',
+                        activeId: focused ? focused.id : '',
+                        shadowActiveTag: shadowFocused ? shadowFocused.tagName : 'none',
+                        inputTag: inp.tagName
+                    }};
+                }})()
+            """)
+            info = _normalize_nd_result(setup_result)
+
+            if isinstance(info, dict) and info.get('error'):
+                logger.debug(f"Cannot find {host_selector}: {info['error']} (field may not exist on this form)")
+                return False
+
+            if not info or not isinstance(info, dict) or info.get('w', 0) <= 0:
+                logger.info(f"Cannot get coords for {host_selector}")
+                return False
+
+            x, y = info['x'], info['y']
+            logger.debug(f"Shadow type {host_selector}: active={info.get('activeTag')}#{info.get('activeId')}, "
+                        f"shadowActive={info.get('shadowActiveTag')}, input={info.get('inputTag')}")
+
+            # CDP mouse click at input coordinates for realistic interaction
+            await nd_page.send(cdp.input_.dispatch_mouse_event(
+                type_="mousePressed", x=x, y=y,
+                button=cdp.input_.MouseButton.LEFT, click_count=1))
+            await asyncio.sleep(0.05)
+            await nd_page.send(cdp.input_.dispatch_mouse_event(
+                type_="mouseReleased", x=x, y=y,
+                button=cdp.input_.MouseButton.LEFT, click_count=1))
+            await asyncio.sleep(0.15)
+
+            # Re-verify focus landed on inner input, fix if needed
+            focus_check = await nd_page.evaluate(f"""
+                (function() {{
+                    function findInput(root) {{
+                        if (!root) return null;
+                        var inp = root.querySelector('{input_selector}');
+                        if (inp) return inp;
+                        var all = root.querySelectorAll('*');
+                        for (var i = 0; i < all.length; i++) {{
+                            if (all[i].shadowRoot) {{ var f = findInput(all[i].shadowRoot); if (f) return f; }}
+                        }}
+                        return null;
+                    }}
+                    var host = document.querySelector('{host_selector}');
+                    var inp = host && host.shadowRoot ? findInput(host.shadowRoot) : null;
+                    var focused = document.activeElement;
+                    var shadowFocused = focused && focused.shadowRoot ? focused.shadowRoot.activeElement : null;
+                    // If inner input doesn't have focus, force it
+                    if (inp && shadowFocused !== inp) {{
+                        inp.focus();
+                        focused = document.activeElement;
+                        shadowFocused = focused && focused.shadowRoot ? focused.shadowRoot.activeElement : null;
+                    }}
+                    return {{
+                        focusOk: shadowFocused && (shadowFocused.tagName === 'INPUT' || shadowFocused.tagName === 'TEXTAREA'),
+                        activeTag: focused ? focused.tagName : 'none',
+                        shadowTag: shadowFocused ? shadowFocused.tagName : 'none'
+                    }};
+                }})()
+            """)
+            fc = _normalize_nd_result(focus_check) or {}
+            logger.debug(f"Focus after click: ok={fc.get('focusOk')}, active={fc.get('activeTag')}, shadow={fc.get('shadowTag')}")
+
+            # Clear existing content via JS (more reliable than Cmd+A/Delete which has timing issues)
+            await nd_page.evaluate(f"""
+                (function() {{
+                    var host = document.querySelector('{host_selector}');
+                    if (!host) return;
+                    var sr = host.shadowRoot;
+                    var inp = sr ? (sr.querySelector('textarea') || sr.querySelector('input')) : null;
+                    if (inp) {{
+                        inp.value = '';
+                        inp.dispatchEvent(new Event('input', {{bubbles: true, composed: true}}));
                     }}
                 }})()
             """)
             await asyncio.sleep(0.1)
 
-            # Step 5: Type text character by character using CDP key events
-            # keyDown (no text!) → char (with text) → keyUp
-            for char in text:
-                await nd_page.send(cdp.input_.dispatch_key_event(
-                    type_="keyDown", key=char,
-                ))
-                await nd_page.send(cdp.input_.dispatch_key_event(
-                    type_="char", text=char, key=char,
-                ))
-                await nd_page.send(cdp.input_.dispatch_key_event(
-                    type_="keyUp", key=char,
-                ))
-            await asyncio.sleep(0.3)
+            # PRIMARY: CDP Input.insertText + Angular model update via __ngContext__
+            # Input.insertText sets the DOM value but Angular's model is separate.
+            # We must also update Angular's internal model so values survive re-renders.
+            await nd_page.send(cdp.input_.insert_text(text=text))
+            await asyncio.sleep(0.15)
 
-            logger.info(f"CDP typed '{text[:30]}' char-by-char into {host_selector} > {input_selector}")
+            # Update Angular's internal model via __ngContext__ + zone.js trigger
+            angular_result = await nd_page.evaluate(f"""
+                (function() {{
+                    var host = document.querySelector('{host_selector}');
+                    if (!host) return 'NO_HOST';
+
+                    // Strategy 1: Find Angular component via __ngContext__ and call writeValue
+                    var ctx = host.__ngContext__;
+                    var componentSet = false;
+                    if (ctx && Array.isArray(ctx)) {{
+                        for (var i = 0; i < ctx.length; i++) {{
+                            var item = ctx[i];
+                            if (item && typeof item === 'object' && item !== null) {{
+                                // Look for the component instance with writeValue or value setter
+                                if (typeof item.writeValue === 'function') {{
+                                    item.writeValue('{escaped}');
+                                    if (typeof item.onChange === 'function') item.onChange('{escaped}');
+                                    if (typeof item.onTouched === 'function') item.onTouched();
+                                    componentSet = true;
+                                    break;
+                                }}
+                                // Some components store value directly
+                                if ('value' in item && typeof item.registerOnChange === 'function') {{
+                                    item.value = '{escaped}';
+                                    if (typeof item.onChange === 'function') item.onChange('{escaped}');
+                                    componentSet = true;
+                                    break;
+                                }}
+                            }}
+                        }}
+                    }}
+
+                    // Strategy 2: Trigger zone.js-patched event handlers directly
+                    // Zone.js stores original listeners in __zone_symbol__ properties
+                    var zoneSymbols = Object.getOwnPropertyNames(host).filter(
+                        function(k) {{ return k.indexOf('__zone_symbol__') === 0; }}
+                    );
+
+                    // Fire spl-change custom event (Angular listens for this on the host)
+                    var splChangeKey = '__zone_symbol__spl-changefalse';
+                    if (host[splChangeKey] && Array.isArray(host[splChangeKey])) {{
+                        for (var i = 0; i < host[splChangeKey].length; i++) {{
+                            try {{
+                                var listener = host[splChangeKey][i];
+                                var handler = listener.handler || listener;
+                                if (typeof handler === 'function') {{
+                                    handler(new CustomEvent('spl-change', {{
+                                        detail: {{value: '{escaped}'}},
+                                        bubbles: true
+                                    }}));
+                                }}
+                            }} catch(e) {{}}
+                        }}
+                    }}
+
+                    // Also fire spl-touched
+                    var splTouchedKey = '__zone_symbol__spl-touchedfalse';
+                    if (host[splTouchedKey] && Array.isArray(host[splTouchedKey])) {{
+                        for (var i = 0; i < host[splTouchedKey].length; i++) {{
+                            try {{
+                                var listener = host[splTouchedKey][i];
+                                var handler = listener.handler || listener;
+                                if (typeof handler === 'function') {{
+                                    handler(new CustomEvent('spl-touched', {{bubbles: true}}));
+                                }}
+                            }} catch(e) {{}}
+                        }}
+                    }}
+
+                    // Strategy 3: Set host.value property (some Angular bindings read this)
+                    try {{ host.value = '{escaped}'; }} catch(e) {{}}
+
+                    // Verify
+                    function findInput(root) {{
+                        if (!root) return null;
+                        var inp = root.querySelector('{input_selector}');
+                        if (inp) return inp;
+                        var all = root.querySelectorAll('*');
+                        for (var i = 0; i < all.length; i++) {{
+                            if (all[i].shadowRoot) {{ var f = findInput(all[i].shadowRoot); if (f) return f; }}
+                        }}
+                        return null;
+                    }}
+                    var inp = host.shadowRoot ? findInput(host.shadowRoot) : null;
+                    var domVal = inp ? inp.value : 'NO_INPUT';
+
+                    return {{
+                        component: componentSet,
+                        zoneSymbols: zoneSymbols.length,
+                        domVal: domVal.substring(0, 30),
+                        splChangeListeners: host[splChangeKey] ? host[splChangeKey].length : 0,
+                        splTouchedListeners: host[splTouchedKey] ? host[splTouchedKey].length : 0
+                    }};
+                }})()
+            """)
+            ar = _normalize_nd_result(angular_result) or {}
+            logger.info(f"Angular fill {host_selector}: component={ar.get('component')}, "
+                       f"zoneSym={ar.get('zoneSymbols')}, splChange={ar.get('splChangeListeners')}, "
+                       f"dom='{ar.get('domVal', '')}'")
+
+            # Tab out to trigger blur/validation
+            await nd_page.send(cdp.input_.dispatch_key_event(
+                type_="keyDown", key="Tab", code="Tab"))
+            await nd_page.send(cdp.input_.dispatch_key_event(
+                type_="keyUp", key="Tab", code="Tab"))
+            await asyncio.sleep(0.2)
+
             return True
 
         except Exception as e:
@@ -1151,166 +1695,234 @@ class SmartRecruitersHandler(BaseHandler):
         return False
 
     async def _nd_handle_screening_questions(self, nd_page, job_data: Dict[str, Any]) -> None:
-        """Handle screening/custom questions on SmartRecruiters forms using AI.
+        """Handle screening/custom questions on SmartRecruiters forms.
 
-        SmartRecruiters screening questions appear as additional form fields
-        beyond the standard name/email/phone. They can be text inputs, selects,
-        textareas, or radio buttons, often inside spl-* shadow DOM components
-        or standard HTML elements in the form.
+        Directly scans spl-select, spl-input, spl-textarea, spl-radio components
+        (the actual SmartRecruiters form elements) rather than relying on generic
+        CSS containers.  Uses config regex patterns first, then AI answerer.
         """
         try:
-            # Detect all screening question containers
-            # Uses shadow-DOM-piercing search to find questions inside spl-* components
+            # Pre-scan: log what form elements exist on page for debugging
+            try:
+                prescan = await nd_page.evaluate("""
+                    (function() {
+                        var s = document.querySelectorAll('spl-select').length;
+                        var i = document.querySelectorAll('spl-input').length;
+                        var t = document.querySelectorAll('spl-textarea').length;
+                        var cb = document.querySelectorAll('spl-checkbox').length;
+                        var r = document.querySelectorAll('fieldset, [role="radiogroup"], spl-radio').length;
+                        var hs = document.querySelectorAll('select').length;
+                        var ac = document.querySelectorAll('spl-autocomplete').length;
+                        // Sample first 3 spl-select labels
+                        var labels = [];
+                        var sels = document.querySelectorAll('spl-select');
+                        for (var j = 0; j < Math.min(sels.length, 5); j++) {
+                            var lbl = sels[j].getAttribute('label') || sels[j].getAttribute('aria-label') || '';
+                            var sr = sels[j].shadowRoot;
+                            var selIdx = sr ? (sr.querySelector('select') || {}).selectedIndex : -1;
+                            labels.push(lbl.substring(0, 40) + '(idx=' + selIdx + ')');
+                        }
+                        return 'spl-select:' + s + ' spl-input:' + i + ' spl-textarea:' + t +
+                               ' spl-checkbox:' + cb + ' spl-autocomplete:' + ac + ' fieldset/radio:' + r + ' html-select:' + hs +
+                               ' labels=[' + labels.join(', ') + ']';
+                    })()
+                """)
+                logger.info(f"Screening pre-scan: {prescan}")
+            except Exception as ps_e:
+                logger.debug(f"Pre-scan failed: {ps_e}")
+
+            # Detect ALL question fields on the page (spl-select, spl-input, spl-textarea, spl-radio)
+            # excluding standard personal info fields
             questions_data = await nd_page.evaluate("""
                 (function() {
-                    // Recursively search through shadow roots
-                    function findInShadow(root, selector) {
-                        var results = Array.from(root.querySelectorAll(selector));
-                        var allEls = root.querySelectorAll('*');
-                        for (var i = 0; i < allEls.length; i++) {
-                            if (allEls[i].shadowRoot) {
-                                results = results.concat(findInShadow(allEls[i].shadowRoot, selector));
-                            }
-                        }
-                        return results;
-                    }
-
                     var questions = [];
-
-                    // Look for screening question containers — pierce shadow DOM
-                    var containers = findInShadow(document,
-                        '.field, .question-item, [class*="screening"], [class*="question"]'
-                    );
-                    // Also check for standard form groups outside the known fields
-                    if (containers.length === 0) {
-                        containers = findInShadow(document, '.form-group, .form-field');
-                    }
-
                     var knownIds = [
                         'first-name-input', 'last-name-input', 'email-input',
                         'confirm-email-input', 'linkedin-input', 'website-input',
                         'hiring-manager-message-input'
                     ];
+                    var knownLabels = [
+                        'first name', 'last name', 'email', 'confirm your email',
+                        'phone', 'linkedin', 'website', 'resume', 'cv',
+                        'cover letter', 'message to hiring', 'city'
+                    ];
 
-                    for (var i = 0; i < containers.length; i++) {
-                        var container = containers[i];
-                        // Find label — also search inside shadow roots within this container
-                        var label = container.querySelector('label, .label, legend');
-                        if (!label) {
-                            var shadowLabels = findInShadow(container, 'label, .label, legend');
-                            if (shadowLabels.length > 0) label = shadowLabels[0];
+                    function getLabel(el) {
+                        var lbl = el.getAttribute('label') || el.getAttribute('aria-label') || '';
+                        if (!lbl && el.shadowRoot) {
+                            var l = el.shadowRoot.querySelector('label, .label, legend');
+                            if (l) lbl = l.textContent.trim();
                         }
-                        if (!label) continue;
-                        var labelText = (label.textContent || '').trim();
-                        if (!labelText || labelText.length < 3) continue;
-
-                        // Skip known standard fields
-                        var skipPatterns = [
-                            'first name', 'last name', 'email', 'phone',
-                            'linkedin', 'website', 'resume', 'cv', 'cover letter',
-                            'message to hiring'
-                        ];
-                        var skip = false;
-                        for (var s = 0; s < skipPatterns.length; s++) {
-                            if (labelText.toLowerCase().indexOf(skipPatterns[s]) >= 0) {
-                                skip = true; break;
+                        // Check parent for label (try multiple levels)
+                        if (!lbl) {
+                            var parent = el.closest('.field, .form-group, [class*="field"], [class*="question"], [class*="screening"], oc-question, fieldset, .spl-mb-1, .spl-flex-col');
+                            if (parent) {
+                                var l2 = parent.querySelector('label, legend, .label, p, span.question-text, [class*="question"], [class*="label"]');
+                                if (l2) lbl = l2.textContent.trim();
                             }
                         }
-                        if (skip) continue;
-
-                        // Find input — search through shadow roots of spl-* components
-                        var input = container.querySelector(
-                            'input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]), ' +
-                            'textarea, select'
-                        );
-
-                        if (!input) {
-                            // Deep search through all shadow DOMs in this container
-                            var shadowInputs = findInShadow(container,
-                                'input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]), ' +
-                                'textarea, select'
-                            );
-                            if (shadowInputs.length > 0) input = shadowInputs[0];
+                        // Try previous sibling elements (common pattern: label before select)
+                        if (!lbl) {
+                            var prev = el.previousElementSibling;
+                            if (prev && (prev.tagName === 'LABEL' || prev.tagName === 'P' || prev.tagName === 'SPAN' || prev.tagName === 'DIV')) {
+                                var ptxt = prev.textContent.trim();
+                                if (ptxt.length > 5 && ptxt.length < 300) lbl = ptxt;
+                            }
                         }
-
-                        if (!input) continue;
-
-                        // Check if already filled
-                        if (input.value && input.value.length > 2) continue;
-
-                        // Also check for known IDs to skip
-                        var parentId = (input.id || '');
-                        if (knownIds.indexOf(parentId) >= 0) continue;
-                        try {
-                            var parentHost = input.getRootNode().host;
-                            if (parentHost && knownIds.indexOf(parentHost.id || '') >= 0) continue;
-                        } catch(e) {}
-
-                        var type = input.tagName.toLowerCase();
-                        var options = [];
-                        if (type === 'select') {
-                            var opts = input.querySelectorAll('option');
-                            for (var o = 0; o < opts.length; o++) {
-                                var optText = (opts[o].textContent || '').trim();
-                                if (optText && optText !== 'Select...' && optText !== '' && optText !== 'Choose...') {
-                                    options.push(optText);
+                        // Try parent's text content (for wrapper divs)
+                        if (!lbl && el.parentElement) {
+                            var ptext = '';
+                            var pChildren = el.parentElement.childNodes;
+                            for (var ci = 0; ci < pChildren.length; ci++) {
+                                if (pChildren[ci].nodeType === 3) { // Text node
+                                    ptext += pChildren[ci].textContent.trim() + ' ';
+                                } else if (pChildren[ci] !== el && pChildren[ci].tagName !== 'SPL-SELECT' &&
+                                           pChildren[ci].tagName !== 'SPL-INPUT' && pChildren[ci].tagName !== 'INPUT') {
+                                    var ctxt = (pChildren[ci].textContent || '').trim();
+                                    if (ctxt.length > 5 && ctxt.length < 500) ptext += ctxt + ' ';
                                 }
                             }
+                            ptext = ptext.trim();
+                            if (ptext.length > 5) lbl = ptext.substring(0, 300);
                         }
-
-                        questions.push({
-                            label: labelText,
-                            type: type,
-                            options: options,
-                            index: i
-                        });
+                        return lbl;
                     }
 
-                    // Also check for radio button groups — pierce shadow DOM
-                    var radios = findInShadow(document, '[class*="radio-group"], fieldset, spl-radio, spl-checkbox');
-                    for (var r = 0; r < radios.length; r++) {
-                        var legend = radios[r].querySelector('legend, label, .label');
-                        if (!legend) {
-                            var shadowLegends = findInShadow(radios[r], 'legend, label, .label');
-                            if (shadowLegends.length > 0) legend = shadowLegends[0];
+                    function isKnown(id, label) {
+                        if (knownIds.indexOf(id) >= 0) return true;
+                        var ll = label.toLowerCase();
+                        for (var i = 0; i < knownLabels.length; i++) {
+                            if (ll.indexOf(knownLabels[i]) >= 0) return true;
                         }
-                        if (!legend) continue;
-                        var legendText = (legend.textContent || '').trim();
-                        if (!legendText || legendText.length < 3) continue;
+                        return false;
+                    }
 
-                        // Find radio inputs — including inside shadow roots
-                        var radioInputs = radios[r].querySelectorAll('input[type="radio"]');
-                        if (radioInputs.length === 0) {
-                            radioInputs = findInShadow(radios[r], 'input[type="radio"]');
-                        }
-                        if (radioInputs.length === 0) continue;
-
-                        var radioOpts = [];
-                        for (var ri = 0; ri < radioInputs.length; ri++) {
-                            var radioLabel = null;
-                            if (radioInputs[ri].id) {
-                                radioLabel = radios[r].querySelector('label[for="' + radioInputs[ri].id + '"]');
-                                if (!radioLabel) {
-                                    var shadowRL = findInShadow(radios[r], 'label[for="' + radioInputs[ri].id + '"]');
-                                    if (shadowRL.length > 0) radioLabel = shadowRL[0];
+                    // === spl-select dropdowns (screening questions like work auth, education) ===
+                    var selects = document.querySelectorAll('spl-select');
+                    for (var i = 0; i < selects.length; i++) {
+                        var id = selects[i].id || 'spl-select-' + i;
+                        var label = getLabel(selects[i]);
+                        if (!label || label.length < 3) continue;
+                        if (isKnown(id, label)) continue;
+                        // Get current value and options
+                        var val = '', opts = [];
+                        if (selects[i].shadowRoot) {
+                            var inner = selects[i].shadowRoot.querySelector('select');
+                            if (inner) {
+                                val = inner.value || '';
+                                for (var o = 0; o < inner.options.length; o++) {
+                                    var ot = (inner.options[o].text || '').trim();
+                                    if (ot && ot !== 'Select...' && ot !== 'Choose...' && ot !== '--'
+                                        && ot.indexOf('Select') !== 0) {
+                                        opts.push(ot);
+                                    }
                                 }
                             }
-                            // Fallback: find closest label or parent text
-                            if (!radioLabel) {
-                                radioLabel = radioInputs[ri].closest('label');
-                            }
-                            if (radioLabel) {
-                                radioOpts.push((radioLabel.textContent || '').trim());
-                            }
                         }
-                        if (radioOpts.length > 0) {
-                            questions.push({
-                                label: legendText,
-                                type: 'radio',
-                                options: radioOpts,
-                                index: containers.length + r
-                            });
+                        // Skip if already has non-default selection
+                        if (inner.selectedIndex > 0) continue;
+                        var req = selects[i].hasAttribute('required');
+                        questions.push({id: id, label: label, type: 'select', options: opts,
+                                        required: req, tagName: 'spl-select', idx: i});
+                    }
+
+                    // === spl-input text fields (screening questions) ===
+                    var inputs = document.querySelectorAll('spl-input');
+                    for (var j = 0; j < inputs.length; j++) {
+                        var jid = inputs[j].id || 'spl-input-' + j;
+                        var jlabel = getLabel(inputs[j]);
+                        if (!jlabel || jlabel.length < 3) continue;
+                        if (isKnown(jid, jlabel)) continue;
+                        // Check if already filled
+                        var jval = '';
+                        if (inputs[j].shadowRoot) {
+                            var jinp = inputs[j].shadowRoot.querySelector('input');
+                            jval = jinp ? jinp.value : '';
                         }
+                        if (jval && jval.trim().length > 1) continue;
+                        var jreq = inputs[j].hasAttribute('required');
+                        questions.push({id: jid, label: jlabel, type: 'text', options: [],
+                                        required: jreq, tagName: 'spl-input', idx: j});
+                    }
+
+                    // === spl-textarea (longer answers) ===
+                    var textareas = document.querySelectorAll('spl-textarea');
+                    for (var t = 0; t < textareas.length; t++) {
+                        var tid = textareas[t].id || 'spl-textarea-' + t;
+                        var tlabel = getLabel(textareas[t]);
+                        if (!tlabel || tlabel.length < 3) continue;
+                        if (isKnown(tid, tlabel)) continue;
+                        var tval = '';
+                        if (textareas[t].shadowRoot) {
+                            var ta = textareas[t].shadowRoot.querySelector('textarea');
+                            tval = ta ? ta.value : '';
+                        }
+                        if (tval && tval.trim().length > 1) continue;
+                        var treq = textareas[t].hasAttribute('required');
+                        questions.push({id: tid, label: tlabel, type: 'textarea', options: [],
+                                        required: treq, tagName: 'spl-textarea', idx: t});
+                    }
+
+                    // === Radio groups (Yes/No screening, EEO) ===
+                    // Look for fieldsets, spl-radio, or [role="radiogroup"] with labels
+                    var radioGroups = document.querySelectorAll(
+                        'fieldset, [role="radiogroup"], spl-radio'
+                    );
+                    for (var r = 0; r < radioGroups.length; r++) {
+                        var rEl = radioGroups[r];
+                        var rlabel = '';
+                        var legend = rEl.querySelector('legend');
+                        if (legend) rlabel = legend.textContent.trim();
+                        if (!rlabel) rlabel = getLabel(rEl);
+                        if (!rlabel || rlabel.length < 3) continue;
+                        if (isKnown(rEl.id || '', rlabel)) continue;
+
+                        // Find radio inputs
+                        var radios = rEl.querySelectorAll('input[type="radio"]');
+                        if (radios.length === 0 && rEl.shadowRoot) {
+                            radios = rEl.shadowRoot.querySelectorAll('input[type="radio"]');
+                        }
+                        if (radios.length === 0) continue;
+
+                        // Check if already selected
+                        var anyChecked = false;
+                        var rOpts = [];
+                        for (var ri = 0; ri < radios.length; ri++) {
+                            if (radios[ri].checked) anyChecked = true;
+                            var rl = radios[ri].closest('label');
+                            if (!rl && radios[ri].id) {
+                                rl = rEl.querySelector('label[for="' + radios[ri].id + '"]');
+                            }
+                            if (rl) rOpts.push(rl.textContent.trim());
+                            else rOpts.push(radios[ri].value || 'Option ' + (ri+1));
+                        }
+                        if (anyChecked) continue;
+
+                        questions.push({id: rEl.id || 'radio-' + r, label: rlabel, type: 'radio',
+                                        options: rOpts, required: rEl.hasAttribute('required'),
+                                        tagName: 'fieldset', idx: r});
+                    }
+
+                    // === Standard HTML selects not inside spl-* ===
+                    var htmlSelects = document.querySelectorAll('select');
+                    for (var h = 0; h < htmlSelects.length; h++) {
+                        // Skip if inside an spl-select (already handled)
+                        if (htmlSelects[h].closest('spl-select')) continue;
+                        var hid = htmlSelects[h].id || htmlSelects[h].name || 'select-' + h;
+                        var hlabel = '';
+                        var hLblEl = htmlSelects[h].closest('label') ||
+                                     document.querySelector('label[for="' + hid + '"]');
+                        if (hLblEl) hlabel = hLblEl.textContent.trim();
+                        if (!hlabel) hlabel = htmlSelects[h].getAttribute('aria-label') || hid;
+                        if (isKnown(hid, hlabel)) continue;
+                        if (htmlSelects[h].selectedIndex > 0) continue;
+                        var hOpts = [];
+                        for (var ho = 0; ho < htmlSelects[h].options.length; ho++) {
+                            var hot = (htmlSelects[h].options[ho].text || '').trim();
+                            if (hot && hot !== 'Select...' && hot !== '--') hOpts.push(hot);
+                        }
+                        questions.push({id: hid, label: hlabel, type: 'select', options: hOpts,
+                                        required: htmlSelects[h].required, tagName: 'select', idx: h});
                     }
 
                     return JSON.stringify(questions);
@@ -1321,140 +1933,222 @@ class SmartRecruitersHandler(BaseHandler):
             questions = _json.loads(questions_data) if isinstance(questions_data, str) else []
 
             if not questions:
-                logger.debug("No screening questions found on SmartRecruiters form")
+                logger.debug("No screening questions found on this page")
                 return
 
-            logger.info(f"Found {len(questions)} screening questions on SmartRecruiters")
+            logger.info(f"Found {len(questions)} screening questions: {[q['label'][:40] for q in questions]}")
 
             for q in questions:
                 question_text = q["label"]
                 field_type = q["type"]
                 options = q.get("options", [])
-                index = q["index"]
+                tag_name = q.get("tagName", "")
+                q_idx = q.get("idx", 0)
 
-                logger.debug(f"Screening Q: {question_text[:60]} (type={field_type})")
+                logger.info(f"Screening Q: '{question_text[:60]}' type={field_type} opts={options[:5]}")
+
+                # Skip social media fields entirely
+                q_lower = question_text.lower().strip()
+                if any(x in q_lower for x in ['facebook', 'twitter', 'instagram', 'tiktok', 'snapchat', 'x (fka']):
+                    logger.info(f"Skipping social media field: {question_text[:50]}")
+                    continue
+
+                # Check if required — skip optional unless it's LinkedIn/GitHub
+                is_required = '*' in question_text or q.get('required', False)
+                is_linkedin_github = any(x in q_lower for x in ['linkedin', 'github', 'portfolio'])
+                if not is_required and not is_linkedin_github:
+                    logger.info(f"Skipping optional screening Q: {question_text[:50]}")
+                    continue
 
                 try:
-                    if field_type == "select" and options:
+                    # Single call to answer_question — handles template bank → config →
+                    # option matching → cache → AI in the correct priority order
+                    answer = None
+                    if hasattr(self, 'ai_answerer') and self.ai_answerer:
+                        effective_type = field_type
+                        if field_type == "radio":
+                            effective_type = "select"
+                        max_len = 500 if field_type == "textarea" else 200
                         answer = await self.ai_answerer.answer_question(
-                            question_text, "select", options
-                        )
-                    elif field_type == "radio" and options:
-                        answer = await self.ai_answerer.answer_question(
-                            question_text, "select", options
-                        )
-                    elif field_type == "textarea":
-                        answer = await self.ai_answerer.answer_question(
-                            question_text, "textarea", max_length=500
-                        )
-                    else:
-                        answer = await self.ai_answerer.answer_question(
-                            question_text, "text", max_length=200
+                            question_text, effective_type,
+                            options=options if options else None,
+                            max_length=max_len
                         )
 
                     if not answer:
+                        logger.warning(f"No answer for screening Q: '{question_text[:40]}'")
                         continue
 
-                    # Fill the answer via JavaScript
+                    # Fill the answer based on field type
                     escaped_answer = answer.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n")
-                    fill_result = await nd_page.evaluate(f"""
-                        (function() {{
-                            // Shadow-DOM-piercing search
-                            function findInShadow(root, selector) {{
-                                var results = Array.from(root.querySelectorAll(selector));
-                                var allEls = root.querySelectorAll('*');
-                                for (var i = 0; i < allEls.length; i++) {{
-                                    if (allEls[i].shadowRoot) {{
-                                        results = results.concat(findInShadow(allEls[i].shadowRoot, selector));
-                                    }}
-                                }}
-                                return results;
-                            }}
 
-                            var containers = findInShadow(document,
-                                '.field, .question-item, [class*="screening"], [class*="question"], ' +
-                                '.form-group, .form-field, [class*="radio-group"], fieldset, spl-radio, spl-checkbox'
-                            );
-                            var container = containers[{index}];
-                            if (!container) return 'CONTAINER_NOT_FOUND';
+                    if field_type == "select":
+                        # Fill spl-select or standard select
+                        fill_result = await nd_page.evaluate(f"""
+                            (function() {{
+                                var answer = '{escaped_answer}'.toLowerCase();
+                                var selects = document.querySelectorAll('{tag_name}');
+                                var el = selects[{q_idx}];
+                                if (!el) return 'NOT_FOUND';
 
-                            // For select — also check shadow DOM
-                            var select = container.querySelector('select');
-                            if (!select) {{
-                                var shadowSelects = findInShadow(container, 'select');
-                                if (shadowSelects.length > 0) select = shadowSelects[0];
-                            }}
-                            if (select) {{
+                                var select = (el.tagName === 'SELECT') ? el :
+                                    (el.shadowRoot ? el.shadowRoot.querySelector('select') : null);
+                                if (!select) return 'NO_SELECT';
+
+                                // Try exact match first, then partial match
+                                var bestIdx = -1, bestScore = 0;
                                 for (var i = 0; i < select.options.length; i++) {{
-                                    if (select.options[i].text.indexOf('{escaped_answer}') >= 0 ||
-                                        '{escaped_answer}'.indexOf(select.options[i].text) >= 0) {{
-                                        select.selectedIndex = i;
-                                        select.dispatchEvent(new Event('change', {{bubbles: true, composed: true}}));
-                                        return 'OK_SELECT';
+                                    var optText = (select.options[i].text || '').trim().toLowerCase();
+                                    if (!optText || optText === 'select...' || optText === '--') continue;
+                                    // Exact match
+                                    if (optText === answer) {{ bestIdx = i; bestScore = 100; break; }}
+                                    // Contains match
+                                    if (optText.indexOf(answer) >= 0 || answer.indexOf(optText) >= 0) {{
+                                        var score = optText.length;
+                                        if (score > bestScore) {{ bestIdx = i; bestScore = score; }}
                                     }}
                                 }}
-                                return 'SELECT_NO_MATCH';
-                            }}
+                                function setSelectAndTriggerAngular(select, idx, el) {{
+                                    select.selectedIndex = idx;
+                                    select.dispatchEvent(new Event('change', {{bubbles: true, composed: true}}));
+                                    select.dispatchEvent(new Event('input', {{bubbles: true, composed: true}}));
+                                    // Trigger zone.js spl-change on host for Angular model
+                                    if (el !== select) {{
+                                        try {{ el.value = select.options[idx].value; }} catch(e) {{}}
+                                        var splKey = '__zone_symbol__spl-changefalse';
+                                        if (el[splKey] && Array.isArray(el[splKey])) {{
+                                            for (var z = 0; z < el[splKey].length; z++) {{
+                                                try {{
+                                                    var h = el[splKey][z].handler || el[splKey][z];
+                                                    if (typeof h === 'function') {{
+                                                        h(new CustomEvent('spl-change', {{
+                                                            detail: {{value: select.options[idx].value}}, bubbles: true
+                                                        }}));
+                                                    }}
+                                                }} catch(e) {{}}
+                                            }}
+                                        }}
+                                        el.dispatchEvent(new Event('change', {{bubbles: true}}));
+                                    }}
+                                }}
 
-                            // For radio — also check shadow DOM
-                            var radios = Array.from(container.querySelectorAll('input[type="radio"]'));
-                            if (radios.length === 0) {{
-                                radios = findInShadow(container, 'input[type="radio"]');
-                            }}
-                            if (radios.length > 0) {{
-                                for (var r = 0; r < radios.length; r++) {{
-                                    var radioLabel = null;
-                                    if (radios[r].id) {{
-                                        radioLabel = container.querySelector('label[for="' + radios[r].id + '"]');
-                                        if (!radioLabel) {{
-                                            var srl = findInShadow(container, 'label[for="' + radios[r].id + '"]');
-                                            if (srl.length > 0) radioLabel = srl[0];
+                                if (bestIdx >= 0) {{
+                                    setSelectAndTriggerAngular(select, bestIdx, el);
+                                    return 'OK:' + select.options[bestIdx].text;
+                                }}
+                                // Normalize true/false → yes/no for matching
+                                var normAnswer = answer;
+                                if (normAnswer === 'true') normAnswer = 'yes';
+                                if (normAnswer === 'false') normAnswer = 'no';
+                                // Fallback: match on yes/no
+                                for (var j = 0; j < select.options.length; j++) {{
+                                    var ot = select.options[j].text.toLowerCase().trim();
+                                    if (!ot || ot === 'select...' || ot === '--') continue;
+                                    if (ot === normAnswer || ot === answer) {{
+                                        setSelectAndTriggerAngular(select, j, el);
+                                        return 'OK_YESNO:' + select.options[j].text;
+                                    }}
+                                }}
+                                // Fallback: partial word match (e.g. answer "linkedin" matches "LinkedIn/Social")
+                                for (var j = 0; j < select.options.length; j++) {{
+                                    var ot = select.options[j].text.toLowerCase().trim();
+                                    if (!ot || ot === 'select...' || ot === '--') continue;
+                                    if (normAnswer.length > 2 && (ot.indexOf(normAnswer) >= 0 || normAnswer.indexOf(ot) >= 0)) {{
+                                        setSelectAndTriggerAngular(select, j, el);
+                                        return 'OK_PARTIAL:' + select.options[j].text;
+                                    }}
+                                }}
+                                return 'NO_MATCH:opts=' + select.options.length + ',answer=' + answer;
+                            }})()
+                        """)
+                        logger.info(f"Select fill: '{question_text[:30]}' -> {fill_result}")
+
+                    elif field_type == "radio":
+                        # Click the correct radio button
+                        fill_result = await nd_page.evaluate(f"""
+                            (function() {{
+                                var answer = '{escaped_answer}'.toLowerCase();
+                                var groups = document.querySelectorAll('fieldset, [role="radiogroup"], spl-radio');
+                                var group = groups[{q_idx}];
+                                if (!group) return 'NOT_FOUND';
+
+                                var radios = group.querySelectorAll('input[type="radio"]');
+                                if (radios.length === 0 && group.shadowRoot) {{
+                                    radios = group.shadowRoot.querySelectorAll('input[type="radio"]');
+                                }}
+
+                                for (var i = 0; i < radios.length; i++) {{
+                                    var label = radios[i].closest('label');
+                                    if (!label && radios[i].id) {{
+                                        label = group.querySelector('label[for="' + radios[i].id + '"]');
+                                    }}
+                                    var labelText = label ? label.textContent.trim().toLowerCase() : '';
+                                    var val = (radios[i].value || '').toLowerCase();
+
+                                    if (labelText === answer || val === answer ||
+                                        labelText.indexOf(answer) >= 0 || answer.indexOf(labelText) >= 0) {{
+                                        radios[i].click();
+                                        radios[i].dispatchEvent(new Event('change', {{bubbles: true, composed: true}}));
+                                        return 'OK:' + (label ? label.textContent.trim() : val);
+                                    }}
+                                }}
+                                // Fallback: "Yes" for affirmative answers
+                                if (answer === 'yes' || answer === 'true') {{
+                                    for (var j = 0; j < radios.length; j++) {{
+                                        var rl = radios[j].closest('label');
+                                        var rlt = rl ? rl.textContent.trim().toLowerCase() : radios[j].value.toLowerCase();
+                                        if (rlt === 'yes' || rlt === 'true') {{
+                                            radios[j].click();
+                                            return 'OK_YES';
                                         }}
                                     }}
-                                    if (!radioLabel) radioLabel = radios[r].closest('label');
-                                    if (radioLabel && radioLabel.textContent.indexOf('{escaped_answer}') >= 0) {{
-                                        radios[r].click();
-                                        return 'OK_RADIO';
+                                }}
+                                if (answer === 'no' || answer === 'false') {{
+                                    for (var j = 0; j < radios.length; j++) {{
+                                        var rl = radios[j].closest('label');
+                                        var rlt = rl ? rl.textContent.trim().toLowerCase() : radios[j].value.toLowerCase();
+                                        if (rlt === 'no' || rlt === 'false') {{
+                                            radios[j].click();
+                                            return 'OK_NO';
+                                        }}
                                     }}
                                 }}
-                                // Default: click first option
-                                radios[0].click();
-                                return 'OK_RADIO_DEFAULT';
-                            }}
+                                return 'NO_MATCH';
+                            }})()
+                        """)
+                        logger.info(f"Radio fill: '{question_text[:30]}' -> {fill_result}")
 
-                            // For text/textarea — deep shadow search
-                            var input = container.querySelector('input:not([type="hidden"]):not([type="file"]), textarea');
-                            if (!input) {{
-                                var shadowInputs = findInShadow(container,
-                                    'input:not([type="hidden"]):not([type="file"]):not([type="radio"]):not([type="checkbox"]), textarea'
-                                );
-                                if (shadowInputs.length > 0) input = shadowInputs[0];
-                            }}
-                            if (input) {{
-                                var proto = input.tagName === 'TEXTAREA'
-                                    ? window.HTMLTextAreaElement.prototype
-                                    : window.HTMLInputElement.prototype;
-                                var setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
-                                setter.call(input, '{escaped_answer}');
-                                input.dispatchEvent(new Event('input', {{bubbles: true, composed: true}}));
-                                input.dispatchEvent(new Event('change', {{bubbles: true, composed: true}}));
-                                return 'OK_TEXT';
-                            }}
+                    elif field_type == "textarea":
+                        # Use CDP typing for textarea (same Angular-compatible approach)
+                        selector = f"spl-textarea:nth-of-type({q_idx + 1})"
+                        if q.get("id") and q["id"].startswith("spl-textarea"):
+                            # Use index-based selector
+                            filled = await self._nd_cdp_type_into_shadow(
+                                nd_page, f"spl-textarea", answer,
+                                input_selector='textarea'
+                            )
+                        else:
+                            filled = await self._nd_cdp_type_into_shadow(
+                                nd_page, f"#{q['id']}" if q.get('id') else 'spl-textarea',
+                                answer, input_selector='textarea'
+                            )
+                        logger.info(f"Textarea fill: '{question_text[:30]}' -> {filled}")
 
-                            return 'NO_INPUT_FOUND';
-                        }})()
-                    """)
+                    else:  # text input
+                        # Use CDP typing for spl-input (Angular-compatible)
+                        host_sel = f"#{q['id']}" if q.get('id') and not q['id'].startswith('spl-input-') else 'spl-input'
+                        filled = await self._nd_cdp_type_into_shadow(
+                            nd_page, host_sel, answer, input_selector='input'
+                        )
+                        logger.info(f"Text fill: '{question_text[:30]}' -> {filled}")
 
-                    if fill_result and fill_result.startswith("OK"):
-                        logger.info(f"Answered screening Q: {question_text[:40]}... -> {answer[:30]}")
-                    else:
-                        logger.debug(f"Screening Q fill result: {fill_result}")
+                    await asyncio.sleep(0.3)
 
                 except Exception as e:
-                    logger.debug(f"Error answering screening question '{question_text[:40]}': {e}")
+                    logger.warning(f"Error answering screening Q '{question_text[:40]}': {e}")
 
         except Exception as e:
-            logger.debug(f"Error detecting screening questions: {e}")
+            logger.warning(f"Error detecting screening questions: {e}", exc_info=True)
 
     async def _nd_validate(self, nd_page) -> bool:
         """Validate form fill quality in dry-run mode (nodriver)."""
@@ -1647,10 +2341,116 @@ class SmartRecruitersHandler(BaseHandler):
                         stall_count = 0
                     prev_sections = sections
 
+                    # If stuck on privacy/consent checkbox error, re-click checkboxes
+                    has_privacy_error = any('you declare' in s.lower() or 'privacy notice' in s.lower() or 'consent' in s.lower() for s in sections if s.startswith('ERROR:'))
+                    if has_privacy_error and stall_count <= 3:
+                        logger.info(f"Privacy/consent checkbox error detected — re-clicking checkboxes (attempt {stall_count})")
+                        try:
+                            await nd_page.activate()
+                            await asyncio.sleep(0.3)
+                            import nodriver.cdp as cdp_priv
+                            # Force-check ALL spl-checkbox elements via multiple strategies
+                            force_result = await nd_page.evaluate("""
+                                (function() {
+                                    var fixed = [];
+                                    var splChecks = document.querySelectorAll('spl-checkbox');
+                                    for (var i = 0; i < splChecks.length; i++) {
+                                        var sr = splChecks[i].shadowRoot;
+                                        if (!sr) continue;
+                                        var inner = sr.querySelector('input[type="checkbox"]');
+                                        if (!inner) continue;
+                                        // Force checked state
+                                        if (!inner.checked) inner.checked = true;
+                                        inner.setAttribute('aria-checked', 'true');
+                                        // Dispatch all necessary events for Angular
+                                        inner.dispatchEvent(new Event('change', {bubbles: true, composed: true}));
+                                        inner.dispatchEvent(new Event('input', {bubbles: true, composed: true}));
+                                        // Trigger zone.js spl-change on the host element
+                                        splChecks[i].dispatchEvent(new CustomEvent('spl-change', {
+                                            detail: {value: true, checked: true}, bubbles: true, composed: true
+                                        }));
+                                        // Also try direct zone.js handler invocation
+                                        for (var key in splChecks[i]) {
+                                            if (key.indexOf('__zone_symbol__spl-change') === 0) {
+                                                var handlers = splChecks[i][key];
+                                                if (Array.isArray(handlers)) {
+                                                    for (var j = 0; j < handlers.length; j++) {
+                                                        try {
+                                                            var h = handlers[j].handler || handlers[j];
+                                                            if (typeof h === 'function') {
+                                                                h(new CustomEvent('spl-change', {
+                                                                    detail: {value: true, checked: true}, bubbles: true
+                                                                }));
+                                                            }
+                                                        } catch(e) {}
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        fixed.push(splChecks[i].id || 'spl-cb-' + i);
+                                    }
+                                    // Also check regular checkboxes
+                                    var htmlChecks = document.querySelectorAll('input[type="checkbox"]');
+                                    for (var k = 0; k < htmlChecks.length; k++) {
+                                        if (!htmlChecks[k].checked && !htmlChecks[k].closest('spl-checkbox')) {
+                                            htmlChecks[k].checked = true;
+                                            htmlChecks[k].dispatchEvent(new Event('change', {bubbles: true}));
+                                            fixed.push(htmlChecks[k].id || 'html-cb-' + k);
+                                        }
+                                    }
+                                    return fixed.join(',') || 'NONE';
+                                })()
+                            """)
+                            logger.info(f"Privacy checkbox force-check result: {force_result}")
+                            # Also CDP-click each checkbox label for real mouse events
+                            cb_coords_priv = await nd_page.evaluate("""
+                                (function() {
+                                    var results = [];
+                                    var splChecks = document.querySelectorAll('spl-checkbox');
+                                    for (var i = 0; i < splChecks.length; i++) {
+                                        var sr = splChecks[i].shadowRoot;
+                                        if (!sr) continue;
+                                        splChecks[i].scrollIntoView({behavior: 'instant', block: 'center'});
+                                        var label = sr.querySelector('label');
+                                        var target = label || splChecks[i];
+                                        var rect = target.getBoundingClientRect();
+                                        if (rect.width > 0 && rect.height > 0) {
+                                            results.push({x: rect.x + 12, y: rect.y + rect.height/2, id: splChecks[i].id || 'cb-'+i});
+                                        }
+                                    }
+                                    return results;
+                                })()
+                            """)
+                            if cb_coords_priv and isinstance(cb_coords_priv, list):
+                                for cb in cb_coords_priv:
+                                    if isinstance(cb, dict) and 'x' in cb:
+                                        x, y = float(cb['x']), float(cb['y'])
+                                        await nd_page.send(cdp_priv.input_.dispatch_mouse_event(
+                                            type_="mouseMoved", x=x, y=y))
+                                        await asyncio.sleep(0.05)
+                                        await nd_page.send(cdp_priv.input_.dispatch_mouse_event(
+                                            type_="mousePressed", x=x, y=y,
+                                            button=cdp_priv.input_.MouseButton.LEFT, click_count=1))
+                                        await asyncio.sleep(0.05)
+                                        await nd_page.send(cdp_priv.input_.dispatch_mouse_event(
+                                            type_="mouseReleased", x=x, y=y,
+                                            button=cdp_priv.input_.MouseButton.LEFT, click_count=1))
+                                        await asyncio.sleep(0.3)
+                                        logger.info(f"CDP-clicked privacy checkbox '{cb.get('id')}' at ({x:.0f},{y:.0f})")
+                            await asyncio.sleep(2)  # Wait for Angular to process
+                        except Exception as priv_e:
+                            logger.debug(f"Privacy checkbox re-click failed: {priv_e}")
+
                     # If stuck on "Fields marked with * are required", re-fill missing fields
                     has_required_error = any('fields marked with' in s.lower() for s in sections)
                     if has_required_error and stall_count <= 2:
                         logger.info(f"Re-filling missing required fields at step {step + 1}")
+                        # Activate tab before CDP input events
+                        try:
+                            await nd_page.activate()
+                            await asyncio.sleep(0.2)
+                        except Exception:
+                            pass
                         config = self.form_filler.config
                         personal = config.get("personal_info", {})
                         import nodriver.cdp as cdp
@@ -1700,6 +2500,7 @@ class SmartRecruitersHandler(BaseHandler):
                                             return {x: rect.x + rect.width/2, y: rect.y + rect.height/2, w: rect.width};
                                         })()
                                     """)
+                                    click_r = _normalize_nd_result(click_r)
                                     if click_r and isinstance(click_r, dict) and click_r.get('w', 0) > 0:
                                         x, y = click_r['x'], click_r['y']
                                         await nd_page.send(cdp.input_.dispatch_mouse_event(
@@ -1719,73 +2520,6 @@ class SmartRecruitersHandler(BaseHandler):
                                     # Fallback
                                     await self._nd_click_and_type_phone(nd_page, phone)
                                 await asyncio.sleep(0.5)
-
-                        # Re-fill city if empty
-                        city = personal.get("city", "") or personal.get("location", "")
-                        if city:
-                            city_val = await nd_page.evaluate("""
-                                (function() {
-                                    var host = document.querySelector('spl-autocomplete');
-                                    if (host && host.shadowRoot) {
-                                        var inp = host.shadowRoot.querySelector('input');
-                                        return inp ? inp.value : '';
-                                    }
-                                    return '';
-                                })()
-                            """)
-                            if not city_val or len(str(city_val).strip()) < 2:
-                                logger.info("Re-filling city (was empty)")
-                                city_typed = await self._nd_cdp_type_into_shadow(
-                                    nd_page, "spl-autocomplete", city, input_selector='input'
-                                )
-                                if city_typed:
-                                    await asyncio.sleep(2)
-                                    # Select from autocomplete dropdown
-                                    await nd_page.send(cdp.input_.dispatch_key_event(
-                                        type_="keyDown", key="ArrowDown", code="ArrowDown"))
-                                    await nd_page.send(cdp.input_.dispatch_key_event(
-                                        type_="keyUp", key="ArrowDown", code="ArrowDown"))
-                                    await asyncio.sleep(0.3)
-                                    await nd_page.send(cdp.input_.dispatch_key_event(
-                                        type_="keyDown", key="Enter", code="Enter"))
-                                    await nd_page.send(cdp.input_.dispatch_key_event(
-                                        type_="keyUp", key="Enter", code="Enter"))
-                                    await asyncio.sleep(0.5)
-                                    # Fallback: click suggestion
-                                    city_verify = await nd_page.evaluate("""
-                                        (function() {
-                                            var host = document.querySelector('spl-autocomplete');
-                                            if (host && host.shadowRoot) {
-                                                var inp = host.shadowRoot.querySelector('input');
-                                                return inp ? inp.value : '';
-                                            }
-                                            return '';
-                                        })()
-                                    """)
-                                    if not city_verify or len(str(city_verify).strip()) < 2:
-                                        await nd_page.evaluate("""
-                                            (function() {
-                                                function findSuggestions(root) {
-                                                    var items = root.querySelectorAll('li, [role="option"]');
-                                                    for (var i = 0; i < items.length; i++) {
-                                                        var r = items[i].getBoundingClientRect();
-                                                        if (r.width > 0 && r.height > 0 && r.height < 100) {
-                                                            items[i].click(); return 'CLICKED';
-                                                        }
-                                                    }
-                                                    var hosts = root.querySelectorAll('*');
-                                                    for (var j = 0; j < hosts.length; j++) {
-                                                        if (hosts[j].shadowRoot) {
-                                                            var r2 = findSuggestions(hosts[j].shadowRoot);
-                                                            if (r2 !== 'NONE') return r2;
-                                                        }
-                                                    }
-                                                    return 'NONE';
-                                                }
-                                                var host = document.querySelector('spl-autocomplete');
-                                                if (host && host.shadowRoot) findSuggestions(host.shadowRoot);
-                                            })()
-                                        """)
 
                         # Re-upload resume if missing
                         resume_path = config.get("files", {}).get("resume")
@@ -1840,10 +2574,195 @@ class SmartRecruitersHandler(BaseHandler):
                             except Exception:
                                 pass
 
+                        # Re-fill city LAST (after all other fields, so nothing clears it)
+                        city = personal.get("city", "") or personal.get("location", "")
+                        if city:
+                            city_val = await self._nd_get_city_value(nd_page)
+                            if not city_val or len(str(city_val).strip()) < 2:
+                                logger.info("Re-filling city (LAST — after all other fields)")
+                                import nodriver.cdp as cdp_mod
+                                await self._nd_fill_city_autocomplete(nd_page, city, cdp_mod)
+
                         await asyncio.sleep(1)
 
                     # If stalled 3+ times on same page, give up on this step
                     if stall_count >= 3:
+                        # Enable CDP network logging to see if Submit triggers any API calls
+                        try:
+                            import nodriver.cdp.network as cdp_net
+                            await nd_page.send(cdp_net.enable())
+                            # Click Submit one more time — try EVERY approach including
+                            # directly invoking zone.js registered handlers
+                            await nd_page.evaluate("""
+                                (function() {
+                                    var splBtns = document.querySelectorAll('spl-button');
+                                    for (var i = 0; i < splBtns.length; i++) {
+                                        var text = (splBtns[i].textContent || '').trim().toLowerCase();
+                                        if (text.indexOf('submit') >= 0) {
+                                            // Approach 1: host click
+                                            splBtns[i].click();
+                                            // Approach 2: inner button click
+                                            if (splBtns[i].shadowRoot) {
+                                                var inner = splBtns[i].shadowRoot.querySelector('button');
+                                                if (inner) {
+                                                    inner.click();
+                                                    // Approach 3: directly invoke zone.js registered click handlers
+                                                    var zkey = '__zone_symbol__clickfalse';
+                                                    if (inner[zkey] && Array.isArray(inner[zkey])) {
+                                                        for (var j = 0; j < inner[zkey].length; j++) {
+                                                            try {
+                                                                var handler = inner[zkey][j].handler || inner[zkey][j];
+                                                                if (typeof handler === 'function') {
+                                                                    handler(new MouseEvent('click', {
+                                                                        bubbles: true, cancelable: true, composed: true, view: window
+                                                                    }));
+                                                                }
+                                                            } catch(e) {}
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            // Approach 4: dispatch composed MouseEvent
+                                            splBtns[i].dispatchEvent(new MouseEvent('click', {
+                                                bubbles: true, cancelable: true, composed: true, view: window
+                                            }));
+                                            return 'CLICKED:' + text;
+                                        }
+                                    }
+                                    return 'NOT_FOUND';
+                                })()
+                            """)
+                            await asyncio.sleep(5)
+                            # Check if URL changed (successful submission redirects)
+                            new_url = await nd_page.evaluate("window.location.href")
+                            logger.info(f"URL after final Submit attempts: {new_url}")
+                            # Check page content for thank you / success
+                            page_text = await nd_page.evaluate("(document.body.innerText || '').substring(0, 500)")
+                            logger.info(f"Page text after final Submit: {str(page_text)[:200]}")
+                        except Exception as net_e:
+                            logger.debug(f"Network logging failed: {net_e}")
+
+                        # Try one more approach: use zone.js event listeners directly on the Submit button
+                        try:
+                            submit_probe = await nd_page.evaluate("""
+                                (function() {
+                                    var splBtns = document.querySelectorAll('spl-button');
+                                    for (var i = 0; i < splBtns.length; i++) {
+                                        var text = (splBtns[i].textContent || '').trim().toLowerCase();
+                                        if (text.indexOf('submit') >= 0) {
+                                            var zoneKeys = [];
+                                            // Check for event listeners registered via zone.js
+                                            var elKey = '__zone_symbol__eventListeners';
+                                            if (splBtns[i][elKey]) {
+                                                var listeners = splBtns[i][elKey];
+                                                for (var evtName in listeners) {
+                                                    zoneKeys.push(evtName + ':' + listeners[evtName].length);
+                                                }
+                                            }
+                                            // Check __zone_symbol__ keys
+                                            var allKeys = [];
+                                            for (var key in splBtns[i]) {
+                                                if (key.indexOf('__zone_symbol__') === 0 && key.indexOf('click') >= 0) {
+                                                    allKeys.push(key + '=' + typeof splBtns[i][key]);
+                                                }
+                                            }
+                                            // Check inner button too
+                                            var innerKeys = [];
+                                            if (splBtns[i].shadowRoot) {
+                                                var inner = splBtns[i].shadowRoot.querySelector('button');
+                                                if (inner) {
+                                                    for (var k in inner) {
+                                                        if (k.indexOf('__zone_symbol__') === 0 && k.indexOf('click') >= 0) {
+                                                            innerKeys.push(k + '=' + typeof inner[k]);
+                                                        }
+                                                    }
+                                                    if (inner[elKey]) {
+                                                        for (var en in inner[elKey]) {
+                                                            innerKeys.push('listener:' + en + ':' + inner[elKey][en].length);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            return JSON.stringify({
+                                                text: text,
+                                                hostZoneClick: allKeys,
+                                                hostListeners: zoneKeys,
+                                                innerKeys: innerKeys
+                                            });
+                                        }
+                                    }
+                                    return 'NO_SUBMIT';
+                                })()
+                            """)
+                            logger.info(f"Submit button zone probe: {submit_probe}")
+                        except Exception:
+                            pass
+
+                        # Before giving up, dump Angular form state for debugging
+                        try:
+                            full_dump = await nd_page.evaluate("""
+                                (function() {
+                                    var info = {};
+                                    info.url = window.location.href;
+
+                                    // Check Angular classes on form-related elements
+                                    var ngClasses = [];
+                                    var els = document.querySelectorAll('.ng-invalid, .ng-valid, .ng-dirty, .ng-pristine, .ng-touched, .ng-untouched');
+                                    for (var i = 0; i < Math.min(els.length, 20); i++) {
+                                        ngClasses.push({
+                                            tag: els[i].tagName,
+                                            id: els[i].id || '',
+                                            classes: (els[i].className || '').toString().substring(0, 100)
+                                        });
+                                    }
+                                    info.ngClasses = ngClasses;
+
+                                    // Check spl-checkbox Angular state
+                                    var cbState = [];
+                                    var splChecks = document.querySelectorAll('spl-checkbox');
+                                    for (var c = 0; c < splChecks.length; c++) {
+                                        var host = splChecks[c];
+                                        var hostClasses = (host.className || '').toString();
+                                        var sr = host.shadowRoot;
+                                        var inner = sr ? sr.querySelector('input[type="checkbox"]') : null;
+                                        var ngCtx = host.__ngContext__;
+                                        cbState.push({
+                                            id: host.id,
+                                            hostClasses: hostClasses.substring(0, 80),
+                                            checked: inner ? inner.checked : 'no-inner',
+                                            hasNgCtx: !!ngCtx,
+                                            ngCtxType: ngCtx ? typeof ngCtx : 'none',
+                                            ngCtxLen: Array.isArray(ngCtx) ? ngCtx.length : 'n/a'
+                                        });
+                                    }
+                                    info.cbState = cbState;
+
+                                    // Check spl-button state
+                                    var btnState = [];
+                                    var splBtns = document.querySelectorAll('spl-button');
+                                    for (var b = 0; b < splBtns.length; b++) {
+                                        var btn = splBtns[b];
+                                        var btnClasses = (btn.className || '').toString();
+                                        var innerBtn = btn.shadowRoot ? btn.shadowRoot.querySelector('button') : null;
+                                        btnState.push({
+                                            text: (btn.textContent || '').trim().substring(0, 20),
+                                            hostClasses: btnClasses.substring(0, 80),
+                                            disabled: btn.hasAttribute('disabled'),
+                                            innerDisabled: innerBtn ? innerBtn.disabled : 'no-inner',
+                                            innerType: innerBtn ? innerBtn.type : 'none'
+                                        });
+                                    }
+                                    info.btnState = btnState;
+
+                                    // Check body text
+                                    info.bodyText = (document.body.innerText || '').substring(0, 300);
+
+                                    return JSON.stringify(info);
+                                })()
+                            """)
+                            logger.info(f"STALL DEBUG dump: {full_dump}")
+                        except Exception as dump_e:
+                            logger.debug(f"Dump failed: {dump_e}")
                         logger.warning(f"Stalled {stall_count} times on step {step + 1} — giving up")
                         break
             except Exception:
@@ -1909,7 +2828,13 @@ class SmartRecruitersHandler(BaseHandler):
                             var bText = (splBtns[b].textContent || '').trim().substring(0, 30);
                             var bRect = splBtns[b].getBoundingClientRect();
                             var bVis = bRect.width > 0 && bRect.height > 0 ? 'vis' : 'hid';
-                            info.buttons.push(bText + '(' + bVis + ')');
+                            var bDisabled = splBtns[b].hasAttribute('disabled') ? ',DIS' : '';
+                            // Check inner button disabled too
+                            if (splBtns[b].shadowRoot) {
+                                var innerBtn = splBtns[b].shadowRoot.querySelector('button');
+                                if (innerBtn && innerBtn.disabled) bDisabled = ',DIS';
+                            }
+                            info.buttons.push(bText + '(' + bVis + bDisabled + ')');
                         }
 
                         // spl-checkbox status
@@ -1935,94 +2860,689 @@ class SmartRecruitersHandler(BaseHandler):
             except Exception as dbg_e:
                 logger.debug(f"DOM debug failed: {dbg_e}")
 
-            # Check ALL consent/privacy/agree checkboxes — aggressively check every checkbox on the page
-            # SmartRecruiters uses spl-checkbox with shadow DOM; the real input is inside the shadow root
+            # Check ALL consent/privacy/agree checkboxes
+            # Strategy: probe spl-checkbox shadow DOM structure, then use the most Angular-compatible click
             try:
-                checkbox_result = await nd_page.evaluate("""
+                import nodriver.cdp as cdp_cb
+                # First, probe the shadow DOM to understand checkbox structure
+                cb_probe = await nd_page.evaluate("""
                     (function() {
-                        var checked = [];
+                        var splChecks = document.querySelectorAll('spl-checkbox');
+                        if (splChecks.length === 0) return 'NO_CHECKBOXES';
+                        var probe = [];
+                        var first = splChecks[0];
+                        var sr = first.shadowRoot;
+                        if (!sr) return 'NO_SHADOW';
+                        // List all elements and their tags inside shadow DOM
+                        var children = sr.querySelectorAll('*');
+                        for (var i = 0; i < children.length; i++) {
+                            var el = children[i];
+                            var rect = el.getBoundingClientRect();
+                            probe.push({
+                                tag: el.tagName.toLowerCase(),
+                                id: el.id || '',
+                                className: (el.className || '').toString().substring(0, 50),
+                                type: el.type || '',
+                                w: Math.round(rect.width),
+                                h: Math.round(rect.height),
+                                x: Math.round(rect.x),
+                                y: Math.round(rect.y)
+                            });
+                        }
+                        // Also check zone.js symbols on host
+                        var zoneKeys = [];
+                        for (var key in first) {
+                            if (key.indexOf('__zone_symbol__') === 0 || key.indexOf('__ng') === 0) {
+                                zoneKeys.push(key);
+                            }
+                        }
+                        return JSON.stringify({shadow: probe, zoneKeys: zoneKeys, hostTag: first.tagName});
+                    })()
+                """)
+                logger.info(f"Checkbox shadow DOM probe: {cb_probe}")
 
-                        // Strategy 1: spl-checkbox components (most common in SmartRecruiters)
+                # Get coordinates — use the <label> element inside shadow DOM
+                # which is the proper clickable target that toggles the checkbox
+                cb_coords = await nd_page.evaluate("""
+                    (function() {
+                        var results = [];
                         var splChecks = document.querySelectorAll('spl-checkbox');
                         for (var i = 0; i < splChecks.length; i++) {
                             var sr = splChecks[i].shadowRoot;
                             if (!sr) continue;
                             var inner = sr.querySelector('input[type="checkbox"]');
                             if (inner && !inner.checked) {
-                                // Click the outer spl-checkbox element (Angular listens here)
-                                splChecks[i].click();
-                                // Also click inner input to ensure DOM state change
-                                if (!inner.checked) inner.click();
-                                // Dispatch Angular-friendly events on both inner and outer
-                                var evts = ['click', 'change', 'input'];
-                                evts.forEach(function(evtName) {
-                                    inner.dispatchEvent(new Event(evtName, {bubbles: true, composed: true}));
-                                    splChecks[i].dispatchEvent(new Event(evtName, {bubbles: true, composed: true}));
-                                });
-                                checked.push('spl-checkbox-' + i);
-                            }
-                            // Also try clicking the label/container inside shadow
-                            if (inner && !inner.checked) {
-                                var label = sr.querySelector('label, .checkbox-label, .checkmark');
-                                if (label) label.click();
-                            }
-                        }
-
-                        // Strategy 2: regular HTML checkboxes
-                        var htmlChecks = document.querySelectorAll('input[type="checkbox"]');
-                        for (var j = 0; j < htmlChecks.length; j++) {
-                            if (!htmlChecks[j].checked) {
-                                htmlChecks[j].click();
-                                checked.push('html-checkbox-' + j);
-                            }
-                        }
-
-                        // Strategy 3: elements with checkbox role
-                        var roleChecks = document.querySelectorAll('[role="checkbox"]');
-                        for (var k = 0; k < roleChecks.length; k++) {
-                            var ariaChecked = roleChecks[k].getAttribute('aria-checked');
-                            if (ariaChecked !== 'true') {
-                                roleChecks[k].click();
-                                checked.push('role-checkbox-' + k);
-                            }
-                        }
-
-                        // Strategy 4: Deep shadow DOM search — some checkboxes are inside
-                        // nested shadow roots (e.g., inside consent sections)
-                        function findAndCheckInShadow(root) {
-                            var all = root.querySelectorAll('*');
-                            for (var m = 0; m < all.length; m++) {
-                                if (all[m].shadowRoot) {
-                                    var innerChecks = all[m].shadowRoot.querySelectorAll('input[type="checkbox"]');
-                                    for (var n = 0; n < innerChecks.length; n++) {
-                                        if (!innerChecks[n].checked) {
-                                            innerChecks[n].click();
-                                            checked.push('deep-shadow-' + m + '-' + n);
-                                        }
-                                    }
-                                    findAndCheckInShadow(all[m].shadowRoot);
+                                splChecks[i].scrollIntoView({behavior: 'instant', block: 'center'});
+                                // Try label first (proper way to toggle checkbox)
+                                var label = sr.querySelector('label');
+                                var hostRect = splChecks[i].getBoundingClientRect();
+                                if (label) {
+                                    var labelRect = label.getBoundingClientRect();
+                                    // Click at the LEFT part of the label (where checkbox icon is)
+                                    results.push({
+                                        x: labelRect.x + 10,
+                                        y: labelRect.y + labelRect.height/2,
+                                        id: splChecks[i].id || ('spl-cb-' + i),
+                                        type: 'spl-label',
+                                        labelW: Math.round(labelRect.width),
+                                        labelH: Math.round(labelRect.height)
+                                    });
+                                } else {
+                                    results.push({
+                                        x: hostRect.x + 10,
+                                        y: hostRect.y + hostRect.height/2,
+                                        id: splChecks[i].id || ('spl-cb-' + i),
+                                        type: 'spl-host'
+                                    });
                                 }
                             }
                         }
-                        findAndCheckInShadow(document);
-
-                        return checked.length > 0 ? ('CHECKED:' + checked.join(',')) : 'NONE_FOUND';
+                        // Also check regular HTML checkboxes
+                        var htmlChecks = document.querySelectorAll('input[type="checkbox"]:not([hidden])');
+                        for (var j = 0; j < htmlChecks.length; j++) {
+                            if (!htmlChecks[j].checked && !htmlChecks[j].closest('spl-checkbox')) {
+                                var r = htmlChecks[j].getBoundingClientRect();
+                                if (r.width > 0 && r.height > 0) {
+                                    results.push({x: r.x + r.width/2, y: r.y + r.height/2, id: htmlChecks[j].id || 'html-cb-'+j, type: 'html'});
+                                }
+                            }
+                        }
+                        return results;
                     })()
                 """)
-                if checkbox_result and 'CHECKED' in str(checkbox_result):
-                    logger.info(f"Checked consent checkboxes: {checkbox_result}")
-                    await asyncio.sleep(1)  # Wait for validation to clear after checking
+                # Deep unwrap nodriver results
+                def _unwrap_nd_list(raw):
+                    if not raw:
+                        return []
+                    result = []
+                    items = raw if isinstance(raw, list) else [raw]
+                    for item in items:
+                        if isinstance(item, dict) and 'type' in item and item.get('type') == 'object' and 'value' in item:
+                            pairs = item['value']
+                            obj = {}
+                            if isinstance(pairs, list):
+                                for pair in pairs:
+                                    if isinstance(pair, list) and len(pair) == 2:
+                                        k, v = pair
+                                        obj[k] = v['value'] if isinstance(v, dict) and 'value' in v else v
+                            if obj:
+                                result.append(obj)
+                        elif isinstance(item, dict) and 'x' in item:
+                            result.append(item)
+                    return result
+
+                cb_list = _unwrap_nd_list(cb_coords)
+                logger.info(f"Checkboxes to click: {cb_list}")
+
+                # Strategy: Click "Select all" first if present (most reliable),
+                # then click individual required ones if "Select all" didn't work
+                select_all_cb = None
+                individual_cbs = []
+                for cb in cb_list:
+                    if not isinstance(cb, dict) or 'x' not in cb:
+                        continue
+                    if cb.get('id', '').lower() in ('consent-select-all', 'select-all', 'selectall'):
+                        select_all_cb = cb
+                    else:
+                        individual_cbs.append(cb)
+
+                # Click checkboxes with full CDP mouse event sequence
+                async def _cdp_click_checkbox(x, y, cb_id):
+                    # Full mouse event sequence: move → down → up (mimics real user)
+                    await nd_page.send(cdp_cb.input_.dispatch_mouse_event(
+                        type_="mouseMoved", x=x, y=y))
+                    await asyncio.sleep(0.05)
+                    await nd_page.send(cdp_cb.input_.dispatch_mouse_event(
+                        type_="mousePressed", x=x, y=y,
+                        button=cdp_cb.input_.MouseButton.LEFT, click_count=1))
+                    await asyncio.sleep(0.05)
+                    await nd_page.send(cdp_cb.input_.dispatch_mouse_event(
+                        type_="mouseReleased", x=x, y=y,
+                        button=cdp_cb.input_.MouseButton.LEFT, click_count=1))
+                    await asyncio.sleep(0.5)
+                    logger.info(f"CDP-clicked checkbox '{cb_id}' at ({x:.0f},{y:.0f})")
+
+                # Click select-all first, then individuals
+                if select_all_cb:
+                    await _cdp_click_checkbox(
+                        float(select_all_cb['x']), float(select_all_cb['y']),
+                        select_all_cb.get('id', 'select-all'))
+                    await asyncio.sleep(0.5)
+
+                for cb in individual_cbs:
+                    await _cdp_click_checkbox(
+                        float(cb['x']), float(cb['y']),
+                        cb.get('id', 'unknown'))
+
+                # Verify checkboxes are checked
+                await asyncio.sleep(0.5)
+                verify_cb = await nd_page.evaluate("""
+                    (function() {
+                        var results = [];
+                        var splChecks = document.querySelectorAll('spl-checkbox');
+                        for (var i = 0; i < splChecks.length; i++) {
+                            var sr = splChecks[i].shadowRoot;
+                            if (!sr) continue;
+                            var inner = sr.querySelector('input[type="checkbox"]');
+                            results.push((splChecks[i].id || 'spl-cb-' + i) + ':' + (inner ? (inner.checked ? 'CHECKED' : 'UNCHECKED') : 'no-inner'));
+                        }
+                        return results.join(', ');
+                    })()
+                """)
+                logger.info(f"Checkbox status after CDP click: {verify_cb}")
+
+                # If still unchecked, click the HOST element itself
+                # Angular's spl-checkbox has a click handler on the HOST (zone.js patches onclick)
+                # HOST.click() → zone.js → Angular change detection → checkbox toggled properly
+                still_unchecked = await nd_page.evaluate("""
+                    (function() {
+                        var fixed = [];
+                        var splChecks = document.querySelectorAll('spl-checkbox');
+                        for (var i = 0; i < splChecks.length; i++) {
+                            var sr = splChecks[i].shadowRoot;
+                            if (!sr) continue;
+                            var inner = sr.querySelector('input[type="checkbox"]');
+                            if (inner && !inner.checked) {
+                                // Strategy 1: Click the HOST element (Angular listens here)
+                                splChecks[i].click();
+                                fixed.push(splChecks[i].id || 'spl-cb-' + i);
+                            }
+                        }
+                        return fixed.length > 0 ? fixed.join(',') : 'ALL_CHECKED';
+                    })()
+                """)
+                if still_unchecked != 'ALL_CHECKED':
+                    logger.info(f"Host-clicked checkboxes: {still_unchecked}")
+                    await asyncio.sleep(0.5)
+                    # Verify after host click
+                    verify2 = await nd_page.evaluate("""
+                        (function() {
+                            var results = [];
+                            var splChecks = document.querySelectorAll('spl-checkbox');
+                            for (var i = 0; i < splChecks.length; i++) {
+                                var sr = splChecks[i].shadowRoot;
+                                if (!sr) continue;
+                                var inner = sr.querySelector('input[type="checkbox"]');
+                                results.push((splChecks[i].id || 'spl-cb-' + i) + ':' + (inner ? (inner.checked ? 'CHECKED' : 'UNCHECKED') : 'no-inner'));
+                            }
+                            return results.join(', ');
+                        })()
+                    """)
+                    logger.info(f"After host.click(): {verify2}")
+                    # If STILL unchecked, try the wrapper div click + zone.js spl-change
+                    still_unchecked2 = await nd_page.evaluate("""
+                        (function() {
+                            var remaining = [];
+                            var splChecks = document.querySelectorAll('spl-checkbox');
+                            for (var i = 0; i < splChecks.length; i++) {
+                                var sr = splChecks[i].shadowRoot;
+                                if (!sr) continue;
+                                var inner = sr.querySelector('input[type="checkbox"]');
+                                if (inner && !inner.checked) {
+                                    // Try wrapper div click
+                                    var wrapper = sr.querySelector('.c-spl-checkbox-wrapper, .c-spl-checkbox');
+                                    if (wrapper) wrapper.click();
+                                    // Force DOM state
+                                    if (!inner.checked) inner.checked = true;
+                                    // Trigger zone.js spl-change on host
+                                    var key = '__zone_symbol__spl-changefalse';
+                                    if (splChecks[i][key] && Array.isArray(splChecks[i][key])) {
+                                        for (var j = 0; j < splChecks[i][key].length; j++) {
+                                            try {
+                                                var h = splChecks[i][key][j].handler || splChecks[i][key][j];
+                                                if (typeof h === 'function') {
+                                                    h(new CustomEvent('spl-change', {
+                                                        detail: {value: true, checked: true}, bubbles: true
+                                                    }));
+                                                }
+                                            } catch(e) {}
+                                        }
+                                    }
+                                    remaining.push(splChecks[i].id || 'spl-cb-' + i);
+                                }
+                            }
+                            return remaining.length > 0 ? remaining.join(',') : 'ALL_CHECKED';
+                        })()
+                    """)
+                    if still_unchecked2 != 'ALL_CHECKED':
+                        logger.warning(f"Force-checked remaining: {still_unchecked2}")
+
+                await asyncio.sleep(1)
             except Exception as cb_e:
                 logger.debug(f"Checkbox check failed: {cb_e}")
 
             # Handle screening questions on the current step (e.g., "Preliminary questions")
             # These can appear on any step, not just the first page
             try:
+                logger.info(f"Step {step + 1}: scanning for screening questions...")
                 await self._nd_handle_screening_questions(nd_page, job_data)
             except Exception as sq_e:
-                logger.debug(f"Screening questions on step {step + 1}: {sq_e}")
+                logger.warning(f"Screening questions on step {step + 1} FAILED: {sq_e}")
+
+            # Handle spl-autocomplete fields on page 2+ (e.g., disability self-ID)
+            # On page 1, spl-autocomplete is the city field. On page 2+, it's screening questions.
+            try:
+                ac_count = await nd_page.evaluate("""
+                    (function() {
+                        var acs = document.querySelectorAll('spl-autocomplete');
+                        var total = acs.length;
+                        var unfilled = [];
+                        for (var i = 0; i < acs.length; i++) {
+                            var val = '';
+                            if (acs[i].shadowRoot) {
+                                var inp = acs[i].shadowRoot.querySelector('input');
+                                if (!inp) {
+                                    // Nested shadow: spl-autocomplete > spl-input > input
+                                    var nested = acs[i].shadowRoot.querySelector('spl-input');
+                                    if (nested && nested.shadowRoot) inp = nested.shadowRoot.querySelector('input');
+                                }
+                                val = inp ? inp.value : '';
+                            }
+                            if (!val || !val.trim()) {
+                                var label = acs[i].getAttribute('label') || '';
+                                // Get parent text for label
+                                if (!label) {
+                                    var prev = acs[i].previousElementSibling;
+                                    if (prev) label = (prev.textContent || '').trim().substring(0, 100);
+                                }
+                                if (!label) {
+                                    var parent = acs[i].parentElement;
+                                    if (parent) {
+                                        var lbl = parent.querySelector('label, .label, p');
+                                        if (lbl && lbl !== acs[i]) label = lbl.textContent.trim().substring(0, 100);
+                                    }
+                                }
+                                unfilled.push({idx: i, label: label, id: acs[i].id || ''});
+                            }
+                        }
+                        return JSON.stringify({total: total, unfilled: unfilled});
+                    })()
+                """)
+                import json as _ac_json
+                ac_data = _ac_json.loads(ac_count) if isinstance(ac_count, str) else {}
+                ac_total = ac_data.get('total', 0) if isinstance(ac_data, dict) else 0
+                ac_fields = ac_data.get('unfilled', []) if isinstance(ac_data, dict) else []
+                logger.info(f"Step {step + 1} spl-autocomplete scan: {ac_total} total, {len(ac_fields)} unfilled")
+                # Broad page scan for debugging: check iframes, ng-invalid, all custom elements
+                if step >= 1:
+                    page_debug = await nd_page.evaluate("""
+                        (function() {
+                            var info = {};
+                            // 1. Check for iframes
+                            info.iframes = document.querySelectorAll('iframe').length;
+                            // 2. Check for ng-invalid elements (form validation failures)
+                            var invalid = document.querySelectorAll('.ng-invalid, [class*="ng-invalid"]');
+                            info.ngInvalid = [];
+                            for (var i = 0; i < invalid.length; i++) {
+                                info.ngInvalid.push({
+                                    tag: invalid[i].tagName, id: invalid[i].id || '',
+                                    cls: invalid[i].className.toString().substring(0, 60)
+                                });
+                            }
+                            // 3. ALL custom elements (non-standard HTML tags)
+                            var customs = [];
+                            var allEls = document.querySelectorAll('*');
+                            for (var j = 0; j < allEls.length; j++) {
+                                var tag = allEls[j].tagName.toLowerCase();
+                                if (tag.indexOf('-') > 0 && !tag.startsWith('spl-checkbox') && !tag.startsWith('spl-button')) {
+                                    var r = allEls[j].getBoundingClientRect();
+                                    if (r.width > 50 && r.height > 10) {
+                                        customs.push(tag + '#' + (allEls[j].id || '') + '(' + Math.round(r.width) + 'x' + Math.round(r.height) + ')');
+                                    }
+                                }
+                            }
+                            info.customElements = customs.slice(0, 30);
+                            // 4. ALL visible inputs/selects (even in shadow DOM we've already checked)
+                            var allInputs = [];
+                            function scanInputs(root, prefix) {
+                                var inputs = root.querySelectorAll('input:not([type="hidden"]), select, textarea');
+                                for (var k = 0; k < inputs.length; k++) {
+                                    var el = inputs[k];
+                                    var r = el.getBoundingClientRect();
+                                    if (r.width > 20 && r.height > 5) {
+                                        allInputs.push(prefix + el.tagName + '#' + (el.id || '') + '[' + (el.type || '') + ']=' +
+                                            (el.value || '').substring(0, 20) + '(' + Math.round(r.x) + ',' + Math.round(r.y) + ')');
+                                    }
+                                }
+                            }
+                            scanInputs(document, '');
+                            // Also scan shadow roots of ALL custom elements
+                            for (var m = 0; m < allEls.length; m++) {
+                                if (allEls[m].shadowRoot) {
+                                    scanInputs(allEls[m].shadowRoot, allEls[m].tagName + '>');
+                                    // One more level deep
+                                    var inner = allEls[m].shadowRoot.querySelectorAll('*');
+                                    for (var n = 0; n < inner.length; n++) {
+                                        if (inner[n].shadowRoot) scanInputs(inner[n].shadowRoot, allEls[m].tagName + '>' + inner[n].tagName + '>');
+                                    }
+                                }
+                            }
+                            info.allVisibleInputs = allInputs.slice(0, 30);
+                            return JSON.stringify(info);
+                        })()
+                    """)
+                    logger.info(f"Step {step + 1} page debug: {page_debug}")
+                if ac_fields:
+                    logger.info(f"Step {step + 1} unfilled spl-autocomplete fields: {ac_fields}")
+                    import nodriver.cdp as cdp_ac
+                    for acf in ac_fields:
+                        ac_label = acf.get('label', '').lower()
+                        ac_idx = acf.get('idx', 0)
+                        # Skip city field (handled separately)
+                        if 'city' in ac_label:
+                            continue
+                        # Determine answer based on label
+                        if 'disab' in ac_label or 'voluntary' in ac_label or 'self-identification' in ac_label:
+                            answer = "I do not wish to answer"
+                        elif 'gender' in ac_label:
+                            answer = "Prefer not to say"
+                        elif 'veteran' in ac_label:
+                            answer = "I am not a protected veteran"
+                        elif 'race' in ac_label or 'ethnic' in ac_label:
+                            answer = "Decline to self identify"
+                        else:
+                            answer = "I do not wish to answer"
+                        logger.info(f"Filling spl-autocomplete #{ac_idx} '{ac_label[:40]}' with '{answer}'")
+                        # Get input coords from shadow DOM
+                        ac_coords = await nd_page.evaluate(f"""
+                            (function() {{
+                                var acs = document.querySelectorAll('spl-autocomplete');
+                                var ac = acs[{ac_idx}];
+                                if (!ac || !ac.shadowRoot) return null;
+                                ac.scrollIntoView({{behavior: 'instant', block: 'center'}});
+                                var inp = ac.shadowRoot.querySelector('input');
+                                if (!inp) {{
+                                    var nested = ac.shadowRoot.querySelector('spl-input');
+                                    if (nested && nested.shadowRoot) inp = nested.shadowRoot.querySelector('input');
+                                }}
+                                if (!inp) return null;
+                                inp.value = '';
+                                inp.focus();
+                                var r = inp.getBoundingClientRect();
+                                return {{x: r.x + r.width/2, y: r.y + r.height/2, w: r.width}};
+                            }})()
+                        """)
+                        if ac_coords and isinstance(ac_coords, dict) and ac_coords.get('w', 0) > 0:
+                            ax, ay = float(ac_coords['x']), float(ac_coords['y'])
+                            # CDP click to focus
+                            await nd_page.send(cdp_ac.input_.dispatch_mouse_event(
+                                type_="mousePressed", x=ax, y=ay,
+                                button=cdp_ac.input_.MouseButton.LEFT, click_count=1))
+                            await nd_page.send(cdp_ac.input_.dispatch_mouse_event(
+                                type_="mouseReleased", x=ax, y=ay,
+                                button=cdp_ac.input_.MouseButton.LEFT, click_count=1))
+                            await asyncio.sleep(0.5)
+                            # Type answer char by char
+                            for char in answer:
+                                await nd_page.send(cdp_ac.input_.dispatch_key_event(type_="keyDown", key=char))
+                                await nd_page.send(cdp_ac.input_.dispatch_key_event(type_="char", text=char, key=char))
+                                await nd_page.send(cdp_ac.input_.dispatch_key_event(type_="keyUp", key=char))
+                                await asyncio.sleep(0.04)
+                            await asyncio.sleep(2)
+                            # Click first matching suggestion
+                            suggestion_result = await nd_page.evaluate(f"""
+                                (function() {{
+                                    var ac = document.querySelectorAll('spl-autocomplete')[{ac_idx}];
+                                    if (!ac || !ac.shadowRoot) return 'NO_AC';
+                                    // Search for suggestions in shadow DOM at all levels
+                                    function findSuggestions(root, depth) {{
+                                        if (depth > 5) return [];
+                                        var results = [];
+                                        var items = root.querySelectorAll('li, [role="option"], [class*="option"], [class*="suggestion"], [class*="item"]');
+                                        for (var i = 0; i < items.length; i++) {{
+                                            var r = items[i].getBoundingClientRect();
+                                            var t = (items[i].textContent || '').trim();
+                                            if (r.width > 0 && r.height > 0 && r.height < 200 && t.length > 2) {{
+                                                results.push({{el: items[i], text: t, x: r.x + r.width/2, y: r.y + r.height/2}});
+                                            }}
+                                        }}
+                                        var all = root.querySelectorAll('*');
+                                        for (var j = 0; j < all.length; j++) {{
+                                            if (all[j].shadowRoot) results = results.concat(findSuggestions(all[j].shadowRoot, depth+1));
+                                        }}
+                                        return results;
+                                    }}
+                                    var suggestions = findSuggestions(ac.shadowRoot, 0);
+                                    // Also check document level (some dropdowns render outside shadow DOM)
+                                    var globalItems = document.querySelectorAll('[role="listbox"] li, [role="listbox"] [role="option"], [class*="cdk-overlay"] li');
+                                    for (var k = 0; k < globalItems.length; k++) {{
+                                        var r = globalItems[k].getBoundingClientRect();
+                                        var t = (globalItems[k].textContent || '').trim();
+                                        if (r.width > 0 && r.height > 0 && r.height < 200 && t.length > 2) {{
+                                            suggestions.push({{el: globalItems[k], text: t, x: r.x + r.width/2, y: r.y + r.height/2}});
+                                        }}
+                                    }}
+                                    if (suggestions.length === 0) return 'NO_SUGGESTIONS';
+                                    // Find best match: prefer "do not wish", "prefer not", "decline"
+                                    var answer = '{answer}'.toLowerCase();
+                                    for (var s = 0; s < suggestions.length; s++) {{
+                                        var st = suggestions[s].text.toLowerCase();
+                                        if (st.indexOf('do not wish') >= 0 || st.indexOf('prefer not') >= 0 ||
+                                            st.indexOf('decline') >= 0 || st.indexOf(answer) >= 0 || answer.indexOf(st) >= 0) {{
+                                            suggestions[s].el.click();
+                                            return 'CLICKED:' + suggestions[s].text.substring(0, 60);
+                                        }}
+                                    }}
+                                    // Click first suggestion as fallback
+                                    suggestions[0].el.click();
+                                    return 'CLICKED_FIRST:' + suggestions[0].text.substring(0, 60);
+                                }})()
+                            """)
+                            logger.info(f"Autocomplete suggestion result: {suggestion_result}")
+                            # If JS click didn't work, try CDP click at suggestion coordinates
+                            if suggestion_result and 'NO_SUGGESTIONS' not in str(suggestion_result):
+                                await asyncio.sleep(0.5)
+                            else:
+                                # Try typing just a shorter query to trigger suggestions
+                                logger.info("No suggestions found, trying shorter query...")
+                                # Clear and type just "do not"
+                                await nd_page.send(cdp_ac.input_.dispatch_key_event(
+                                    type_="keyDown", key="a",
+                                    windows_virtual_key_code=65, native_virtual_key_code=65,
+                                    modifiers=2))  # Cmd+A
+                                await nd_page.send(cdp_ac.input_.dispatch_key_event(type_="keyUp", key="a"))
+                                await nd_page.send(cdp_ac.input_.dispatch_key_event(
+                                    type_="keyDown", key="Backspace"))
+                                await nd_page.send(cdp_ac.input_.dispatch_key_event(type_="keyUp", key="Backspace"))
+                                await asyncio.sleep(0.3)
+                                for char in "do not":
+                                    await nd_page.send(cdp_ac.input_.dispatch_key_event(type_="keyDown", key=char))
+                                    await nd_page.send(cdp_ac.input_.dispatch_key_event(type_="char", text=char, key=char))
+                                    await nd_page.send(cdp_ac.input_.dispatch_key_event(type_="keyUp", key=char))
+                                    await asyncio.sleep(0.04)
+                                await asyncio.sleep(2)
+                        else:
+                            logger.info(f"Could not get coords for spl-autocomplete #{ac_idx}")
+            except Exception as ac_e:
+                logger.warning(f"spl-autocomplete scan failed: {ac_e}", exc_info=True)
+
+            # Handle special fields that _nd_handle_screening_questions might miss:
+            # - oc-autocomplete-question (disability self-ID, etc.)
+            # - oc-select-question (custom SR question wrappers)
+            # These use different components than spl-select/spl-input
+            try:
+                special_result = await nd_page.evaluate("""
+                    (function() {
+                        var filled = [];
+
+                        // Find ALL unfilled form elements the screening scanner missed
+                        // Look for oc-* question wrappers, custom autocomplete fields, etc.
+                        var allInputs = document.querySelectorAll(
+                            'input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]),' +
+                            'select, textarea'
+                        );
+                        for (var i = 0; i < allInputs.length; i++) {
+                            var el = allInputs[i];
+                            // Skip if inside spl-* components (already handled)
+                            if (el.closest('spl-input') || el.closest('spl-select') || el.closest('spl-textarea') ||
+                                el.closest('spl-phone-field') || el.closest('spl-autocomplete') || el.closest('spl-dropzone')) continue;
+                            // Skip if already filled
+                            if (el.value && el.value.trim().length > 0) continue;
+                            // Skip if hidden
+                            var rect = el.getBoundingClientRect();
+                            if (rect.width === 0 || rect.height === 0) continue;
+
+                            // Find label
+                            var label = '';
+                            var lbl = el.closest('label') || document.querySelector('label[for="' + el.id + '"]');
+                            if (lbl) label = lbl.textContent.trim();
+                            if (!label) {
+                                // Check parent oc-* components
+                                var ocParent = el.closest('oc-autocomplete-question, oc-select-question, oc-input-question, oc-question, [class*="question"]');
+                                if (ocParent) {
+                                    var ocLabel = ocParent.querySelector('label, legend, .label, [class*="label"], p');
+                                    if (ocLabel) label = ocLabel.textContent.trim();
+                                }
+                            }
+                            if (!label) {
+                                // Check previous sibling or parent text
+                                var prev = el.previousElementSibling;
+                                if (prev) label = (prev.textContent || '').trim().substring(0, 200);
+                                if (!label && el.parentElement) {
+                                    label = (el.parentElement.textContent || '').trim().substring(0, 200);
+                                }
+                            }
+                            if (!label) label = el.getAttribute('placeholder') || el.getAttribute('aria-label') || '';
+
+                            filled.push({
+                                tag: el.tagName, id: el.id || '', name: el.name || '',
+                                type: el.type || '', label: label.substring(0, 100),
+                                x: Math.round(rect.x + rect.width/2),
+                                y: Math.round(rect.y + rect.height/2)
+                            });
+                        }
+
+                        // Also check shadow DOM of any non-spl custom elements
+                        var customEls = document.querySelectorAll('oc-autocomplete-question, oc-select-question');
+                        for (var j = 0; j < customEls.length; j++) {
+                            var ce = customEls[j];
+                            var ceLabel = '';
+                            var ceLbl = ce.querySelector('label, .label');
+                            if (ceLbl) ceLabel = ceLbl.textContent.trim();
+                            // Check shadow root
+                            if (ce.shadowRoot) {
+                                var ceInputs = ce.shadowRoot.querySelectorAll('input, select');
+                                for (var k = 0; k < ceInputs.length; k++) {
+                                    if (!ceInputs[k].value || !ceInputs[k].value.trim()) {
+                                        var cr = ceInputs[k].getBoundingClientRect();
+                                        if (cr.width > 0) {
+                                            filled.push({
+                                                tag: 'SHADOW:' + ceInputs[k].tagName, id: ceInputs[k].id || '',
+                                                parent: ce.tagName, label: ceLabel.substring(0, 100),
+                                                x: Math.round(cr.x + cr.width/2),
+                                                y: Math.round(cr.y + cr.height/2)
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        return filled.length > 0 ? JSON.stringify(filled) : 'NONE';
+                    })()
+                """)
+                if special_result and special_result != 'NONE':
+                    import json as _spec_json
+                    special_fields = _spec_json.loads(special_result) if isinstance(special_result, str) else []
+                    logger.info(f"Step {step + 1} special unfilled fields: {special_fields}")
+
+                    # Try to fill disability/EEO fields automatically
+                    for sf in special_fields:
+                        sf_label = sf.get('label', '').lower()
+                        if 'disab' in sf_label or 'self-identification' in sf_label or 'voluntary' in sf_label:
+                            logger.info(f"Found disability field: {sf}")
+                            # Type "I do not wish to answer" into the field
+                            sx, sy = float(sf.get('x', 0)), float(sf.get('y', 0))
+                            if sx > 0 and sy > 0:
+                                import nodriver.cdp as cdp_spec
+                                # Click to focus
+                                await nd_page.send(cdp_spec.input_.dispatch_mouse_event(
+                                    type_="mousePressed", x=sx, y=sy,
+                                    button=cdp_spec.input_.MouseButton.LEFT, click_count=1))
+                                await nd_page.send(cdp_spec.input_.dispatch_mouse_event(
+                                    type_="mouseReleased", x=sx, y=sy,
+                                    button=cdp_spec.input_.MouseButton.LEFT, click_count=1))
+                                await asyncio.sleep(0.5)
+                                # Type text
+                                answer = "I do not wish to answer"
+                                for char in answer:
+                                    await nd_page.send(cdp_spec.input_.dispatch_key_event(type_="keyDown", key=char))
+                                    await nd_page.send(cdp_spec.input_.dispatch_key_event(type_="char", text=char, key=char))
+                                    await nd_page.send(cdp_spec.input_.dispatch_key_event(type_="keyUp", key=char))
+                                    await asyncio.sleep(0.03)
+                                await asyncio.sleep(1.5)
+                                # Try clicking first suggestion
+                                suggestion_clicked = await nd_page.evaluate("""
+                                    (function() {
+                                        var items = document.querySelectorAll(
+                                            '[role="option"], [role="listbox"] li, li[class*="option"], ' +
+                                            '[class*="suggestion"], [class*="item"]'
+                                        );
+                                        for (var i = 0; i < items.length; i++) {
+                                            var r = items[i].getBoundingClientRect();
+                                            var t = (items[i].textContent || '').trim().toLowerCase();
+                                            if (r.width > 0 && r.height > 0 && r.height < 100 &&
+                                                (t.indexOf('do not wish') >= 0 || t.indexOf('prefer not') >= 0 ||
+                                                 t.indexOf('decline') >= 0 || t.indexOf('not to answer') >= 0)) {
+                                                items[i].click();
+                                                return 'CLICKED:' + t.substring(0, 50);
+                                            }
+                                        }
+                                        // If no match, click first visible item
+                                        for (var j = 0; j < items.length; j++) {
+                                            var r2 = items[j].getBoundingClientRect();
+                                            if (r2.width > 0 && r2.height > 0 && r2.height < 100) {
+                                                items[j].click();
+                                                return 'CLICKED_FIRST:' + (items[j].textContent || '').trim().substring(0, 50);
+                                            }
+                                        }
+                                        return 'NO_SUGGESTION';
+                                    })()
+                                """)
+                                logger.info(f"Disability field suggestion: {suggestion_clicked}")
+                                await asyncio.sleep(0.5)
+
+                        elif 'gender' in sf_label or 'race' in sf_label or 'ethnic' in sf_label or 'veteran' in sf_label:
+                            logger.info(f"Found EEO field: {sf}")
+                            # Similar autocomplete fill for EEO fields
+                            sx, sy = float(sf.get('x', 0)), float(sf.get('y', 0))
+                            if sx > 0 and sy > 0:
+                                import nodriver.cdp as cdp_spec
+                                await nd_page.send(cdp_spec.input_.dispatch_mouse_event(
+                                    type_="mousePressed", x=sx, y=sy,
+                                    button=cdp_spec.input_.MouseButton.LEFT, click_count=1))
+                                await nd_page.send(cdp_spec.input_.dispatch_mouse_event(
+                                    type_="mouseReleased", x=sx, y=sy,
+                                    button=cdp_spec.input_.MouseButton.LEFT, click_count=1))
+                                await asyncio.sleep(0.5)
+                                answer = "Prefer not to say" if 'gender' in sf_label else "Decline"
+                                for char in answer:
+                                    await nd_page.send(cdp_spec.input_.dispatch_key_event(type_="keyDown", key=char))
+                                    await nd_page.send(cdp_spec.input_.dispatch_key_event(type_="char", text=char, key=char))
+                                    await nd_page.send(cdp_spec.input_.dispatch_key_event(type_="keyUp", key=char))
+                                    await asyncio.sleep(0.03)
+                                await asyncio.sleep(1.5)
+                                # Click first matching suggestion
+                                await nd_page.evaluate("""
+                                    (function() {
+                                        var items = document.querySelectorAll(
+                                            '[role="option"], [role="listbox"] li, li[class*="option"]'
+                                        );
+                                        for (var i = 0; i < items.length; i++) {
+                                            var r = items[i].getBoundingClientRect();
+                                            if (r.width > 0 && r.height > 0 && r.height < 100) {
+                                                items[i].click();
+                                                return;
+                                            }
+                                        }
+                                    })()
+                                """)
+                                await asyncio.sleep(0.5)
+            except Exception as spec_e:
+                logger.warning(f"Special field scan failed: {spec_e}", exc_info=True)
 
             # Handle spl-select dropdowns that need answers (screening questions as dropdowns)
+            # This is a FALLBACK for any selects that _nd_handle_screening_questions missed
+            # MUST trigger zone.js spl-change on the host for Angular to see the change
             try:
                 select_result = await nd_page.evaluate("""
                     (function() {
@@ -2036,118 +3556,255 @@ class SmartRecruitersHandler(BaseHandler):
                             if (inner.selectedIndex > 0) continue;
                             var label = selects[i].getAttribute('label') || '';
                             // For required selects without a value, try selecting first non-empty option
-                            if (selects[i].hasAttribute('required') && inner.options.length > 1) {
+                            if (inner.options.length > 1) {
+                                var picked = -1;
                                 for (var j = 1; j < inner.options.length; j++) {
                                     var optText = (inner.options[j].text || '').toLowerCase();
                                     // Prefer "yes" or positive options
                                     if (optText.indexOf('yes') >= 0 || optText === 'true') {
-                                        inner.selectedIndex = j;
-                                        inner.dispatchEvent(new Event('change', {bubbles: true, composed: true}));
-                                        filled.push(label + '=' + inner.options[j].text);
+                                        picked = j;
                                         break;
                                     }
                                 }
                                 // If no "yes" found, just select first option
-                                if (inner.selectedIndex === 0 && inner.options.length > 1) {
-                                    inner.selectedIndex = 1;
-                                    inner.dispatchEvent(new Event('change', {bubbles: true, composed: true}));
-                                    filled.push(label + '=' + inner.options[1].text);
+                                if (picked < 0) picked = 1;
+
+                                inner.selectedIndex = picked;
+                                inner.dispatchEvent(new Event('change', {bubbles: true, composed: true}));
+                                inner.dispatchEvent(new Event('input', {bubbles: true, composed: true}));
+
+                                // Trigger zone.js spl-change on host for Angular model update
+                                try { selects[i].value = inner.options[picked].value; } catch(e) {}
+                                var splKey = '__zone_symbol__spl-changefalse';
+                                if (selects[i][splKey] && Array.isArray(selects[i][splKey])) {
+                                    for (var z = 0; z < selects[i][splKey].length; z++) {
+                                        try {
+                                            var h = selects[i][splKey][z].handler || selects[i][splKey][z];
+                                            if (typeof h === 'function') {
+                                                h(new CustomEvent('spl-change', {
+                                                    detail: {value: inner.options[picked].value}, bubbles: true
+                                                }));
+                                            }
+                                        } catch(e) {}
+                                    }
                                 }
+                                selects[i].dispatchEvent(new Event('change', {bubbles: true}));
+                                filled.push(label + '=' + inner.options[picked].text);
                             }
                         }
                         return filled.length > 0 ? JSON.stringify(filled) : 'NONE';
                     })()
                 """)
                 if select_result and select_result != 'NONE':
-                    logger.info(f"Filled spl-select dropdowns on step {step + 1}: {select_result}")
+                    logger.info(f"Fallback filled spl-select dropdowns on step {step + 1}: {select_result}")
             except Exception:
                 pass
 
-            # Try clicking navigation buttons via JS — handles both spl-button shadow DOM and regular buttons
-            # Prioritize "Next"/"Continue" over "Submit" since we navigate step by step
+            # Screenshot each step for debugging
             try:
+                ss_path = f"data/screenshots/SR_STEP{step+1}_{__import__('datetime').datetime.now().strftime('%H%M%S')}.png"
+                await nd_page.save_screenshot(ss_path)
+                logger.info(f"Step {step + 1} screenshot: {ss_path}")
+            except Exception:
+                pass
+
+            # Click navigation buttons — try multiple strategies
+            try:
+                # Install console error catcher (no network interceptor — causes infinite recursion with zone.js)
+                await nd_page.evaluate("""
+                    if (!window.__sr_console_patched) {
+                        window.__sr_console_errors = [];
+                        var origError = console.error;
+                        console.error = function() {
+                            window.__sr_console_errors.push(Array.from(arguments).join(' ').substring(0, 200));
+                            origError.apply(console, arguments);
+                        };
+                        window.__sr_console_patched = true;
+                    } else {
+                        window.__sr_console_errors = [];
+                    }
+                """)
+
                 nav_result = await nd_page.evaluate("""
                     (function() {
                         var allButtons = [];
 
-                        // Collect ALL spl-button components with their text and click target
+                        // Collect ALL spl-button components
+                        // CRITICAL: use the INNER button coordinates from shadow DOM
+                        // not the host coordinates — click events on host SPAN don't reach
+                        // the inner button's zone.js click handler
                         var splBtns = document.querySelectorAll('spl-button');
                         for (var i = 0; i < splBtns.length; i++) {
                             var text = (splBtns[i].textContent || '').trim().toLowerCase();
                             var rect = splBtns[i].getBoundingClientRect();
                             if (rect.width === 0 || rect.height === 0) continue;
-                            var clickTarget = splBtns[i];
+                            // Get inner button coordinates from shadow DOM
+                            var innerRect = rect;
                             if (splBtns[i].shadowRoot) {
                                 var inner = splBtns[i].shadowRoot.querySelector('button');
-                                if (inner) clickTarget = inner;
+                                if (inner) {
+                                    var ir = inner.getBoundingClientRect();
+                                    if (ir.width > 0 && ir.height > 0) innerRect = ir;
+                                }
                             }
-                            allButtons.push({text: text, el: clickTarget, type: 'spl'});
+                            allButtons.push({text: text, host: splBtns[i], type: 'spl',
+                                x: innerRect.x + innerRect.width/2, y: innerRect.y + innerRect.height/2});
                         }
 
                         // Collect regular buttons
                         var btns = document.querySelectorAll('button, a[role="button"], input[type="submit"]');
                         for (var j = 0; j < btns.length; j++) {
                             var t = (btns[j].textContent || '').trim().toLowerCase();
+                            if (btns[j].closest('spl-button')) continue;
                             var r = btns[j].getBoundingClientRect();
                             if (r.width === 0 || r.height === 0) continue;
-                            // Skip if already captured as spl-button inner button
-                            if (btns[j].closest('spl-button')) continue;
-                            allButtons.push({text: t, el: btns[j], type: 'html'});
+                            allButtons.push({text: t, host: btns[j], type: 'html',
+                                x: r.x + r.width/2, y: r.y + r.height/2});
                         }
 
-                        // Priority 1: "Next" / "Continue" / "Save & Next"
-                        for (var k = 0; k < allButtons.length; k++) {
-                            var txt = allButtons[k].text;
-                            if (txt === 'next' || txt === 'continue' || txt === 'next step' ||
-                                txt === 'save & next' || txt === 'save and next' ||
-                                txt.indexOf('next') === 0) {
-                                allButtons[k].el.click();
-                                return 'NEXT:' + txt + ':' + allButtons[k].type;
-                            }
-                        }
-
-                        // Priority 2: "Submit Application" / "Submit" / "Apply"
-                        for (var m = 0; m < allButtons.length; m++) {
-                            var stxt = allButtons[m].text;
-                            if (stxt.indexOf('submit') >= 0 || stxt.indexOf('apply now') >= 0) {
-                                allButtons[m].el.click();
-                                return 'SUBMIT:' + stxt + ':' + allButtons[m].type;
-                            }
-                        }
-
-                        // Priority 3: Any prominent action button (not "back" or "cancel")
-                        for (var n = 0; n < allButtons.length; n++) {
-                            var ptxt = allButtons[n].text;
-                            if (ptxt && ptxt.length > 0 && ptxt.length < 30 &&
-                                ptxt !== 'back' && ptxt !== 'cancel' && ptxt !== 'previous' &&
-                                ptxt !== 'sign in' && ptxt !== 'log in' && ptxt !== 'close' &&
-                                ptxt.indexOf('upload') < 0 && ptxt.indexOf('add') < 0 &&
-                                ptxt.indexOf('remove') < 0 && ptxt.indexOf('delete') < 0 &&
-                                ptxt.indexOf('edit') < 0) {
-                                // Only click primary/action-style buttons
-                                var el = allButtons[n].el;
-                                var classes = (el.className || '').toLowerCase();
-                                if (classes.indexOf('primary') >= 0 || classes.indexOf('action') >= 0 ||
-                                    classes.indexOf('cta') >= 0 || classes.indexOf('submit') >= 0) {
-                                    el.click();
-                                    return 'ACTION:' + ptxt + ':' + allButtons[n].type;
+                        function findButton(priority) {
+                            for (var k = 0; k < allButtons.length; k++) {
+                                var txt = allButtons[k].text;
+                                if (priority === 'next' && (txt === 'next' || txt === 'continue' || txt === 'next step' ||
+                                    txt === 'save & next' || txt === 'save and next' || txt.indexOf('next') === 0)) {
+                                    return allButtons[k];
+                                }
+                                if (priority === 'submit' && (txt.indexOf('submit') >= 0 || txt.indexOf('apply now') >= 0)) {
+                                    return allButtons[k];
                                 }
                             }
+                            return null;
                         }
 
-                        // Debug: return what buttons are visible
-                        var dbg = allButtons.map(function(b) { return b.text; }).slice(0, 8);
-                        return 'NO_NAV:visible=' + JSON.stringify(dbg);
+                        var btn = findButton('next') || findButton('submit');
+                        if (!btn) {
+                            var dbg = allButtons.map(function(b) { return b.text; }).slice(0, 8);
+                            return 'NO_NAV:visible=' + JSON.stringify(dbg);
+                        }
+
+                        var action = btn.text.indexOf('next') >= 0 || btn.text === 'continue' ? 'NEXT' : 'SUBMIT';
+
+                        // Return button info — DON'T click here, let CDP handle it
+                        return JSON.stringify({action: action, text: btn.text, type: btn.type,
+                            x: btn.x, y: btn.y});
                     })()
                 """)
                 nav_str = str(nav_result) if nav_result else 'NO_RESULT'
-                logger.info(f"Step {step + 1} nav result: {nav_str}")
 
-                if 'NEXT:' in nav_str or 'SUBMIT:' in nav_str or 'ACTION:' in nav_str:
+                clicked = False
+                if nav_str.startswith('{') or ('{' in nav_str and '"action"' in nav_str):
+                    import json as _json
+                    btn_data = _json.loads(nav_str)
+                    action = btn_data['action']
+                    btn_text = btn_data['text']
+                    logger.info(f"Step {step + 1} nav result: {action}:{btn_text}:{btn_data['type']}")
+
+                    # Check what element is at the button coordinates
+                    import nodriver.cdp.input_ as cdp_nav
+                    bx, by = float(btn_data['x']), float(btn_data['y'])
+                    try:
+                        elem_at_point = await nd_page.evaluate(f"""
+                            (function() {{
+                                var el = document.elementFromPoint({bx}, {by});
+                                if (!el) return 'null';
+                                return el.tagName + '#' + el.id + '.' + (el.className || '').toString().substring(0,50) +
+                                    ' text=' + (el.textContent || '').trim().substring(0,30) +
+                                    ' parent=' + (el.parentElement ? el.parentElement.tagName : 'none');
+                            }})()
+                        """)
+                        logger.info(f"Element at ({bx:.0f},{by:.0f}): {elem_at_point}")
+                    except Exception:
+                        pass
+
+                    # Use CDP mouse events at the INNER button coordinates
+                    # nodriver's find+click hits the SPAN (projected light DOM content)
+                    # which doesn't trigger the shadow DOM inner button's zone.js handler.
+                    # CDP mouse events at the inner button coords send a trusted click.
+                    logger.info(f"CDP clicking {action} button '{btn_text}' at ({bx:.0f}, {by:.0f})")
+                    try:
+                        await nd_page.send(cdp_nav.dispatch_mouse_event(
+                            type_="mouseMoved", x=bx, y=by))
+                        await asyncio.sleep(0.05)
+                        await nd_page.send(cdp_nav.dispatch_mouse_event(
+                            type_="mousePressed", x=bx, y=by,
+                            button=cdp_nav.MouseButton.LEFT, click_count=1))
+                        await asyncio.sleep(0.05)
+                        await nd_page.send(cdp_nav.dispatch_mouse_event(
+                            type_="mouseReleased", x=bx, y=by,
+                            button=cdp_nav.MouseButton.LEFT, click_count=1))
+                        logger.info(f"CDP clicked '{btn_text}' at ({bx:.0f}, {by:.0f})")
+                        # CDP mouse at coords hits SPAN (light DOM projected via slot),
+                        # NOT the inner shadow DOM button. The click bubbles through light DOM
+                        # and never reaches inner button's zone.js handler.
+                        # Fix: focus the inner button via JS, then send CDP Enter key (trusted).
+                        await asyncio.sleep(0.3)
+                        await nd_page.evaluate("""
+                            (function() {
+                                var splBtns = document.querySelectorAll('spl-button');
+                                for (var i = 0; i < splBtns.length; i++) {
+                                    var text = (splBtns[i].textContent || '').trim().toLowerCase();
+                                    if (text.indexOf('""" + ('submit' if action == 'SUBMIT' else 'next') + """') >= 0) {
+                                        if (splBtns[i].shadowRoot) {
+                                            var inner = splBtns[i].shadowRoot.querySelector('button');
+                                            if (inner) inner.focus();
+                                        }
+                                        return;
+                                    }
+                                }
+                            })()
+                        """)
+                        await asyncio.sleep(0.1)
+                        # Send Space key to the focused inner button — trusted CDP event
+                        # IMPORTANT: <button type="button"> responds to SPACE not ENTER in Chrome
+                        await nd_page.send(cdp_nav.dispatch_key_event(
+                            type_="keyDown", key=" ",
+                            code="Space", windows_virtual_key_code=32, native_virtual_key_code=32))
+                        await nd_page.send(cdp_nav.dispatch_key_event(
+                            type_="keyUp", key=" ",
+                            code="Space", windows_virtual_key_code=32, native_virtual_key_code=32))
+                        logger.info(f"Also sent Space key to focused inner button for '{btn_text}'")
+                    except Exception as cdp_click_e:
+                        logger.info(f"CDP click failed ({cdp_click_e}), trying nodriver find")
+                        try:
+                            nd_btn = await nd_page.find(btn_text, best_match=True)
+                            if nd_btn:
+                                await nd_btn.click()
+                                logger.info(f"nodriver clicked '{btn_text}' as fallback")
+                        except Exception:
+                            pass
+                    clicked = True
+                else:
+                    logger.info(f"Step {step + 1} nav result: {nav_str}")
+
+                if clicked:
                     await asyncio.sleep(3)
+                    # Check for console errors and network calls after click
+                    try:
+                        errors = await nd_page.evaluate("JSON.stringify(window.__sr_console_errors || [])")
+                        if errors and errors != '[]':
+                            logger.info(f"Console errors after click: {errors}")
+                        # Reset for next iteration
+                        await nd_page.evaluate("window.__sr_console_errors = [];")
+                    except Exception:
+                        pass
                     continue
             except Exception as e:
-                logger.debug(f"Navigation JS click failed: {e}")
+                logger.debug(f"Navigation click failed: {e}")
+
+            # Fallback: use nodriver's native find() + click() for button
+            # nodriver handles shadow DOM traversal internally
+            for btn_text in ["Next", "Continue", "Submit Application", "Submit"]:
+                try:
+                    btn = await nd_page.find(btn_text, best_match=True)
+                    if btn:
+                        found_text = str(getattr(btn, 'text', '')).strip().lower()
+                        if btn_text.lower() in found_text or found_text in btn_text.lower():
+                            await btn.click()
+                            logger.info(f"nodriver click '{btn_text}' at step {step + 1}")
+                            await asyncio.sleep(3)
+                            break
+                except Exception:
+                    continue
 
             # Fallback: try nodriver's find() for "Next" button (handles shadow DOM better sometimes)
             for btn_text in ["Next", "Continue", "Submit Application", "Submit"]:

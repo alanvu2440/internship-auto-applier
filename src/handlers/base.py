@@ -9,6 +9,12 @@ from typing import Dict, Any, Optional
 from playwright.async_api import Page
 from loguru import logger
 
+from detection.job_status import (
+    CLOSED_JOB_INDICATORS,
+    is_job_closed as _check_job_closed,
+    is_application_complete as _check_complete,
+)
+
 
 class BaseHandler(ABC):
     """Base class for ATS handlers."""
@@ -216,67 +222,14 @@ class BaseHandler(ABC):
         return await self.captcha_solver.solve_and_inject(page)
 
     async def is_application_complete(self, page: Page) -> bool:
-        """Check if application was submitted successfully."""
+        """Check if application was submitted successfully.
+
+        Delegates to detection.job_status.is_application_complete for the
+        text-matching logic.  ATS-specific handlers may override this with
+        stricter checks (e.g. Greenhouse verifies the form is gone).
+        """
         page_text = await page.text_content("body") or ""
-        page_text_lower = page_text.lower()
-
-        # Check for FAILURE indicators first — these override any success text
-        failure_indicators = [
-            "no longer accepting",
-            "position is closed",
-            "position has been filled",
-            "no longer available",
-            "this job has expired",
-            "this job is no longer",
-            "flagged as possible spam",
-            "flagged as spam",
-            "suspicious activity",
-            "already applied",
-            "already submitted",
-            "you have already submitted an application",
-            "duplicate application",
-            "previously applied",
-            "application already exists",
-            "page not found",
-            "page you are looking for doesn't exist",
-            "page you are looking for doesn",
-            "job is no longer posted",
-            "this position is no longer",
-            "this role has been filled",
-            "this requisition has been closed",
-            "posting has been removed",
-            # Workday auth pages — never mark as success
-            "password requirements:",
-            "verify new password",
-            "create your candidate home account",
-        ]
-
-        for indicator in failure_indicators:
-            if indicator in page_text_lower:
-                logger.debug(f"is_application_complete: matched failure indicator '{indicator}'")
-                return False
-
-        success_indicators = [
-            "thank you for applying",
-            "thanks for applying",
-            "application received",
-            "application submitted",
-            "successfully applied",
-            "we've received your application",
-            "application complete",
-            "thank you for your interest in",
-            "thank you for submitting",
-        ]
-
-        for indicator in success_indicators:
-            if indicator in page_text_lower:
-                return True
-
-        # Fallback: bare "thank you" only if page has few words (likely a confirmation page)
-        if "thank you" in page_text_lower and len(page_text_lower.split()) < 200:
-            return True
-
-        return False
+        return _check_complete(page_text)
 
     async def get_error_message(self, page: Page) -> Optional[str]:
         """Get any actual error message displayed on the page."""
@@ -319,34 +272,76 @@ class BaseHandler(ABC):
             return "; ".join(errors[:3])  # Return first 3 errors max
         return None
 
-    async def check_required_fields_filled(self, page: Page) -> list:
-        """Check all required fields are filled before submit. Returns list of empty required field labels.
+    async def _check_required_fields_before_submit(self, page_or_frame) -> list:
+        """Golden-path guard: check all required fields are filled before submit.
 
-        This is a SAFETY CHECK to prevent submitting incomplete forms,
-        which triggers spam/fraud detection on ATS platforms.
+        Finds fields marked with ``required``, ``aria-required="true"``, or
+        ``*`` in their label.  Returns a list of unfilled required field
+        names.  If the list is non-empty the handler should return False
+        (don't submit) and leave the tab open so the user can complete it
+        manually.
+
+        Also checks required ``<select>`` elements and required radio groups.
         """
         try:
-            empty = await page.evaluate('''() => {
+            empty = await page_or_frame.evaluate('''() => {
                 const empty = [];
-                // Check text/email/tel inputs
+
+                // --- text / email / tel / textarea inputs ---
                 const inputs = document.querySelectorAll(
-                    'input:not([type="hidden"]):not([type="file"]):not([type="radio"]):not([type="checkbox"]):not([type="submit"]), textarea'
+                    'input:not([type="hidden"]):not([type="file"]):not([type="radio"]):not([type="checkbox"]):not([type="submit"]):not([type="button"]), textarea'
                 );
                 for (const inp of inputs) {
-                    if (inp.getBoundingClientRect().width === 0) continue;
+                    const rect = inp.getBoundingClientRect();
+                    if (rect.width === 0 || rect.height === 0) continue;
                     let labelText = "";
                     let p = inp.parentElement;
-                    for (let i = 0; i < 4 && p; i++) {
+                    for (let i = 0; i < 5 && p; i++) {
                         const l = p.querySelector("label, legend, [class*='label']");
                         if (l && l.textContent.trim()) { labelText = l.textContent.trim(); break; }
                         p = p.parentElement;
                     }
-                    const req = inp.required || inp.getAttribute("aria-required") === "true" || labelText.includes("*");
+                    const req = inp.required
+                        || inp.getAttribute("aria-required") === "true"
+                        || labelText.includes("*");
                     if (req && (!inp.value || !inp.value.trim())) {
-                        empty.push(labelText || inp.name || inp.id || "?");
+                        // Check if this is a React-Select search input with a visible selection
+                        let isReactSelectFilled = false;
+                        let rsContainer = inp.parentElement;
+                        for (let j = 0; j < 8 && rsContainer; j++) {
+                            // Standard react-select: .select__single-value
+                            const sv = rsContainer.querySelector('.select__single-value, [class*="singleValue"], [class*="single-value"]');
+                            if (sv && sv.textContent.trim()) {
+                                isReactSelectFilled = true;
+                                break;
+                            }
+                            // Check if placeholder is gone (replaced by value in a different element)
+                            const placeholder = rsContainer.querySelector('.select__placeholder, [class*="placeholder"]');
+                            const valueContainer = rsContainer.querySelector('.select__value-container, [class*="ValueContainer"], [class*="value-container"]');
+                            if (valueContainer && !placeholder) {
+                                // Placeholder removed means a value was selected
+                                const text = valueContainer.textContent.trim();
+                                if (text && text !== inp.value) {
+                                    isReactSelectFilled = true;
+                                    break;
+                                }
+                            }
+                            // Also check for aria-selected option in a listbox descendant
+                            const selected = rsContainer.querySelector('[aria-selected="true"]');
+                            if (selected) {
+                                isReactSelectFilled = true;
+                                break;
+                            }
+                            if (rsContainer.classList && rsContainer.classList.contains('select')) break;
+                            rsContainer = rsContainer.parentElement;
+                        }
+                        if (!isReactSelectFilled) {
+                            empty.push(labelText || inp.name || inp.id || "unknown_field");
+                        }
                     }
                 }
-                // Check required file inputs (resume)
+
+                // --- required file inputs (resume / cover letter) ---
                 for (const inp of document.querySelectorAll('input[type="file"]')) {
                     let labelText = "";
                     let p = inp.parentElement;
@@ -355,15 +350,75 @@ class BaseHandler(ABC):
                         if (l && l.textContent.trim()) { labelText = l.textContent.trim(); break; }
                         p = p.parentElement;
                     }
-                    if ((labelText.includes("*") || /resume|cv/i.test(labelText)) && !inp.files.length) {
-                        empty.push(labelText || "Resume");
+                    const req = inp.required
+                        || inp.getAttribute("aria-required") === "true"
+                        || labelText.includes("*")
+                        || /resume|cv/i.test(labelText);
+                    if (req && !inp.files.length) {
+                        empty.push(labelText || "Resume/File upload");
                     }
                 }
+
+                // --- required <select> dropdowns ---
+                for (const sel of document.querySelectorAll("select")) {
+                    const rect = sel.getBoundingClientRect();
+                    if (rect.width === 0 || rect.height === 0) continue;
+                    let labelText = "";
+                    let p = sel.parentElement;
+                    for (let i = 0; i < 5 && p; i++) {
+                        const l = p.querySelector("label, legend, [class*='label']");
+                        if (l && l.textContent.trim()) { labelText = l.textContent.trim(); break; }
+                        p = p.parentElement;
+                    }
+                    const req = sel.required
+                        || sel.getAttribute("aria-required") === "true"
+                        || labelText.includes("*");
+                    if (req && (!sel.value || sel.value === "" || sel.value === "--")) {
+                        empty.push(labelText || sel.name || sel.id || "unknown_select");
+                    }
+                }
+
+                // --- required radio groups (none checked) ---
+                const checkedGroups = new Set();
+                const requiredGroups = {};
+                for (const radio of document.querySelectorAll('input[type="radio"]')) {
+                    const name = radio.name;
+                    if (!name) continue;
+                    if (radio.checked) checkedGroups.add(name);
+                    if (radio.required || radio.getAttribute("aria-required") === "true") {
+                        if (!requiredGroups[name]) {
+                            let labelText = "";
+                            let p = radio.parentElement;
+                            for (let i = 0; i < 5 && p; i++) {
+                                const l = p.querySelector("label, legend, [class*='label']");
+                                if (l && l.textContent.trim()) { labelText = l.textContent.trim(); break; }
+                                p = p.parentElement;
+                            }
+                            requiredGroups[name] = labelText || name;
+                        }
+                    }
+                }
+                for (const [name, label] of Object.entries(requiredGroups)) {
+                    if (!checkedGroups.has(name)) {
+                        empty.push(label);
+                    }
+                }
+
                 return empty;
             }''')
-            return empty or []
-        except Exception:
-            return []
+
+            empty = empty or []
+            if empty:
+                logger.warning(
+                    f"PRE-SUBMIT GUARD: {len(empty)} required field(s) still empty: {empty}"
+                )
+            else:
+                logger.info("PRE-SUBMIT GUARD: All required fields filled — OK to submit")
+            return empty
+
+        except Exception as e:
+            logger.debug(f"Required fields check failed: {e}")
+            return []  # Don't block submit on check failure
 
     async def scroll_to_bottom(self, page: Page):
         """Scroll to bottom of page."""
@@ -379,37 +434,12 @@ class BaseHandler(ABC):
             logger.debug(f"Failed to take screenshot: {e}")
 
     async def is_job_closed(self, page: Page) -> bool:
-        """Check if job posting is closed/unavailable."""
-        closed_indicators = [
-            "position has been filled",
-            "no longer accepting",
-            "job has been closed",
-            "this position is closed",
-            "this job is no longer available",
-            "job posting has expired",
-            "requisition has been closed",
-            "role has been filled",
-            "sorry, we couldn't find",
-            "page not found",
-            "job not found",
-            "this posting has closed",
-            "no longer available",
-            "this job has been removed",
-            "application is no longer active",
-            "oops, you've gone too far",  # SmartRecruiters 404
-            "sorry, this job has expired",  # SmartRecruiters expired
-            "the page you are looking for doesn't exist",  # Workday 404
-            "page you are looking for doesn",  # Workday 404 variant
-            "something went wrong",  # Workday already-applied / error state
-            "this position is no longer",
-            "this role is no longer",
-            "job is no longer posted",
-            "posting has been removed",
-            "this opening has been filled",
-            "you have already submitted",
-            "already applied to this",
-        ]
+        """Check if job posting is closed/unavailable.
 
+        Uses detection.job_status.is_job_closed for text-pattern matching,
+        plus Playwright-specific checks (URL redirects, 404 headings,
+        Greenhouse-specific heuristics).
+        """
         try:
             current_url = page.url.lower()
 
@@ -418,11 +448,15 @@ class BaseHandler(ABC):
                 logger.info("Job appears closed: Greenhouse ?error=true redirect")
                 return True
 
-            page_text = (await page.text_content("body") or "").lower()
-            for indicator in closed_indicators:
-                if indicator in page_text:
-                    logger.info(f"Job appears closed: found '{indicator}'")
-                    return True
+            page_text = await page.text_content("body") or ""
+            if _check_job_closed(page_text):
+                # Log which indicator matched (for debugging)
+                page_text_lower = page_text.lower()
+                for indicator in CLOSED_JOB_INDICATORS:
+                    if indicator in page_text_lower:
+                        logger.info(f"Job appears closed: found '{indicator}'")
+                        break
+                return True
 
             # Check for explicit 404 page (h1 heading, not just "404" in body text
             # which can match job IDs like 744000104...)
@@ -596,7 +630,31 @@ class BaseHandler(ABC):
                 const result = {};
                 for (const el of document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="file"]), textarea, select')) {
                     const key = el.id || el.name || el.getAttribute('data-qa') || el.placeholder || '';
-                    if (key) result[key] = el.value || '';
+                    if (!key) continue;
+                    // Try multiple value sources to capture React-managed values
+                    let val = el.value || '';
+                    if (!val) val = el.getAttribute('value') || '';
+                    if (!val) {
+                        try {
+                            const fiberKey = Object.keys(el).find(k => k.startsWith('__reactFiber'));
+                            if (fiberKey) val = el[fiberKey]?.memoizedProps?.value || '';
+                        } catch(e) {}
+                    }
+                    // For select elements, capture selected option text
+                    if (el.tagName === 'SELECT' && el.selectedIndex >= 0) {
+                        const opt = el.options[el.selectedIndex];
+                        if (opt && opt.value) val = opt.value;
+                    }
+                    // For React-Select, capture displayed value
+                    if (!val) {
+                        let container = el.parentElement;
+                        for (let i = 0; i < 6 && container; i++) {
+                            const sv = container.querySelector('.select__single-value, [class*="singleValue"]');
+                            if (sv && sv.textContent.trim()) { val = sv.textContent.trim(); break; }
+                            container = container.parentElement;
+                        }
+                    }
+                    result[key] = val;
                 }
                 return result;
             }""")
@@ -653,7 +711,7 @@ class BaseHandler(ABC):
             if result.get('found'):
                 autofill_clicked = True
                 logger.info(f"Simplify Autofill clicked: '{result.get('clicked')}'")
-                await asyncio.sleep(2)
+                await asyncio.sleep(10)
             else:
                 # Step 2: Open the Simplify panel by clicking the widget, then search again
                 opened = await _open_simplify_panel()
@@ -665,7 +723,7 @@ class BaseHandler(ABC):
                     if result2.get('found'):
                         autofill_clicked = True
                         logger.info(f"Simplify Autofill clicked (post-open): '{result2.get('clicked')}'")
-                        await asyncio.sleep(2)
+                        await asyncio.sleep(10)
                     else:
                         # Step 3: Playwright shadow-piercing selectors as fallback
                         for autofill_sel in [
@@ -679,7 +737,7 @@ class BaseHandler(ABC):
                                     await btn.click(timeout=2000)
                                     autofill_clicked = True
                                     logger.info(f"Simplify Autofill clicked via Playwright: {autofill_sel}")
-                                    await asyncio.sleep(2)
+                                    await asyncio.sleep(10)
                                     break
                             except Exception:
                                 pass
@@ -716,7 +774,28 @@ class BaseHandler(ABC):
                 const result = {};
                 for (const el of document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="file"]), textarea, select')) {
                     const key = el.id || el.name || el.getAttribute('data-qa') || el.placeholder || '';
-                    if (key) result[key] = el.value || '';
+                    if (!key) continue;
+                    let val = el.value || '';
+                    if (!val) val = el.getAttribute('value') || '';
+                    if (!val) {
+                        try {
+                            const fiberKey = Object.keys(el).find(k => k.startsWith('__reactFiber'));
+                            if (fiberKey) val = el[fiberKey]?.memoizedProps?.value || '';
+                        } catch(e) {}
+                    }
+                    if (el.tagName === 'SELECT' && el.selectedIndex >= 0) {
+                        const opt = el.options[el.selectedIndex];
+                        if (opt && opt.value) val = opt.value;
+                    }
+                    if (!val) {
+                        let container = el.parentElement;
+                        for (let i = 0; i < 6 && container; i++) {
+                            const sv = container.querySelector('.select__single-value, [class*="singleValue"]');
+                            if (sv && sv.textContent.trim()) { val = sv.textContent.trim(); break; }
+                            container = container.parentElement;
+                        }
+                    }
+                    result[key] = val;
                 }
                 return result;
             }""")
@@ -728,6 +807,37 @@ class BaseHandler(ABC):
 
             net_filled = len(newly_filled) + len(changed)
             logger.info(f"Simplify filled {net_filled} fields ({len(newly_filled)} new, {len(changed)} updated)")
+
+            # Secondary verification via Playwright's input_value() on critical fields
+            # This catches React-managed values that JS el.value misses
+            if net_filled == 0 and autofill_clicked:
+                critical_selectors = {
+                    'first_name': 'input[name="first_name"], input[id*="first_name"], input[id*="firstName"], input[autocomplete="given-name"]',
+                    'last_name': 'input[name="last_name"], input[id*="last_name"], input[id*="lastName"], input[autocomplete="family-name"]',
+                    'email': 'input[name="email"], input[id*="email"], input[type="email"], input[autocomplete="email"]',
+                }
+                pw_filled = 0
+                for field_name, sel in critical_selectors.items():
+                    try:
+                        el = await page.query_selector(sel)
+                        if el:
+                            pw_val = await page.evaluate("el => el.value", el)
+                            if not pw_val:
+                                pw_val = await el.input_value()
+                            before_val = ""
+                            # Check if this field had a value before
+                            for bk, bv in before_snapshot.items():
+                                if field_name.replace('_', '') in bk.lower().replace('_', ''):
+                                    before_val = bv
+                                    break
+                            if pw_val and pw_val.strip() and pw_val != before_val:
+                                pw_filled += 1
+                                logger.info(f"[SIMPLIFY PW-VERIFY] {field_name} filled: '{pw_val}'")
+                    except Exception as e:
+                        logger.debug(f"PW verify failed for {field_name}: {e}")
+                if pw_filled > 0:
+                    net_filled = pw_filled
+                    logger.info(f"Simplify actually filled {pw_filled} critical field(s) (detected via Playwright input_value)")
 
             # Flag anything Simplify filled that looks wrong
             for field_key, value in {**newly_filled, **changed}.items():

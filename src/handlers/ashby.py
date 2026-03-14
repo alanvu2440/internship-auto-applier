@@ -31,12 +31,16 @@ class AshbyHandler(BaseHandler):
     ASHBY_API_BASE = "https://jobs.ashbyhq.com/api"
 
     # Re-enabled with fresh SJSU email (different domain from burned Gmail aliases).
-    # BURNED: alanvu2440@gmail.com, +ashby1, +ashby2, +ashby3 — all flagged
+    # BURNED: user@example.com, +ashby1, +ashby2, +ashby3 — all flagged
     # Rate limit: MAX 3/hour, 5+ minute gaps between applications
     ASHBY_DISABLED = False
 
     # Fresh email — completely different domain, no alias pattern
-    ASHBY_EMAIL_ALIAS = "alan.vu@sjsu.edu"
+    _ASHBY_EMAIL_ALIAS_FALLBACK = "user@university.edu"
+
+    @property
+    def ASHBY_EMAIL_ALIAS(self):
+        return self.form_filler.config.get("personal_info", {}).get("email", "") or self._ASHBY_EMAIL_ALIAS_FALLBACK
 
     # Track spam flags per session — if we get flagged, stop ALL Ashby immediately
     _spam_flag_count = 0
