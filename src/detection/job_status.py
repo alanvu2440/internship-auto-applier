@@ -36,7 +36,7 @@ CLOSED_JOB_INDICATORS: List[str] = [
     "this job has expired",                             # SmartRecruiters generic
     "the page you are looking for doesn't exist",       # Workday 404
     "page you are looking for doesn",                   # Workday 404 variant
-    "something went wrong",                             # Workday error state
+    "something went wrong with your application",        # Workday permanent error (not transient)
     "this position is no longer",
     "this role is no longer",
     "job is no longer posted",
@@ -136,8 +136,9 @@ def is_application_complete(text: str) -> bool:
         if indicator in text_lower:
             return True
 
-    # Fallback: bare "thank you" only on short pages (likely a confirmation page)
+    # Fallback: "thank you" paired with application-related words on short pages
     if "thank you" in text_lower and len(text_lower.split()) < 200:
-        return True
+        if any(kw in text_lower for kw in ["application", "applying", "submitted", "applied", "candidacy", "interest in"]):
+            return True
 
     return False

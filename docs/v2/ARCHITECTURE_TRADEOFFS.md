@@ -1,7 +1,7 @@
 # Browser Architecture Tradeoffs
 
 > Last updated: 2026-03-14
-> Decision status: PENDING — user choosing approach
+> Decision status: DECIDED — Option A implemented (dual browser)
 
 ---
 

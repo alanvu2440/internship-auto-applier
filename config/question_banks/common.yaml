@@ -69,7 +69,7 @@ questions:
   : answer: 'Yes'
     type: select
   ? are you currently based in any of these countries? please note these are the only countries where we are accepting applications
-  : answer: San Jose, CA
+  : answer: 'Yes'
     type: select
   ? are you currently employed by, or have you previously been employed by, volkswagen group or any of its subsidiaries, including but not limited to scout motors, audi, porsche, bentley, ducati, cupra,
     seat, or škoda?
@@ -128,7 +128,7 @@ questions:
   : answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy
     type: textarea
   ? 'astranis complies with u.s. government space technology export regulations, therefore will you state which of the following applies to you:'
-  : answer: As an AI, I cannot truthfully answer this quest...
+  : answer: United States — citizen since birth
     type: select
   ? at astranis, we value in-person collaboration and a strong work ethic. are you comfortable with working onsite at our san francisco hq 5 days a week?
   : answer: 'Yes'
@@ -138,7 +138,7 @@ questions:
     type: textarea
   ? because this position may have itar restrictions per the type of work that is required, do you require any additional sponsorship for us citizenship, permanent residence, or anything regarding a protected
     category at this time or going forward?
-  : answer: 'Yes'
+  : answer: 'No'
     type: select
   ? 'by checking this box, i confirm that i have read and understood the information regarding u.s. export control laws and regulations as outlined above.: by checking this box, i confirm that i have read
     and understood the information regarding u.s. export control laws and regulations as outlined above.'
@@ -201,7 +201,7 @@ questions:
     answer: San Jose, CA
     type: select
   ? do you currently work under any agreement, such as a non-compete agreement, which would restrict your employment with a toshiba company?
-  : answer: Kruiz
+  : answer: 'No'
     type: select
   ? do you have any conflicts of interest that could affect your ability to perform the duties of the role you are applying for at scout motors, including financial interests held by you or your immediate
     family in competitors, vendors, or clients relevant to this role, or any personal or professional relationships that could create a conflict? please describe any such conflicts.
@@ -215,7 +215,7 @@ questions:
     answer: 'No'
     type: select
   do you have experience with python and/or github?:
-    answer: GITHUB_FROM_CONFIG
+    answer: 'Yes'
     type: select
   do you have legal authorization to work in the united states?:
     answer: 'Yes'
@@ -227,7 +227,7 @@ questions:
     answer: 'Yes'
     type: select
   do you hold a security clearance?:
-    answer: 'Yes'
+    answer: 'No'
     type: select
   do you live in one of the following states?:
     answer: 'No'
@@ -254,7 +254,7 @@ questions:
     answer: '3.6'
     type: select
   does your current or completed degree program align with this internship? (if yes, please specify your major):
-    answer: May 2026
+    answer: 'Yes'
     type: select
   due to regulating employment of minors or establishing age requirements for certain tasks, are you age 18 or over?:
     answer: 'Yes'
@@ -276,7 +276,7 @@ questions:
   : answer: 'Yes'
     type: select
   first name:
-    answer: Alan
+    answer: FIRST_NAME_FROM_CONFIG
     type: text
   for program 1 and 2 you will need genai experience.:
     answer: I have 3 years of coding experience and have worked with technologies like React.js, Node.js, Express.js.
@@ -330,7 +330,7 @@ questions:
   : answer: While my primary experience is in software engineering, I apply principles of modularity and clear interface definition
     type: textarea
   how many hours per week can you reliably commit? are there specific days or times you are unavailable?:
-    answer: I can reliably commit 40 hours per week. I am generally available during standard business
+    answer: 40
     type: select
   ? how many years of experience do you have in electrical engineering, computer engineering, computer science, or a similar field?
   : answer: '2'
@@ -350,7 +350,7 @@ questions:
     that ai2 will adhere to the provisions of the fair credit reporting act, if applicable, and other applicable state and federal statutes concerning the securing of information, handling, utilization,
     and release of information obtained in the pre-employment investigation. i understand that any material misrepresentation or omission on this application may be grounds for rejection of my application
     or termination of any subsequent employment with ai2.
-  : answer: 'No'
+  : answer: 'Yes'
     type: select
   ? i understand and agree that knowbe4 does not permit the use of ai tools or assistance during the interview process. exceptions may be made for approved reasonable accommodations (please visit www.knowbe4.com/careers/request-accommodation
     to make a request).
@@ -380,7 +380,7 @@ questions:
   : answer: 'No'
     type: textarea
   if you are a dual citizen, what other country are you a citizen of?:
-    answer: 'Yes'
+    answer: Vietnam
     type: select
   ? if you are a veteran of the armed forces in your country and would like to identify this fact to our recruiting team, please select one of the options below
   : answer: No, I am not a veteran.
@@ -423,7 +423,7 @@ questions:
   : answer: N/A
     type: textarea
   last name:
-    answer: Vu
+    answer: LAST_NAME_FROM_CONFIG
     type: text
   ? link to video submission (loom, google drive, private youtube link, etc.) - please make sure all appropriate permissions are given. we look forward to watching!
   : answer: 'Yes'
@@ -438,7 +438,7 @@ questions:
     answer: '3.6'
     type: input
   phone number:
-    answer: (222) 555-0123
+    answer: PHONE_FROM_CONFIG
     type: text
   ? please confirm you are aware this is an on-site, paid internship, in our reston, va headquarters for 12 weeks, summer of 2026.
   : answer: 'Yes'
@@ -464,7 +464,7 @@ questions:
     type: select
   ? please tell us about a research project that you’ve worked on in the past few years that you found exciting and important. the project does not need to be in machine reasoning, nlp, or even in ai. please
     use 100 words or less, and include a url to any paper/code/blog/video/website where we can learn more about this work.
-  : answer: '**Source:** cache | **Type:** textarea | **Company:** The Allen Institute for AI'
+  : answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy using XGBoost, neural networks, and Elo models trained on 20,000+ fights. The system processes real-time odds data through automated pipelines and serves predictions via a Flask API.
     type: textarea
   ? please tell us about one research question or problem that you’d be excited to work on with our team and why you think this problem is important, challenging, and relevant to our efforts. importantly,
     your answer is not a commitment to future work; it’s only meant as a way for us to learn about your interests and gauge their alignment to ours. please limit your answer to 200 words.
@@ -507,7 +507,7 @@ questions:
   : answer: Open to discuss
     type: select
   ? this internship requires daily attendance in office with in-person meetings and events, as outlined in the job description. are you able to meet the on-site requirements for this role?
-  : answer: 'No'
+  : answer: 'Yes'
     type: select
   ? this internship requires individuals to work full-time in our portland, maine office. are you able to relocate to the greater portland, maine area for the summer and work in the office 5 days per week?
   : answer: 'Yes'
@@ -658,13 +658,13 @@ questions:
     answer: 'No'
     type: select
   will you now, or in the future, require sponsorship (i.e. h-1b visa, etc.) to legally work in the u.s.?:
-    answer: 'Yes'
+    answer: 'No'
     type: select
   will you now, or in the future, require sponsorship for employment or a visa transfer (e.g., h-1b or other work visa)?:
     answer: 'No'
     type: select
   ? will you require commvault to sponsor a work visa or work authorization for you to be employed in the country where the role is located?
-  : answer: San Jose, CA
+  : answer: 'No'
     type: select
   'will you require immigration sponsorship within the next 3-7 years for work authorization? (for example: f1, h1b, h4)':
     answer: 'No'
@@ -701,7 +701,7 @@ questions:
   : answer: 'No'
     type: select
   your authorization to work in the country where you live. please choose the option that describes your work authorization.:
-    answer: San Jose, CA
+    answer: 'Yes'
     type: select
   ? ​if you provided a phone number, do you consent to receiving follow-up communication via text message (or sms message) regarding your application status?
   : answer: 'Yes'

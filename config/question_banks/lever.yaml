@@ -41,10 +41,10 @@ questions:
     answer: 'No'
     type: select
   'beta career site: college fair':
-    answer: SCHOOL_FROM_CONFIG
+    answer: 'No'
     type: select
   'beta career site: college job posting platform (e.g. handshake)':
-    answer: SCHOOL_FROM_CONFIG
+    answer: 'Yes'
     type: select
   'beta career site: linkedin':
     answer: LINKEDIN_FROM_CONFIG
@@ -56,26 +56,26 @@ questions:
     answer: 'Yes'
     type: select
   ? 'built structured python applications using modules, classes, and clearly defined inputs/outputs: built structured python applications using modules, classes, and clearly defined inputs/outputs'
-  : answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy
+  : answer: 'Yes'
     type: select
   ? 'built structured python applications using modules, classes, and clearly defined inputs/outputs: implemented error handling and logging in production-oriented code'
-  : answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy
+  : answer: 'Yes'
     type: select
   'built structured python applications using modules, classes, and clearly defined inputs/outputs: none of the above':
-    answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy
+    answer: 'No'
     type: select
   ? 'built structured python applications using modules, classes, and clearly defined inputs/outputs: primarily written exploratory scripts or notebooks'
-  : answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy
+  : answer: 'Yes'
     type: select
   ? 'built structured python applications using modules, classes, and clearly defined inputs/outputs: processed structured data (csv, json, logs, images) using libraries such as pandas or numpy'
-  : answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy
+  : answer: 'Yes'
     type: select
   ? 'by checking this box, i confirm that i have read and understood the information regarding u.s. export control laws and regulations as outlined above.: by checking this box, i confirm that i have read
     and understood the information regarding u.s. export control laws and regulations as outlined above.'
   : answer: United States — citizen since birth
     type: select
   currently enrolled in a master's program:
-    answer: 'Yes'
+    answer: 'No'
     type: select
   'employer alignment: learner voice and community':
     answer: 'No'
@@ -150,10 +150,10 @@ questions:
     answer: 'Yes'
     type: select
   'i live outside of the united states: i live outside of the united states':
-    answer: 'Yes'
+    answer: 'No'
     type: select
   'i understand and agree: i do not agree':
-    answer: 'Yes'
+    answer: 'No'
     type: select
   'i understand and agree: i understand and agree':
     answer: 'Yes'
@@ -168,7 +168,7 @@ questions:
     answer: 'No'
     type: select
   instagram url:
-    answer: '**Source:** config_fallback | **Type:** text | **Company:** Tekton'
+    answer: N/A
     type: text
   'ios: machine learning':
     answer: 'No'
@@ -189,7 +189,7 @@ questions:
     answer: N/A
     type: text
   other/autres url:
-    answer: '**Source:** config_fallback | **Type:** text | **Company:** Cirque du Soleil'
+    answer: N/A
     type: text
   portfolio (artstation, github, personal website etc) url:
     answer: GITHUB_FROM_CONFIG
@@ -201,7 +201,7 @@ questions:
     answer: I'm enthusiastic about Sunwater Capital's mission. My data engineering experience at Kruiz and
     type: text
   tiktok url:
-    answer: '**Source:** config_fallback | **Type:** text | **Company:** WebFX'
+    answer: N/A
     type: text
   transcripts (if applying for co-op/internship) url:
     answer: N/A
@@ -234,7 +234,7 @@ questions:
     answer: East Asian
     type: select
   'white / caucasian: white / caucasian':
-    answer: 'Yes'
+    answer: 'No'
     type: select
   x url:
     answer: N/A

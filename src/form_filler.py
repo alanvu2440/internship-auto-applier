@@ -1079,7 +1079,7 @@ class FormFiller:
                     if value:
                         # Check if already filled (e.g. by Simplify extension) — don't override
                         current_value = await element.input_value()
-                        if current_value and len(current_value.strip()) > 2:
+                        if current_value and len(current_value.strip()) > 0:
                             logger.debug(f"Text field '{name or id_attr}' already filled with '{current_value}' — preserving")
                             filled[name or id_attr or placeholder] = current_value
                             continue
@@ -1114,7 +1114,8 @@ class FormFiller:
                 if value:
                     # Check if already selected (e.g. by Simplify) — don't override
                     current_val = await element.input_value()
-                    if current_val and current_val.strip() and current_val != "0" and current_val != "":
+                    placeholder_values = {"0", "", "select", "select...", "choose", "please select", "please choose", "--", "- select -", "- choose -"}
+                    if current_val and current_val.strip() and current_val.strip().lower() not in placeholder_values:
                         logger.debug(f"Dropdown '{name or id_attr}' already has value '{current_val}' — preserving")
                         filled[name or id_attr] = current_val
                         continue

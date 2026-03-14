@@ -61,6 +61,10 @@ class OptionMatcher:
                 for i, opt in enumerate(options_lower):
                     if "permanent" in opt or "authorized" in opt:
                         return options[i]
+            else:
+                for i, opt in enumerate(options_lower):
+                    if "no" in opt:
+                        return options[i]
 
         # Work permit type / authorization type (conditional follow-up)
         if any(x in q for x in ["work permit", "permit type", "authorization type", "work authorization"]):
@@ -87,6 +91,10 @@ class OptionMatcher:
             if availability.get("willing_to_relocate", True):
                 for i, opt in enumerate(options_lower):
                     if "yes" in opt:
+                        return options[i]
+            else:
+                for i, opt in enumerate(options_lower):
+                    if "no" in opt:
                         return options[i]
 
         # Age questions
