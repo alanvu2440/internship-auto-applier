@@ -3,7 +3,7 @@ description: Pre-mapped questions for smartrecruiters forms
 questions:
   ? 1. in the past three years from today’s date, have you been employed by a private sector organization/company & personally participated in a bid, proposal, capture, or competition for any program(s)
     in which northrop grumman may be/has been a competitor?
-  : answer: 'Yes'
+  : answer: ‘No’
     type: dropdown
   ? 2. are you currently employed or have you been employed in the past five years by a state or local government entity (other than temporary summer or part-time positions, e.g. lifeguard, emt, not involved
     in government contracting/procurement activities)?
@@ -11,10 +11,10 @@ questions:
     type: dropdown
   ? 3. in the past five years, have you worked for the u.s. government in a seta, a&as, special government employee, or similar capacity, or as part of the information technology exchange program or similar
     u.s. government program?
-  : answer: Yes, and I do not have an NDA in this capacity
+  : answer: 'No'
     type: dropdown
   3.7 - 4.0:
-    answer: 3.3 - 3.69
+    answer: 'No'
     type: select
   ? 4. have you ever been employed by the u.s. government in either a civilian or military capacity, or served in the reserve or guard component of the u.s. armed services?
   : answer: 'No'
@@ -44,7 +44,7 @@ questions:
     answer: 'No'
     type: dropdown
   are you a relative or close friend of any parsons customer, subcontractor or vendor?:
-    answer: 'Yes'
+    answer: 'No'
     type: dropdown
   ? are you a tobacco user? tobacco products include, but are not limited to; cigarettes (of any kind including herbal/spice cigarettes), cigars, pipes, electronic cigarettes/vaping, smokeless tobacco,
     snuff, and chewing tobacco. please note that swbc does not hire tobacco users as allowed by law.
@@ -60,7 +60,7 @@ questions:
     answer: 'Yes'
     type: select
   ? are you currently based in any of these countries? please note these are the only countries where we are accepting applications
-  : answer: San Jose, CA
+  : answer: 'Yes'
     type: select
   are you currently enrolled in a bachelors or masters program and will be returning back to school fall/winter 2026?:
     answer: 'Yes'
@@ -75,7 +75,7 @@ questions:
     and/or participated personally and substantially in a procurement or contract valued at more than $10 million.• executive service position• senior executive service position• general or flag officer
     at pay grade o7 or above• program manager• deputy program manager• procuring contracting officer• administrative contracting officer• source selection official/authority/member of a source selection
     evaluation board• chief of a technical or financial evaluation team
-  : answer: 'Yes'
+  : answer: 'No'
     type: dropdown
   are you currently the owner or employee of any outside company that is currently or formerly doing business with parsons?:
     answer: 'No'
@@ -132,17 +132,17 @@ questions:
     answer: December 2026
     type: select
   do you currently hold a us security clearance?:
-    answer: 'Yes'
+    answer: 'No'
     type: dropdown
   ? 'do you currently need – or will you need in the future – any immigration support or sponsorship from applied materials, inc. to work here? this includes the following: (1) j-1 or f-1 (cpt or stem opt);
     (2) employment visas (h-1b, h-1b1, e-3, o-1, tn); or (3) ead holders who will need long-term work authorization (like a temporary work visa or green card).'
   : answer: 'No'
     type: dropdown
   do you currently possess an active security clearance?:
-    answer: No, I do not possess an active security clearance.
+    answer: 'No'
     type: dropdown
   do you currently work for a news corp company? if you select “yes” see the question below.:
-    answer: 'Yes'
+    answer: 'No'
     type: dropdown
   do you have a current security clearance?:
     answer: 'No'
@@ -151,7 +151,7 @@ questions:
     answer: 'No'
     type: dropdown
   ? do you have any commitments to another employer or organization which might interfere with our affect your employment with us?
-  : answer: 'Yes'
+  : answer: 'No'
     type: dropdown
   do you have any relatives employed at cadence?:
     answer: 'No'
@@ -172,7 +172,7 @@ questions:
     answer: 'Yes'
     type: select
   ? do you serve as a director, officer, adviser, consultant, partner or investor of greater than 5% of any for-profit company or venture?
-  : answer: 'Yes'
+  : answer: 'No'
     type: dropdown
   'doctorate gpa: please convert your gpa to a 4.0 scale. select "not applicable" if you do not have a doctorate gpa':
     answer: '3.6'
@@ -181,11 +181,8 @@ questions:
     answer: 'No'
     type: select
   ? 'engineering organization involvement: indicate if you are an active participant in any of the following engineering student groups or competitions listed below:'
-  : answer: Given the lack of specific information in the c...
+  : answer: 'No'
     type: select
-  enter website. this input is for robots only, do not enter if you're human.:
-    answer: '**Source:** config_fallback | **Type:** textarea | **Company:** Unknown'
-    type: textarea
   facebook:
     answer: N/A
     type: input
@@ -199,10 +196,10 @@ questions:
     answer: GITHUB_FROM_CONFIG
     type: text
   government separation from service date:
-    answer: 'No'
+    answer: N/A
     type: input
   government start date:
-    answer: May 2026
+    answer: N/A
     type: text
   'graduate gpa: please convert your gpa to a 4.0 scale. select "not applicable" if you do not have a graduate gpa':
     answer: '3.6'
@@ -212,14 +209,14 @@ questions:
   : answer: 'No'
     type: dropdown
   ? have you been suspended or debarred (or proposed to be suspended or debarred) from doing business with any governmental entity, including a state, federal or international entity?
-  : answer: 'Yes'
+  : answer: 'No'
     type: dropdown
   have you ever applied for work at cadence?:
-    answer: 'Yes'
+    answer: 'No'
     type: dropdown
   ? have you ever been an amentum employee? please include employment by any of the companies or businesses that ultimately became part of amentum by virtue of mergers, acquisitions, joint ventures, or
     other corporate transactions.
-  : answer: 'Yes'
+  : answer: 'No'
     type: dropdown
   ? have you ever been convicted of a felony, or a misdemeanor involving any violent act, use or possession of a weapon or act of dishonesty for which the record has not been sealed or expunged?
   : answer: 'No'
@@ -238,19 +235,19 @@ questions:
     answer: 'No'
     type: dropdown
   have you ever held a security clearance?:
-    answer: No, never held a clearance
+    answer: 'No'
     type: dropdown
   have you ever performed services for northrop grumman as a contractor or as a consultant?:
-    answer: 'Yes'
+    answer: 'No'
     type: dropdown
   have you ever served or are you currently serving in the united states military?:
-    answer: 'Yes'
+    answer: 'No'
     type: dropdown
   have you ever worked at applied materials as a regular employee, contingent worker, intern, etc.?:
     answer: 'No'
     type: radio
   have you ever worked at cadence?:
-    answer: 'Yes'
+    answer: 'No'
     type: dropdown
   have you previously been employed by, or worked as a contractor or temporary employee for, swbc?:
     answer: 'No'
@@ -262,7 +259,7 @@ questions:
     answer: 'No'
     type: select
   have you previously worked for a news corp company?:
-    answer: Kruiz
+    answer: 'No'
     type: radio
   have you previously worked for caci (including subsidiaries or affiliates)?:
     answer: 'No'
@@ -271,16 +268,16 @@ questions:
     answer: While I haven't directly used Vercel or Next.js, I have extensive experience with
     type: textarea
   'highest level clearance previously obtained/currently held:':
-    answer: 'No'
+    answer: None
     type: dropdown
   how did you hear about this role?:
     answer: Online Job Board
     type: select
   how many hours per week can you reliably commit? are there specific days or times you are unavailable?:
-    answer: I can reliably commit 40 hours per week. I am generally available during standard business
+    answer: 40
     type: select
   i have the right to work in the country of employment on a permanent basis:
-    answer: I will require sponsorship or other immigration support to obtain the right to work in the country of employment
+    answer: I have the right to work in the country of employment on a permanent basis
     type: select
   if hired for this position, are you willing to self-relocate?:
     answer: 'Yes'
@@ -322,19 +319,16 @@ questions:
     answer: Monday through Friday, 8:00 AM - 5:00 PM
     type: textarea
   'military dates of service: from':
-    answer: 'No'
+    answer: N/A
     type: input
   'military dates of service: to':
-    answer: 'No'
+    answer: N/A
     type: input
   ? outside of university coursework, what amount of software engineering experience do you have? this can include research/ laboratory work, and/or personal/team project experience.
   : answer: I built Scorecard, an AI boxing prediction engi...
     type: select
   overall result (gpa):
     answer: '3.6'
-    type: input
-  password:
-    answer: As an AI, I cannot provide a password for you. Please choose a strong, unique password for your account to ensure security.
     type: input
   phone number:
     answer: PHONE_FROM_CONFIG
@@ -343,7 +337,7 @@ questions:
   : answer: Confirmed.
     type: select
   please list name(s) and nature of relationship(s).:
-    answer: Professional references from former supervisors, professors, and colleagues are available upon request. These individuals can speak to my strong technical skills, collaborative spirit, and dedication
+    answer: N/A
       to software engineering.
     type: textarea
   please select the ethnicity which most accurately describes how you identify yourself.:
@@ -353,7 +347,7 @@ questions:
     answer: Student
     type: select
   please specify:
-    answer: As the question "Please specify" is incomplete and lacks context or options, I cannot provide
+    answer: N/A
     type: select
   ? please tell us in a few sentences about the most impressive thing that you have built or achieved. (if you are describing a team effort or group project, please be specific about your personal contribution.)
   : answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy
@@ -368,12 +362,11 @@ questions:
     will only be accepted from fully accredited institutions.
   : answer: Bachelor of Science
     type: dropdown
-  ? 'solely for the purpose of determining if an export control license is needed, please indicate “yes” if you are currently a citizen of any of the following countries: iran, syria, n. korea, cuba, ukraine,
-    people’s republic of china, hong kong (china), macau (china) or russia.'
-  : answer: 'Yes'
+  solely for the purpose of determining if an export control license is needed please indicate yes if you are currently a citizen of iran syria n. korea cuba ukraine china hong kong macau or russia:
+    answer: ‘No’
     type: dropdown
   terminal leave date, if applicable:
-    answer: N/A, I am a student graduating May 2026 and seeking new opportunities
+    answer: N/A
     type: input
   ? 'the below survey requests information from you so that caci can fulfill its obligations to mitigate, avoid or eliminate any conflict before assigning you to support one of caci''s federal government
     projects. please select the appropriate value regarding your employment history with the u.s. government:'
@@ -416,10 +409,10 @@ questions:
     type: dropdown
   ? to help us comply with company policies, do you have any family members, relatives, or close relationships with individuals currently employed by any news corp entity? if yes, please enter the name(s)
     of those you have a relationship with.
-  : answer: 'Yes'
+  : answer: 'No'
     type: textarea
   transition leave date, if applicable:
-    answer: Not applicable, as I am not currently on transition leave.
+    answer: N/A
     type: input
   twitter share:
     answer: N/A
@@ -427,9 +420,6 @@ questions:
   type of employment desired.:
     answer: Intern
     type: dropdown
-  verify new password:
-    answer: As an AI, I do not have access to Alan's personal security information. Please enter
-    type: input
   what intrigues you the most about being a data engineer?:
     answer: I'm drawn to the innovative work being done at this company and see a strong
     type: textarea
@@ -446,7 +436,7 @@ questions:
     answer: Rising Junior
     type: select
   ? what is your current base salary/hourly rate? did you receive any bonus, commission, or other additional compensation in the prior 12 months?
-  : answer: I'm a U.S. citizen available to start full-time in May 2026 and flexible on location.
+  : answer: N/A - currently a student
     type: textarea
   ? what is your desired annual base salary? please specify currency before the amount. (e.g. aud 50,000 or gbp 50,000 or usd 50,000 or inr 50,000)
   : answer: N/A
@@ -464,19 +454,19 @@ questions:
     answer: Software Engineer - Computer Science, Computer Engineering
     type: dropdown
   what type of opportunity are you looking for?:
-    answer: 'Yes'
+    answer: Internship
     type: dropdown
   ? what year will you be graduating or expecting to graduate? this includes any anticipated, but not yet commenced studies e.g. a masters (even if you are still in the process of applying or awaiting confirmation).
-  : answer: 'No'
+  : answer: '2026'
     type: select
   when could you start?:
     answer: May 2026
     type: input
   ? which available location(s) on the posting are you open to relocating to? please only select locations that are listed on the posting. type city and states below (e.g. palmdale, ca).
-  : answer: '3.6'
+  : answer: San Jose, CA
     type: textarea
   which of the following describes your gender?:
-    answer: Female
+    answer: Male
     type: dropdown
   will you consent to a background check? (all offers of employment are contingent on passing a background check):
     answer: 'Yes'
@@ -502,7 +492,7 @@ questions:
     answer: 'No'
     type: dropdown
   will you require immigration support to maintain work authorization:
-    answer: 'Yes'
+    answer: 'No'
     type: dropdown
   would you be willing to consent to a background check?:
     answer: 'Yes'
@@ -517,5 +507,5 @@ questions:
     answer: I am authorized to work permanently in the country
     type: dropdown
   your authorization to work in the country where you live. please choose the option that describes your work authorization.:
-    answer: San Jose, CA
+    answer: I am authorized to work permanently in the country
     type: select

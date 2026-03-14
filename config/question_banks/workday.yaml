@@ -88,7 +88,7 @@ questions:
     answer: '2'
     type: dropdown
   how much are you willing to travel ?:
-    answer: 'Yes'
+    answer: 25%
     type: dropdown
   ? how much prior leadership experience do you have (leading people and/or projects in a classroom, student organization, or business environment)?
   : answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy
@@ -104,10 +104,10 @@ questions:
     answer: N/A
     type: input
   'if previously employed by a first american company, please provide company name(s):':
-    answer: Kruiz
+    answer: N/A
     type: textarea
   if so, what is the workday requisition number on the risc intern agreement?:
-    answer: As I am currently applying for the ARLIS RISC Intern position, I have not yet
+    answer: N/A
     type: textarea
   ? 'if you would like to explain any gap in employment, you may do so here (please be aware that periods of unemployment on their own shall not necessarily disqualify you from the position(s) for which
     you have applied.):'
@@ -117,10 +117,10 @@ questions:
     answer: Software Developer Intern
     type: input
   language:
-    answer: English (fluent), Vietnamese (conversational)
+    answer: English
     type: dropdown
   'most recent position - reason for leaving:':
-    answer: Data Engineer
+    answer: Seeking internship opportunity
     type: textarea
   overall result (gpa):
     answer: '3.6'
@@ -176,7 +176,7 @@ questions:
     answer: Year 4 / Senior
     type: dropdown
   what is your desired annual salary?:
-    answer: My desired annual salary is flexible and open to discussion, depending on the overall compensation package and benefits
+    answer: Open to discuss
     type: textarea
   what is your desired start date?:
     answer: May 2026
@@ -197,10 +197,10 @@ questions:
     answer: '3.6'
     type: dropdown
   what position type are you applying to?:
-    answer: 'Yes'
+    answer: Intern
     type: dropdown
   what was your ciena email address?:
-    answer: I do not have a Ciena email address as I have not previously worked for Ciena.
+    answer: N/A
     type: input
   which of the core engineering/applied sciences disciplines are you currently majoring in or do you possess?:
     answer: Software Engineering
