@@ -505,3 +505,140 @@ questions:
   your authorization to work in the country where you live. please choose the option that describes your work authorization.:
     answer: I am authorized to work permanently in the country
     type: select
+
+  # === Universal SR screening questions (Continental pattern) ===
+  are you currently enrolled in a us accredited university/college degree program?:
+    answer: 'Yes'
+    type: select
+  do you currently have a cumulative 2.8 gpa or higher out of a 4.0 scale?:
+    answer: 'Yes'
+    type: select
+  when is your projected graduation date?:
+    answer: 'May 2026'
+    type: text
+  are you a returning intern with continental?:
+    answer: 'No'
+    type: select
+  are you a returning intern?:
+    answer: 'No'
+    type: select
+  are you an international student on an f-1 visa (cpt/opt)?:
+    answer: 'No'
+    type: select
+  are you an international student?:
+    answer: 'No'
+    type: select
+  as of what date are you available to start?:
+    answer: 'June 2026'
+    type: text
+  when are you available to start?:
+    answer: 'June 2026'
+    type: text
+  what is your earliest available start date?:
+    answer: 'June 2026'
+    type: text
+  are you continental employee?:
+    answer: 'No'
+    type: select
+  are you a current employee?:
+    answer: 'No'
+    type: select
+  are you a current employee of this company?:
+    answer: 'No'
+    type: select
+  have you previously worked for this company?:
+    answer: 'No'
+    type: select
+  my pronouns are:
+    answer: 'He/Him'
+    type: text
+  what are your preferred pronouns?:
+    answer: 'He/Him'
+    type: text
+  # EEOC / demographics
+  gender:
+    answer: 'Male'
+    type: select
+  what is your gender?:
+    answer: 'Male'
+    type: select
+  ethnicity - are you hispanic or latino?:
+    answer: 'No'
+    type: select
+  are you hispanic or latino?:
+    answer: 'No'
+    type: select
+  "race - if you answered \"no\" to the above question regarding ethnicity, please select one of the following:":
+    answer: 'Asian (Not Hispanic or Latino)'
+    type: select
+  what is your race/ethnicity?:
+    answer: 'Asian'
+    type: select
+  please indicate below whether you belong to any of the four (4) categories of protected veterans listed above.:
+    answer: 'I am not a protected veteran'
+    type: select
+  voluntary self-identification of covered veteran status:
+    answer: 'I am not a protected veteran'
+    type: select
+  are you a protected veteran?:
+    answer: 'No'
+    type: select
+  please choose your answer:
+    answer: 'I do not want to answer'
+    type: select
+  voluntary self-identification of disability:
+    answer: 'I do not want to answer'
+    type: select
+  do you have (or have a history/record of having) a disability?:
+    answer: 'I do not want to answer'
+    type: select
+  # Common screening - enrollment/education
+  are you currently enrolled in a degree program?:
+    answer: 'Yes'
+    type: select
+  are you currently pursuing a degree?:
+    answer: 'Yes'
+    type: select
+  what is your expected graduation date?:
+    answer: 'May 2026'
+    type: text
+  expected graduation date:
+    answer: 'May 2026'
+    type: text
+  what is your current gpa?:
+    answer: '3.5'
+    type: text
+  gpa:
+    answer: '3.5'
+    type: text
+  cumulative gpa:
+    answer: '3.5'
+    type: text
+  what university/college do you attend?:
+    answer: 'San Jose State University'
+    type: text
+  what is your major/field of study?:
+    answer: 'Software Engineering'
+    type: text
+  what degree are you pursuing?:
+    answer: "Bachelor's"
+    type: text
+  # Work authorization (common SR patterns)
+  are you legally authorized to work in the united states?:
+    answer: 'Yes'
+    type: select
+  are you authorized to work in the us?:
+    answer: 'Yes'
+    type: select
+  will you now or in the future require sponsorship?:
+    answer: 'No'
+    type: select
+  do you require visa sponsorship?:
+    answer: 'No'
+    type: select
+  are you 18 years of age or older?:
+    answer: 'Yes'
+    type: select
+  are you at least 18 years old?:
+    answer: 'Yes'
+    type: select
