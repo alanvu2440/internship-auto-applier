@@ -70,9 +70,9 @@ class CaptchaSolver:
                 if (match && match[1] !== 'explicit') return match[1];
             }
 
-            // Method 2: Check data-sitekey attribute
-            const el = document.querySelector('[data-sitekey]');
-            if (el) return el.getAttribute('data-sitekey');
+            // Method 2: Check data-sitekey attribute (exclude hCaptcha elements)
+            const el = document.querySelector('[data-sitekey]:not(.h-captcha):not([data-hcaptcha-widget-id])');
+            if (el && !el.closest('.h-captcha') && !el.id?.includes('hcaptcha')) return el.getAttribute('data-sitekey');
 
             // Method 3: Search HTML for reCAPTCHA key pattern
             const html = document.documentElement.innerHTML;
@@ -119,13 +119,19 @@ class CaptchaSolver:
                 }
             }
 
-            // Check for data-sitekey
-            const sitekeyEl = document.querySelector('[data-sitekey]');
+            // Check for data-sitekey (exclude hCaptcha elements)
+            const sitekeyEl = document.querySelector('[data-sitekey]:not(.h-captcha):not([data-hcaptcha-widget-id])');
             if (sitekeyEl) {
-                result.sitekey = sitekeyEl.getAttribute('data-sitekey');
-                result.hasRecaptcha = true;
-                const size = sitekeyEl.getAttribute('data-size');
-                if (size === 'invisible') result.isInvisible = true;
+                // Double-check this isn't an hCaptcha container
+                const isHcaptcha = sitekeyEl.closest('.h-captcha') ||
+                    sitekeyEl.querySelector('iframe[src*="hcaptcha"]') ||
+                    sitekeyEl.id?.includes('hcaptcha');
+                if (!isHcaptcha) {
+                    result.sitekey = sitekeyEl.getAttribute('data-sitekey');
+                    result.hasRecaptcha = true;
+                    const size = sitekeyEl.getAttribute('data-size');
+                    if (size === 'invisible') result.isInvisible = true;
+                }
             }
 
             // Check for grecaptcha.enterprise
