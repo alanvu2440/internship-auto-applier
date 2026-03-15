@@ -1713,18 +1713,54 @@ class SmartRecruitersHandler(BaseHandler):
                         var r = document.querySelectorAll('fieldset, [role="radiogroup"], spl-radio').length;
                         var hs = document.querySelectorAll('select').length;
                         var ac = document.querySelectorAll('spl-autocomplete').length;
-                        // Sample first 3 spl-select labels
+                        // Sample labels using sibling-walking approach
+                        function findLabel(el) {
+                            var lbl = el.getAttribute('label') || el.getAttribute('aria-label') || '';
+                            if (!lbl) {
+                                var prev = el.previousElementSibling;
+                                while (prev && !lbl) {
+                                    var ptag = prev.tagName.toLowerCase();
+                                    if (ptag === 'p' || ptag === 'label' || ptag === 'legend' || ptag === 'span') {
+                                        var ptxt = prev.textContent.trim();
+                                        if (ptxt.length > 2 && ptxt.length < 300) lbl = ptxt;
+                                    }
+                                    if (ptag === 'spl-input' || ptag === 'spl-select' || ptag === 'spl-textarea') break;
+                                    prev = prev.previousElementSibling;
+                                }
+                            }
+                            if (!lbl) {
+                                var par = el.parentElement;
+                                for (var u = 0; u < 3 && par && !lbl; u++) {
+                                    var kids = par.children;
+                                    for (var kk = 0; kk < kids.length; kk++) {
+                                        var kt = kids[kk].tagName.toLowerCase();
+                                        if ((kt === 'p' || kt === 'label' || kt === 'legend') && kids[kk] !== el) {
+                                            var tx = kids[kk].textContent.trim();
+                                            if (tx.length > 2 && tx.length < 300) { lbl = tx; break; }
+                                        }
+                                    }
+                                    par = par.parentElement;
+                                }
+                            }
+                            return lbl;
+                        }
                         var labels = [];
                         var sels = document.querySelectorAll('spl-select');
                         for (var j = 0; j < Math.min(sels.length, 5); j++) {
-                            var lbl = sels[j].getAttribute('label') || sels[j].getAttribute('aria-label') || '';
+                            var lbl = findLabel(sels[j]);
                             var sr = sels[j].shadowRoot;
                             var selIdx = sr ? (sr.querySelector('select') || {}).selectedIndex : -1;
                             labels.push(lbl.substring(0, 40) + '(idx=' + selIdx + ')');
                         }
+                        var inputLabels = [];
+                        var inps = document.querySelectorAll('spl-input');
+                        for (var j2 = 0; j2 < Math.min(inps.length, 5); j2++) {
+                            inputLabels.push(findLabel(inps[j2]).substring(0, 40));
+                        }
                         return 'spl-select:' + s + ' spl-input:' + i + ' spl-textarea:' + t +
                                ' spl-checkbox:' + cb + ' spl-autocomplete:' + ac + ' fieldset/radio:' + r + ' html-select:' + hs +
-                               ' labels=[' + labels.join(', ') + ']';
+                               ' select-labels=[' + labels.join(', ') + ']' +
+                               ' input-labels=[' + inputLabels.join(', ') + ']';
                     })()
                 """)
                 logger.info(f"Screening pre-scan: {prescan}")
@@ -1748,43 +1784,90 @@ class SmartRecruitersHandler(BaseHandler):
                     ];
 
                     function getLabel(el) {
-                        var lbl = el.getAttribute('label') || el.getAttribute('aria-label') || '';
+                        var lbl = '';
+
+                        // Strategy 1: element attributes
+                        lbl = el.getAttribute('label') || el.getAttribute('aria-label') || '';
+
+                        // Strategy 1b: shadow DOM internal label
                         if (!lbl && el.shadowRoot) {
                             var l = el.shadowRoot.querySelector('label, .label, legend');
                             if (l) lbl = l.textContent.trim();
                         }
-                        // Check parent for label (try multiple levels)
-                        if (!lbl) {
-                            var parent = el.closest('.field, .form-group, [class*="field"], [class*="question"], [class*="screening"], oc-question, fieldset, .spl-mb-1, .spl-flex-col');
-                            if (parent) {
-                                var l2 = parent.querySelector('label, legend, .label, p, span.question-text, [class*="question"], [class*="label"]');
-                                if (l2) lbl = l2.textContent.trim();
-                            }
-                        }
-                        // Try previous sibling elements (common pattern: label before select)
+
+                        // Strategy 2: walk previous siblings looking for <p>, <label>, <legend>, <span>
+                        // SR renders screening questions as <p>Question?</p> <spl-input>...
                         if (!lbl) {
                             var prev = el.previousElementSibling;
-                            if (prev && (prev.tagName === 'LABEL' || prev.tagName === 'P' || prev.tagName === 'SPAN' || prev.tagName === 'DIV')) {
-                                var ptxt = prev.textContent.trim();
-                                if (ptxt.length > 5 && ptxt.length < 300) lbl = ptxt;
+                            while (prev && !lbl) {
+                                var tag = prev.tagName.toLowerCase();
+                                if (tag === 'p' || tag === 'label' || tag === 'legend' || tag === 'span') {
+                                    var ptxt = prev.textContent.trim();
+                                    if (ptxt.length > 2 && ptxt.length < 300) {
+                                        lbl = ptxt;
+                                    }
+                                }
+                                // Stop walking if we hit another input element (belongs to previous question)
+                                if (tag === 'spl-input' || tag === 'spl-select' || tag === 'spl-textarea'
+                                    || tag === 'spl-radio' || tag === 'fieldset') {
+                                    break;
+                                }
+                                prev = prev.previousElementSibling;
                             }
                         }
-                        // Try parent's text content (for wrapper divs)
+
+                        // Strategy 3: walk up parents (up to 4 levels), look for child <p>/<label>/<legend>
+                        if (!lbl) {
+                            var parent = el.parentElement;
+                            for (var up = 0; up < 4 && parent && !lbl; up++) {
+                                var kids = parent.children;
+                                for (var k = 0; k < kids.length; k++) {
+                                    var ktag = kids[k].tagName.toLowerCase();
+                                    if ((ktag === 'p' || ktag === 'label' || ktag === 'legend' || ktag === 'span')
+                                        && kids[k] !== el) {
+                                        var txt = kids[k].textContent.trim();
+                                        if (txt.length > 2 && txt.length < 300) {
+                                            lbl = txt;
+                                            break;
+                                        }
+                                    }
+                                }
+                                parent = parent.parentElement;
+                            }
+                        }
+
+                        // Strategy 4: closest question/field container
+                        if (!lbl) {
+                            var container = el.closest('.field, .form-group, [class*="field"], [class*="question"], [class*="screening"], oc-question, fieldset, .spl-mb-1, .spl-flex-col');
+                            if (container) {
+                                var l2 = container.querySelector('label, legend, .label, p, span.question-text, [class*="question"], [class*="label"]');
+                                if (l2 && l2 !== el) lbl = l2.textContent.trim();
+                            }
+                        }
+
+                        // Strategy 5: parent's direct text nodes and non-input children
                         if (!lbl && el.parentElement) {
                             var ptext = '';
                             var pChildren = el.parentElement.childNodes;
                             for (var ci = 0; ci < pChildren.length; ci++) {
-                                if (pChildren[ci].nodeType === 3) { // Text node
+                                if (pChildren[ci].nodeType === 3) {
                                     ptext += pChildren[ci].textContent.trim() + ' ';
                                 } else if (pChildren[ci] !== el && pChildren[ci].tagName !== 'SPL-SELECT' &&
                                            pChildren[ci].tagName !== 'SPL-INPUT' && pChildren[ci].tagName !== 'INPUT') {
                                     var ctxt = (pChildren[ci].textContent || '').trim();
-                                    if (ctxt.length > 5 && ctxt.length < 500) ptext += ctxt + ' ';
+                                    if (ctxt.length > 2 && ctxt.length < 500) ptext += ctxt + ' ';
                                 }
                             }
                             ptext = ptext.trim();
-                            if (ptext.length > 5) lbl = ptext.substring(0, 300);
+                            if (ptext.length > 2) lbl = ptext.substring(0, 300);
                         }
+
+                        // Strategy 6: shadow DOM placeholder as last resort
+                        if (!lbl && el.shadowRoot) {
+                            var inp = el.shadowRoot.querySelector('input, textarea, select');
+                            if (inp) lbl = inp.getAttribute('placeholder') || '';
+                        }
+
                         return lbl;
                     }
 
@@ -1806,8 +1889,9 @@ class SmartRecruitersHandler(BaseHandler):
                         if (isKnown(id, label)) continue;
                         // Get current value and options
                         var val = '', opts = [];
+                        var inner = null;
                         if (selects[i].shadowRoot) {
-                            var inner = selects[i].shadowRoot.querySelector('select');
+                            inner = selects[i].shadowRoot.querySelector('select');
                             if (inner) {
                                 val = inner.value || '';
                                 for (var o = 0; o < inner.options.length; o++) {
@@ -1820,7 +1904,7 @@ class SmartRecruitersHandler(BaseHandler):
                             }
                         }
                         // Skip if already has non-default selection
-                        if (inner.selectedIndex > 0) continue;
+                        if (inner && inner.selectedIndex > 0) continue;
                         var req = selects[i].hasAttribute('required');
                         questions.push({id: id, label: label, type: 'select', options: opts,
                                         required: req, tagName: 'spl-select', idx: i});
