@@ -2002,6 +2002,379 @@ def track(interval, days):
 
 
 @cli.command()
+@click.option("--max", "-m", default=10, help="Maximum jobs to scan")
+@click.option("--ats", default=None, help="Only scan specific ATS type (greenhouse, lever, ashby, smartrecruiters)")
+def discover(max, ats):
+    """Crawl job forms WITHOUT submitting — discover questions, test Simplify, populate template banks."""
+    async def main():
+        import json as _json
+        import time as _time
+
+        app = InternshipAutoApplier()
+        try:
+            await app.initialize()
+            # Always dry-run — NEVER submit
+            await app._init_handlers(dry_run=True)
+            app.config.setdefault("preferences", {})["dry_run"] = True
+            app.browser_manager.headless = False
+
+            # Load Simplify extension
+            try:
+                ext_mgr = ExtensionManager()
+                ext_path = await ext_mgr.ensure_extension()
+                if ext_path:
+                    app._extension_path = ext_path
+                    app.browser_manager.extension_paths = [ext_path]
+                    from handlers.smartrecruiters import SmartRecruitersHandler
+                    SmartRecruitersHandler._simplify_extension_path = ext_path
+                    logger.info(f"SIMPLIFY EXTENSION loaded from {ext_path}")
+            except Exception as ext_e:
+                logger.warning(f"Could not load Simplify extension: {ext_e}")
+
+            # ATS filter
+            ats_filter_type = None
+            if ats:
+                ats_lower = ats.lower().strip()
+                try:
+                    ats_filter_type = ATSType(ats_lower)
+                except ValueError:
+                    logger.error(f"Unknown ATS type: {ats}")
+                    return
+
+            # Report accumulators
+            report = {
+                "jobs_scanned": 0,
+                "total_questions": 0,
+                "already_in_bank": 0,
+                "newly_added": 0,
+                "unsolved": 0,
+                "unsolved_list": [],
+                "simplify_detected": 0,
+                "simplify_fields_filled": [],
+                "simplify_fields_missed": [],
+                "per_job": [],
+            }
+
+            # JS snippet to extract all form questions (works on Playwright pages)
+            EXTRACT_JS = """() => {
+                const questions = [];
+                const fields = document.querySelectorAll(
+                    'input, textarea, select, [role="listbox"], [role="radiogroup"], [role="combobox"]'
+                );
+                for (const el of fields) {
+                    if (el.type === 'hidden' || el.type === 'submit') continue;
+                    const rect = el.getBoundingClientRect();
+                    if (rect.width === 0 && rect.height === 0) continue;
+
+                    // Find label
+                    let label = '';
+                    if (el.id) {
+                        const lbl = document.querySelector(`label[for="${el.id}"]`);
+                        if (lbl) label = lbl.innerText.trim();
+                    }
+                    if (!label && el.closest('label')) {
+                        label = el.closest('label').innerText.trim();
+                    }
+                    if (!label && el.closest('fieldset')) {
+                        const legend = el.closest('fieldset').querySelector('legend');
+                        if (legend) label = legend.innerText.trim();
+                    }
+                    if (!label) label = el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.name || '';
+
+                    // Field type
+                    let ftype = el.tagName.toLowerCase();
+                    if (ftype === 'input') ftype = el.type || 'text';
+
+                    // Options for select/radio
+                    let options = [];
+                    if (ftype === 'select' || el.tagName === 'SELECT') {
+                        options = Array.from(el.options).map(o => o.text.trim()).filter(t => t);
+                    }
+                    if (el.type === 'radio') {
+                        const name = el.name;
+                        if (name) {
+                            const radios = document.querySelectorAll(`input[name="${name}"]`);
+                            const radioLabels = [];
+                            for (const r of radios) {
+                                const rl = r.closest('label');
+                                if (rl) radioLabels.push(rl.innerText.trim());
+                            }
+                            options = radioLabels;
+                        }
+                    }
+
+                    const value = el.value || '';
+                    const required = el.required || el.getAttribute('aria-required') === 'true';
+
+                    questions.push({
+                        label: label.substring(0, 200),
+                        field_type: ftype,
+                        name: el.name || el.id || '',
+                        value: value.substring(0, 200),
+                        options: options.slice(0, 30),
+                        required: required,
+                    });
+                }
+                // Dedupe by label+type
+                const seen = new Set();
+                return questions.filter(q => {
+                    const key = q.label + '|' + q.field_type;
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                });
+            }"""
+
+            scanned = 0
+            while scanned < max:
+                job = await app.queue.get_next_job(ats_type=ats_filter_type)
+                if not job:
+                    logger.info("No more pending jobs")
+                    break
+
+                job_id = job["id"]
+                company = job.get("company", "Unknown")
+                role = job.get("role", "Unknown")
+                url = job["url"]
+                try:
+                    job_ats = ATSType(job.get("ats_type", "unknown"))
+                except ValueError:
+                    job_ats = ATSType.UNKNOWN
+
+                scanned += 1
+                logger.info(f"\n{'='*60}")
+                logger.info(f"[DISCOVER {scanned}/{max}] {company} — {role}")
+                logger.info(f"  ATS: {job_ats.value} | URL: {url}")
+                logger.info(f"{'='*60}")
+
+                job_report = {
+                    "company": company, "role": role, "url": url,
+                    "ats": job_ats.value, "questions": [],
+                    "simplify_filled": [], "simplify_missed": [],
+                }
+                page = None
+
+                try:
+                    # Set AI context
+                    app.ai_answerer.set_job_context(company, role, ats_type=job_ats.value)
+                    handler = app.handlers.get(job_ats, app.handlers[ATSType.UNKNOWN])
+
+                    is_sr = (job_ats == ATSType.SMARTRECRUITERS)
+
+                    if is_sr:
+                        # SR uses nodriver — let handler do its thing, skip JS extraction
+                        await app.browser_manager.start_nodriver()
+                        page = None
+                    else:
+                        await app.browser_manager.start_playwright()
+                        page = await app.browser_manager.create_stealth_page()
+
+                    # ---- STEP 1: Navigate and snapshot BEFORE Simplify ----
+                    pre_simplify_values = {}
+                    if page is not None:
+                        try:
+                            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                            await asyncio.sleep(3)
+                            # Snapshot field values before Simplify
+                            pre_fields = await page.evaluate(EXTRACT_JS)
+                            pre_simplify_values = {
+                                (f["label"] or f["name"]): f["value"]
+                                for f in pre_fields if f["label"] or f["name"]
+                            }
+                        except Exception as nav_e:
+                            logger.warning(f"Navigation failed: {nav_e}")
+
+                    # ---- STEP 2: Test Simplify ----
+                    simplify_detected = False
+                    if page is not None:
+                        try:
+                            filled = await handler.wait_for_extension_autofill(page, timeout=8000)
+                            if filled:
+                                simplify_detected = True
+                                report["simplify_detected"] += 1
+                                # Snapshot AFTER Simplify
+                                post_fields = await page.evaluate(EXTRACT_JS)
+                                post_values = {
+                                    (f["label"] or f["name"]): f["value"]
+                                    for f in post_fields if f["label"] or f["name"]
+                                }
+                                for key in post_values:
+                                    pre_val = pre_simplify_values.get(key, "")
+                                    post_val = post_values[key]
+                                    if post_val and not pre_val:
+                                        job_report["simplify_filled"].append(key)
+                                        report["simplify_fields_filled"].append(key)
+                                    elif not post_val:
+                                        job_report["simplify_missed"].append(key)
+                                        report["simplify_fields_missed"].append(key)
+                        except Exception as simp_e:
+                            logger.debug(f"Simplify test error: {simp_e}")
+
+                    # ---- STEP 3: Let handler fill the form (dry-run) ----
+                    try:
+                        await asyncio.wait_for(
+                            handler.apply(page, url, job), timeout=120
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning(f"Handler timed out for {company}")
+                    except Exception as handler_e:
+                        logger.debug(f"Handler error (expected in discovery): {handler_e}")
+
+                    # ---- STEP 4: Extract all questions ----
+                    questions = []
+                    if page is not None:
+                        try:
+                            questions = await page.evaluate(EXTRACT_JS)
+                        except Exception as extract_e:
+                            logger.warning(f"Question extraction failed: {extract_e}")
+
+                    # ---- STEP 5: Log questions + add to banks ----
+                    bank_before = _count_bank_entries(app.ai_answerer)
+
+                    for q in questions:
+                        label = q.get("label", "").strip()
+                        if not label or len(label) < 3:
+                            continue
+
+                        report["total_questions"] += 1
+                        value = q.get("value", "")
+                        field_type = q.get("field_type", "text")
+                        options = q.get("options", [])
+
+                        q_entry = {
+                            "label": label,
+                            "type": field_type,
+                            "value": value,
+                            "options": options,
+                            "required": q.get("required", False),
+                            "answered": bool(value),
+                        }
+                        job_report["questions"].append(q_entry)
+
+                        # Try to add answered questions to template banks
+                        if value:
+                            app.ai_answerer._auto_learn_to_template_bank(
+                                label, value, field_type, "config"
+                            )
+                        else:
+                            # Unsolved
+                            report["unsolved"] += 1
+                            opts_str = ""
+                            if options:
+                                opts_str = f" (options: {', '.join(options[:8])})"
+                            report["unsolved_list"].append(f'"{label}" [{field_type}]{opts_str}')
+
+                    bank_after = _count_bank_entries(app.ai_answerer)
+                    newly_added = bank_after - bank_before
+                    report["newly_added"] += newly_added
+                    report["already_in_bank"] += len([q for q in questions if q.get("label", "").strip() and len(q.get("label", "").strip()) >= 3]) - newly_added - report["unsolved"]
+
+                    # Collect session answers as well
+                    if app.ai_answerer and hasattr(app.ai_answerer, 'session_answers'):
+                        for sa in app.ai_answerer.session_answers:
+                            if sa.get("answer") and sa.get("source") != "unsolved":
+                                app.ai_answerer._auto_learn_to_template_bank(
+                                    sa["question"], sa["answer"],
+                                    sa.get("field_type", "text"), sa.get("source", "config")
+                                )
+                        app.ai_answerer.session_answers = []
+
+                    report["jobs_scanned"] += 1
+                    report["per_job"].append(job_report)
+
+                    logger.info(f"[DISCOVER] {company}: {len(questions)} questions found, {newly_added} newly added to bank")
+
+                except Exception as job_e:
+                    logger.error(f"[DISCOVER] Error scanning {company}: {job_e}")
+                finally:
+                    # Reset job to pending so it can be applied to later
+                    try:
+                        await app.queue.reset_job(job_id)
+                    except Exception:
+                        pass
+                    # Close the tab
+                    try:
+                        if page and not page.is_closed():
+                            await page.close()
+                    except Exception:
+                        pass
+                    await asyncio.sleep(2)
+
+            # ---- PRINT SUMMARY REPORT ----
+            ats_label = ats.upper() if ats else "ALL"
+            print(f"\n{'='*60}")
+            print(f"  DISCOVERY REPORT")
+            print(f"{'='*60}")
+            print(f"  ATS Filter:          {ats_label}")
+            print(f"  Jobs scanned:        {report['jobs_scanned']}")
+            print(f"  Total questions:     {report['total_questions']}")
+            print(f"  Already in bank:     {report['already_in_bank']}")
+            print(f"  Newly added to bank: {report['newly_added']}")
+            print(f"  Unsolved:            {report['unsolved']}")
+            print()
+            print(f"  Simplify Results:")
+            print(f"  - Detected on {report['simplify_detected']}/{report['jobs_scanned']} forms")
+            if report["simplify_fields_filled"]:
+                from collections import Counter
+                filled_counts = Counter(report["simplify_fields_filled"])
+                always_filled = [f for f, c in filled_counts.items() if c >= report["simplify_detected"] and report["simplify_detected"] > 0]
+                print(f"  - Total fields filled: {len(report['simplify_fields_filled'])}")
+                if always_filled:
+                    print(f"  - Fields Simplify always fills: {', '.join(always_filled[:10])}")
+            if report["simplify_fields_missed"]:
+                from collections import Counter
+                missed_counts = Counter(report["simplify_fields_missed"])
+                never_filled = [f for f, c in missed_counts.items() if c >= report["simplify_detected"] and report["simplify_detected"] > 0]
+                if never_filled:
+                    print(f"  - Fields Simplify never fills: {', '.join(never_filled[:10])}")
+
+            if report["unsolved_list"]:
+                print()
+                print(f"  Unsolved Questions (add to bank manually):")
+                for i, uq in enumerate(report["unsolved_list"][:20], 1):
+                    print(f"    {i}. {uq}")
+                if len(report["unsolved_list"]) > 20:
+                    print(f"    ... and {len(report['unsolved_list']) - 20} more")
+            print(f"{'='*60}\n")
+
+            # Save report to file
+            report_path = Path("data/discovery_report.json")
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            # Convert unsolved_list and per_job for JSON serialization
+            with open(report_path, "w") as f:
+                _json.dump(report, f, indent=2, default=str)
+            print(f"  Full report saved to: {report_path}\n")
+
+        except KeyboardInterrupt:
+            logger.info("\nDiscovery interrupted by user.")
+        finally:
+            await app.cleanup()
+            # Close browser
+            if app.browser_manager:
+                await app.browser_manager.close()
+            try:
+                from handlers.smartrecruiters import SmartRecruitersHandler
+                SmartRecruitersHandler._shared_nd_browser = None
+                SmartRecruitersHandler._release_browser_lock()
+            except Exception:
+                pass
+
+    asyncio.run(main())
+
+
+def _count_bank_entries(ai_answerer) -> int:
+    """Count total entries across all template banks."""
+    total = 0
+    if hasattr(ai_answerer, '_template_banks'):
+        for bank in ai_answerer._template_banks.values():
+            if isinstance(bank, dict):
+                total += len(bank)
+    if hasattr(ai_answerer, '_common_bank') and isinstance(ai_answerer._common_bank, dict):
+        total += len(ai_answerer._common_bank)
+    return total
+
+
+@cli.command()
 def reset_failed():
     """Reset all failed jobs back to pending for retry."""
     async def main():
