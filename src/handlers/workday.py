@@ -81,11 +81,15 @@ class WorkdayHandler(BaseHandler):
 
     name = "workday"
 
-    _WORKDAY_PASSWORD_FALLBACK = "CHANGE_ME"
-
     @property
     def WORKDAY_PASSWORD(self):
-        return self.form_filler.config.get("accounts", {}).get("workday_password", "") or self._WORKDAY_PASSWORD_FALLBACK
+        password = self.form_filler.config.get("accounts", {}).get("workday_password")
+        if not password:
+            raise ValueError(
+                "workday_password not set in config.accounts — cannot log into Workday. "
+                "Add it to config/secrets.yaml under accounts.workday_password"
+            )
+        return password
 
     # Tenants known to use SSO (Okta, Azure AD, etc.) — skip these
     SSO_TENANTS: set = set()

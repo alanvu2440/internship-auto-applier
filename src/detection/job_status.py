@@ -36,7 +36,6 @@ CLOSED_JOB_INDICATORS: List[str] = [
     "this job has expired",                             # SmartRecruiters generic
     "the page you are looking for doesn't exist",       # Workday 404
     "page you are looking for doesn",                   # Workday 404 variant
-    "something went wrong with your application",        # Workday permanent error (not transient)
     "this position is no longer",
     "this role is no longer",
     "job is no longer posted",
@@ -107,9 +106,41 @@ def is_job_closed(text: str) -> bool:
 
     Returns:
         True if any closed-job indicator is found in the text.
+        Returns False for transient/retryable errors (e.g. "something went wrong").
     """
     text_lower = text.lower()
+    # Transient errors are NOT permanent closures — check first so they don't
+    # accidentally match a closed-job indicator substring
+    if is_transient_error(text):
+        return False
     return any(indicator in text_lower for indicator in CLOSED_JOB_INDICATORS)
+
+
+# ---------------------------------------------------------------------------
+# Transient / retryable error indicators (should be retried, not marked closed)
+# ---------------------------------------------------------------------------
+TRANSIENT_ERRORS: List[str] = [
+    "something went wrong",
+    # Keep strings specific enough to not match incidental text on closed-job pages.
+    # "an error occurred" and "please try again" are too generic and cause closed jobs
+    # to be retried instead of skipped when they render with an error banner alongside
+    # "this position is no longer available" etc.
+    "temporarily unavailable",
+    "service unavailable",
+]
+
+
+def is_transient_error(text: str) -> bool:
+    """Check if page text indicates a transient/retryable error (not a permanent closure).
+
+    Args:
+        text: Page body text (will be lowercased internally).
+
+    Returns:
+        True if a transient error indicator is found — caller should retry, not close.
+    """
+    text_lower = text.lower()
+    return any(indicator in text_lower for indicator in TRANSIENT_ERRORS)
 
 
 def is_application_complete(text: str) -> bool:

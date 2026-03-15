@@ -1,4 +1,5 @@
 language: en-US
+
 reviews:
   profile: assertive
   request_changes_workflow: true
@@ -12,12 +13,233 @@ reviews:
       - ".*"
   path_instructions:
     - path: "src/handlers/**"
-      instructions: "Review for: proper Simplify-first flow (check if field filled before overwriting), template bank usage, required field detection, and browser stability. Never spawn multiple Chrome windows."
+      instructions: |
+        Review ALL of the following for every handler change:
+
+        SIMPLIFY-FIRST FLOW:
+        - Does the handler wait for Simplify to fill first before the bot touches fields?
+        - Does it check if a field is already filled before overwriting? (input_value() / inner_text())
+        - Does it detect "Thank you for applying" in case Simplify submitted before the bot?
+
+        FORM FILLING CORRECTNESS:
+        - Are all required fields handled: name, email, phone, resume, cover letter, location, LinkedIn, GitHub?
+        - Is phone country code dropdown handled (not just the phone number text field)?
+        - Is resume uploaded via set_input_files(), not typed?
+        - Is cover letter uploaded when a file upload field exists?
+        - Are education fields handled (school, degree, field of study, GPA, grad date)?
+        - Are work experience fields handled?
+        - Are custom/extra questions passed to AIAnswerer?
+
+        DROPDOWN / SELECT HANDLING:
+        - Are dropdowns checked with option_matcher before calling AI?
+        - Are typeahead/autocomplete fields handled (type → wait → select from list)?
+        - Are React-Select dropdowns handled (not just native <select>)?
+        - Are radio buttons handled?
+        - Are checkboxes handled?
+
+        FRAME / IFRAME SUPPORT:
+        - If the form is in an iframe, does the handler switch context correctly?
+        - Are all selectors scoped to the frame, not the top-level page?
+
+        MULTI-PAGE FORMS:
+        - Does the handler detect and navigate multiple pages/steps?
+        - Does it handle "Next" / "Continue" buttons correctly?
+
+        SUBMISSION:
+        - Does it take a screenshot AFTER submit (not before)?
+        - Does it save screenshot to data/screenshots/ with PASS/FAIL prefix?
+        - Does it only close the tab on success, leaving it open on failure?
+        - Does it mark the job applied/failed in the DB?
+
+        ERROR HANDLING:
+        - Are closed/removed job patterns detected (redirect to listing page, "no longer accepting")?
+        - Are login walls detected and the job skipped?
+        - Is there a timeout (300s max per job)?
+        - Does it retry up to 3x on failure?
+
+        BROWSER SAFETY:
+        - NEVER spawn a second Chrome window. nodriver = SR only, Playwright = everything else.
+        - No CDP bridge between the two browsers.
+
     - path: "src/ai_answerer.py"
-      instructions: "Review for: golden path order (template bank → config → cache → AI → leave empty), auto-learn to template banks, no generic fallback answers."
+      instructions: |
+        Review ALL of the following:
+
+        GOLDEN PATH ORDER (must be exactly this order, no exceptions):
+        1. Template bank (config/question_banks/{ats}.yaml) — must be checked FIRST
+        2. Option matcher (_match_option_from_config) — for dropdowns
+        3. Config regex patterns (_get_config_answer) — 730+ patterns
+        4. Answer cache (data/answer_cache.json) — previously answered
+        5. Primary Gemini key (free tier)
+        6. Backup Gemini key (GCP $300 cap) — only on 429/quota from primary
+        7. Generic fallback — ONLY if confidence >= 85%, last resort
+        8. Leave field empty — never submit garbage
+
+        TEMPLATE BANK:
+        - Is the template bank loaded and cached per ATS type?
+        - Is question normalization applied before lookup (lowercase, strip punctuation)?
+        - Is fuzzy matching used when exact match fails?
+        - Are new high-confidence answers auto-learned back to the template bank?
+
+        COST CONTROL:
+        - Is primary key used before backup?
+        - Is backup budget checked against gemini_backup_budget_cap before every call?
+        - Is cost tracked in data/gemini_cost_tracker.json after every backup key call?
+
+        LOGGING:
+        - Is EVERY question logged to data/question_knowledge_base.md regardless of answer source?
+        - Are generic_fallback answers flagged clearly in the log?
+
+        SKIPPING:
+        - Are optional fields skipped?
+        - Are social media fields skipped (Facebook, Twitter, Instagram)?
+        - Are LinkedIn and GitHub always filled (never skipped)?
+
     - path: "src/browser_manager.py"
-      instructions: "Review for: dual browser architecture (nodriver for SR, Playwright for others), no CDP bridge, separate profiles."
+      instructions: |
+        Review ALL of the following:
+
+        DUAL BROWSER ARCHITECTURE:
+        - nodriver Chrome = SmartRecruiters ONLY (DataDome bypass)
+        - Playwright Chrome = Greenhouse, Lever, Ashby, Workday, Generic
+        - Each browser has its OWN separate Chrome process and profile directory
+        - No CDP bridge, no shared Chrome instance — this was the root cause of 60% crash rate
+
+        PROFILE MANAGEMENT:
+        - nodriver profile: data/browser_profiles/nodriver_profile/
+        - Playwright profile: data/browser_profiles/extension_default/
+        - Stale lock files (SingletonLock, SingletonCookie, SingletonSocket) cleaned on startup
+        - Orphaned Chrome processes killed on startup
+
+        EXTENSION LOADING:
+        - Simplify extension loaded in BOTH browsers via --load-extension
+        - Extensions require headed mode (headless=False for Playwright persistent context)
+
+        STEALTH:
+        - playwright-stealth applied to every new page
+        - navigator.webdriver overridden to undefined
+        - Human-like delays between actions (500-2000ms)
+
+        LIFECYCLE:
+        - Both browsers stay alive for entire session (never auto-close)
+        - Keeper tabs prevent auto-shutdown
+        - close() must clean up both browsers completely
+
+    - path: "src/form/option_matcher.py"
+      instructions: |
+        Review ALL of the following:
+
+        MATCHING CORRECTNESS:
+        - School/university dropdown: matches config education.school value against options
+        - Degree type: maps config degree (BS/MS/PhD) to dropdown options
+        - Graduation date: derives from config, maps to correct dropdown option
+        - Enrollment status: current student vs alumni based on grad date vs today
+        - Work authorization: "yes" for authorized, "no" for needing sponsorship
+        - Sponsorship: "yes" if needs_sponsorship=true, "no" if false
+        - Veteran status: "not a veteran" / "I am not a protected veteran"
+        - Disability: "I do not want to answer" / decline to self-identify
+        - Race/ethnicity: "decline to answer" unless config specifies
+
+        NEGATIVE VALUES:
+        - Negative config values (needs_sponsorship=false, has_security_clearance=false) must return explicit "No"
+        - Never return None for a negative — that causes the field to be sent to AI unnecessarily
+
+        EDGE CASES:
+        - What if no options match at all? Should return None (not crash)
+        - What if config value is missing/None? Should return None gracefully
+        - Case-insensitive matching required
+
+    - path: "src/detection/job_status.py"
+      instructions: |
+        Review ALL of the following:
+
+        CLOSED JOB DETECTION:
+        - Must catch: "no longer accepting", "position has been filled", "job has expired",
+          "this job is not available", redirect back to job listing page
+        - Must NOT false-positive on application confirmation pages
+        - "something went wrong" should only count as closed if no form elements are visible
+
+        COMPLETION DETECTION:
+        - "Thank you for applying" must require application context keywords nearby
+          (applied, application, submitted, position, role) — not just any "thank you" text
+        - Must detect Simplify-submitted forms (Simplify clicks submit before bot does)
+
+        LOGIN WALL DETECTION:
+        - Must detect login/signup walls and mark job as skipped (not failed)
+
     - path: "config/question_banks/**"
-      instructions: "Review for: correct answers, proper YAML formatting, no duplicate questions."
+      instructions: |
+        Review ALL of the following for every YAML entry:
+
+        ANSWER CORRECTNESS:
+        - Yes/No questions: verify the answer is actually correct for an intern applicant
+        - Authorization questions: "yes" for work authorized, varies for sponsorship
+        - Veteran/disability/race: always "decline" or equivalent
+        - Salary: lowest range for intern, or "negotiable"
+        - Start date: "June 2026" or "flexible"
+        - Degree: "Bachelor's" / "BS" unless grad student context
+
+        FORMAT CORRECTNESS:
+        - No multi-line quoted keys (causes YAML parse errors)
+        - No apostrophes inside single-quoted strings
+        - No debug metadata in answers ("**Source:**", "Confidence:", etc.)
+        - No "As an AI" or narrative answers in select/dropdown fields
+        - No personal data (real emails, phone numbers, passwords)
+        - Placeholders only: user@example.com, PHONE_FROM_CONFIG, CHANGE_ME
+
+        HONEYPOT / JUNK:
+        - No password fields, no hidden trap fields
+        - No duplicate question keys
+
+    - path: "src/main.py"
+      instructions: |
+        Review ALL of the following:
+
+        RATE LIMITING:
+        - Max 10 applications/hour enforced
+        - Min 90s delay between jobs
+        - Max 40 applications/day
+        - Max 3 applications per company
+        - Jobs skipped if company has active interview (status = interview_invite/offer)
+
+        JOB ROUTING:
+        - SmartRecruiters URL → start_nodriver() → SR handler
+        - All other URLs → start_playwright() → appropriate handler
+        - ATS detection must happen before browser start
+
+        TIMEOUT:
+        - Each job has 300s max timeout
+        - Timeout = mark as failed, leave tab open
+
+        RESULT RECORDING:
+        - Screenshot saved to data/screenshots/ with PASS/FAIL prefix
+        - Job status updated in SQLite (applied/failed/skipped)
+        - Result logged to logs/running_application_log.jsonl
+
+    - path: "src/form_filler.py"
+      instructions: |
+        Review ALL of the following:
+
+        PRE-FILL PRESERVATION:
+        - ALWAYS check input_value() before filling a text field — skip if already filled by Simplify
+        - ALWAYS check current dropdown selection before changing — skip if already set
+        - NEVER overwrite a non-empty field unless explicitly clearing it
+
+        FIELD COVERAGE:
+        - Text inputs: name, email, phone, address, LinkedIn, GitHub, website
+        - File uploads: resume (set_input_files), cover letter (set_input_files)
+        - Dropdowns: degree, school, location, authorization, sponsorship
+        - Radio buttons: yes/no questions
+        - Checkboxes: agreements, preferences
+        - Textareas: cover letter text, additional info
+
+        PLACEHOLDER DETECTION:
+        - Detect and skip fields with placeholder text still as value
+        - Placeholder patterns: "Enter your...", "Type here...", "Search..."
+
+        REACT FORM SUPPORT:
+        - React controlled inputs need value set via JS (fiber memoizedProps.value hack)
+        - React-Select dropdowns need click → type → wait for options → click option
+
 chat:
   auto_reply: true

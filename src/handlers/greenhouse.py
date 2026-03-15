@@ -6,6 +6,7 @@ URLs: boards.greenhouse.io, job-boards.greenhouse.io
 """
 
 import asyncio
+import random
 from typing import Dict, Any
 from playwright.async_api import Page, Frame
 from loguru import logger
@@ -665,7 +666,9 @@ class GreenhouseHandler(BaseHandler):
                 '[data-field="resume"] button'
             )
             if upload_btn:
-                async with page_or_frame.expect_file_chooser() as fc_info:
+                # Get Page from Frame if needed — Frame objects don't have expect_file_chooser()
+                page_obj = page_or_frame.page if hasattr(page_or_frame, 'page') else page_or_frame
+                async with page_obj.expect_file_chooser() as fc_info:
                     await upload_btn.click()
                 file_chooser = await fc_info.value
                 await file_chooser.set_files(resume_path)
@@ -4612,6 +4615,8 @@ class GreenhouseHandler(BaseHandler):
             try:
                 btn = await page.query_selector(selector)
                 if btn and await btn.is_visible():
+                    # Human-like delay before submit to avoid bot detection
+                    await asyncio.sleep(random.uniform(2.0, 5.0))
                     await self.browser_manager.human_delay(500, 1000)
                     await btn.click()
                     logger.info("Clicked submit button")
@@ -4652,6 +4657,8 @@ class GreenhouseHandler(BaseHandler):
                     continue
                 text = (await btn.text_content() or "").strip().lower()
                 if any(w in text for w in ["submit", "apply", "send", "continue"]):
+                    # Human-like delay before fallback submit
+                    await asyncio.sleep(random.uniform(2.0, 5.0))
                     await self.browser_manager.human_delay(500, 1000)
                     await btn.scroll_into_view_if_needed()
                     await btn.click()
@@ -4672,7 +4679,13 @@ class GreenhouseHandler(BaseHandler):
         # Check if Simplify already submitted (page shows "Thank you for applying")
         try:
             body_text = await page.text_content("body") or ""
-            if "thank you for applying" in body_text.lower() or "application has been received" in body_text.lower():
+            body_lower = body_text.lower()
+            _context_keywords = {"application", "submitted", "applied", "received", "candidacy"}
+            _thank_you_match = (
+                "thank you for applying" in body_lower
+                and any(kw in body_lower for kw in _context_keywords)
+            )
+            if _thank_you_match or "application has been received" in body_lower:
                 logger.info("Simplify already submitted the application! (detected 'Thank you for applying')")
                 self._last_status = "success"
                 return True

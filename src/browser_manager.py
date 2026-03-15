@@ -174,13 +174,22 @@ class BrowserManager:
             logger.info(f"[Playwright] Loading extensions: {ext_list}")
 
         # Use persistent context (preserves cookies, extensions, profile)
-        self._persistent_context = await self._playwright.chromium.launch_persistent_context(
-            user_data_dir=str(profile),
-            headless=False,  # Extensions require headed mode
-            slow_mo=self.slow_mo,
-            args=chrome_args,
-            viewport={"width": 1920, "height": 1080},
-        )
+        try:
+            self._persistent_context = await self._playwright.chromium.launch_persistent_context(
+                user_data_dir=str(profile),
+                headless=self.headless,  # Extensions require headed mode (headless=False by default)
+                slow_mo=self.slow_mo,
+                args=chrome_args,
+                viewport={"width": 1920, "height": 1080},
+            )
+        except Exception:
+            try:
+                await self._playwright.stop()
+            except Exception:
+                pass
+            self._playwright = None
+            self._pw_started = False
+            raise
         self._context = self._persistent_context
         self._browser = None  # Not used with persistent context
 

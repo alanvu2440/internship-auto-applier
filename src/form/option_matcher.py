@@ -53,7 +53,9 @@ class OptionMatcher:
 
         # Authorization questions - including "unrestricted right to work"
         if any(x in q for x in ["authorized", "eligible", "legally", "right to work", "unrestricted"]):
-            if work_auth.get("us_work_authorized", True):
+            # Read config explicitly; absence of key → False (don't assume authorized)
+            is_authorized = work_auth.get("us_work_authorized") or work_auth.get("us_citizen", False)
+            if is_authorized:
                 for i, opt in enumerate(options_lower):
                     if "yes" in opt:
                         return options[i]
@@ -80,11 +82,21 @@ class OptionMatcher:
         # Sponsorship / immigration support questions
         if any(x in q for x in ["sponsor", "visa", "h1b", "h-1b", "immigration"]):
             need_sponsor = work_auth.get("require_sponsorship_now", False)
-            for i, opt in enumerate(options_lower):
-                if need_sponsor and "yes" in opt:
-                    return options[i]
-                elif not need_sponsor and "no" in opt:
-                    return options[i]
+            if need_sponsor:
+                for i, opt in enumerate(options_lower):
+                    if "yes" in opt:
+                        return options[i]
+                # Fallback: first non-placeholder option
+                for i, opt in enumerate(options_lower):
+                    if opt.strip() and "select" not in opt:
+                        return options[i]
+            else:
+                for i, opt in enumerate(options_lower):
+                    if "no" in opt:
+                        return options[i]
+                # No "no"-containing option found — return None rather than guessing.
+                # options[-1] is semantically wrong here (could be "Yes").
+                return None
 
         # Relocation questions
         if "relocat" in q:
@@ -123,12 +135,18 @@ class OptionMatcher:
         # Ethnicity
         if any(x in q for x in ["ethnic", "race", "racial"]):
             ethnicity = demographics.get("ethnicity", "Prefer not to say")
-            race = demographics.get("race", "Asian")
-            # Try exact match first ("East Asian"), then broader ("Asian")
-            for candidate in [ethnicity.lower(), race.lower()]:
+            race = demographics.get("race", None)
+            # Build candidate list — only include non-None, non-"prefer not to say" values
+            candidates = []
+            for val in [ethnicity, race]:
+                if val and val.lower() not in ("prefer not to say", "prefer not to answer", "decline"):
+                    candidates.append(val.lower())
+            # Try each candidate against options
+            for candidate in candidates:
                 for i, opt in enumerate(options_lower):
                     if candidate in opt:
                         return options[i]
+            # If no config value or all are "prefer not to say", fall through to decline
             for i, opt in enumerate(options_lower):
                 if "prefer not" in opt or "decline" in opt:
                     return options[i]
@@ -224,7 +242,7 @@ class OptionMatcher:
                     "denver": ["denver"],
                 }
                 for city_name, aliases in city_map.items():
-                    if city_name in city or city in city_name:
+                    if city and (city_name in city or city in city_name):
                         for i, opt in enumerate(options_lower):
                             if any(alias in opt for alias in aliases):
                                 return options[i]

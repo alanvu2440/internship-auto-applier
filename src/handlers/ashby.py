@@ -35,12 +35,13 @@ class AshbyHandler(BaseHandler):
     # Rate limit: MAX 3/hour, 5+ minute gaps between applications
     ASHBY_DISABLED = False
 
-    # Fresh email — completely different domain, no alias pattern
-    _ASHBY_EMAIL_ALIAS_FALLBACK = "user@university.edu"
-
     @property
-    def ASHBY_EMAIL_ALIAS(self):
-        return self.form_filler.config.get("personal_info", {}).get("email", "") or self._ASHBY_EMAIL_ALIAS_FALLBACK
+    def _ashby_email(self):
+        email = self.form_filler.config.get("personal_info", {}).get("email")
+        if not email:
+            logger.error("Ashby handler: email not found in config — cannot proceed")
+            raise ValueError("Email required for Ashby but not configured in personal_info.email")
+        return email
 
     # Track spam flags per session — if we get flagged, stop ALL Ashby immediately
     _spam_flag_count = 0
@@ -240,8 +241,8 @@ class AshbyHandler(BaseHandler):
         education = config.get("education", [{}])[0] if config.get("education") else {}
         work_auth = config.get("work_authorization", {})
 
-        # Use alias email to avoid Ashby fraud flag on base email
-        ashby_email = self.ASHBY_EMAIL_ALIAS
+        # Use email from config
+        ashby_email = self._ashby_email
 
         # Standard field type mappings
         type_to_value = {
@@ -879,8 +880,8 @@ class AshbyHandler(BaseHandler):
             if not await fill([
                 'input[name*="email"]', 'input[type="email"]',
                 'input[placeholder*="Email"]', 'input[placeholder*="hello@example"]',
-            ], self.ASHBY_EMAIL_ALIAS):
-                await fill_by_label(r"e-?mail", self.ASHBY_EMAIL_ALIAS)
+            ], self._ashby_email):
+                await fill_by_label(r"e-?mail", self._ashby_email)
 
             # Phone
             phone = f"{personal.get('phone_prefix', '')}{personal.get('phone', '')}".replace("+", "")

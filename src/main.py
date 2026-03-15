@@ -354,7 +354,7 @@ class InternshipAutoApplier:
         # CHECK: Don't apply if we have an active interview at this company
         try:
             interview_statuses = ("interview_invite", "assessment", "offer", "follow_up")
-            existing = await self.queue.db.execute(
+            existing = await self.queue._db.execute(
                 "SELECT response_status FROM jobs WHERE company = ? AND response_status IN (?, ?, ?, ?)",
                 (company, *interview_statuses)
             )
@@ -370,7 +370,7 @@ class InternshipAutoApplier:
             #   Priority 1: Software Engineer, SWE, Backend, Frontend, Full Stack
             #   Priority 2: Data Engineer, Data Scientist, ML, AI
             #   Priority 3: Everything else
-            company_apps = await self.queue.db.execute(
+            company_apps = await self.queue._db.execute(
                 "SELECT role FROM jobs WHERE company = ? AND status = 'applied'",
                 (company,)
             )
@@ -381,7 +381,8 @@ class InternshipAutoApplier:
                 self.stats["skipped"] += 1
                 return False
         except Exception as e:
-            logger.debug(f"Interview check failed: {e}")
+            logger.warning(f"Could not check interview/company limits: {e} — skipping job to be safe")
+            return False
 
         logger.info(f"\n{'='*60}")
         logger.info(f"{progress}Applying to: {company} — {role}")
@@ -421,11 +422,12 @@ class InternshipAutoApplier:
 
             # Apply with timeout — ESC cancels handler and enters manual mode
             import time as _time
+            HANDLER_TIMEOUT_SECONDS = 300
             start_time = _time.time()
             esc_interrupted = False
             try:
                 handler_task = asyncio.create_task(
-                    asyncio.wait_for(handler.apply(page, url, job_data), timeout=300)
+                    asyncio.wait_for(handler.apply(page, url, job_data), timeout=HANDLER_TIMEOUT_SECONDS)
                 )
                 if self.esc_monitor and not self.esc_monitor.is_manual:
                     esc_task = asyncio.create_task(self.esc_monitor.wait_for_toggle())
@@ -459,8 +461,8 @@ class InternshipAutoApplier:
                     success = await handler_task
             except asyncio.TimeoutError:
                 success = False
-                error_msg = "Timed out after 180s — tab left open for manual help"
-                logger.warning(f"Application timed out after 180s — tab left open")
+                error_msg = f"Timed out after {HANDLER_TIMEOUT_SECONDS}s — tab left open for manual help"
+                logger.warning(f"Application timed out after {HANDLER_TIMEOUT_SECONDS}s — tab left open")
             except asyncio.CancelledError:
                 success = False
                 esc_interrupted = True
@@ -695,6 +697,10 @@ class InternshipAutoApplier:
             except Exception:
                 pass
 
+            # Log Simplify extension status
+            simplify_status = getattr(handler, '_simplify_status', 'not_checked')
+            logger.info(f"[SIMPLIFY] {company}: {simplify_status}")
+
             # Build detailed application record
             app_record = {
                 "timestamp": _time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -707,6 +713,7 @@ class InternshipAutoApplier:
                 "duration_seconds": round(duration, 1),
                 "success": success,
                 "handler_status": handler_status,
+                "simplify_status": simplify_status,
                 "fields_filled": fields_filled,
                 "fields_missed": fields_missed,
                 "questions_answered": questions_answered,
@@ -1411,22 +1418,28 @@ def backfill(max, headless, dry_run, review, ats, smart, with_simplify, workday_
         # Kill any orphaned nodriver Chrome from previous crashed runs
         import subprocess
         try:
-            result = subprocess.run(["pgrep", "-f", "nodriver_persistent"],
+            result = subprocess.run(["pgrep", "-f", "nodriver_profile"],
                                     capture_output=True, text=True, timeout=5)
             if result.stdout.strip():
                 logger.warning(f"Killing orphaned Chrome from previous run")
-                subprocess.run(["pkill", "-9", "-f", "nodriver_persistent"],
+                subprocess.run(["pkill", "-9", "-f", "nodriver_profile"],
                                capture_output=True, timeout=5)
                 import time; time.sleep(1)
         except Exception:
             pass
-        # Clean stale lock files
+        # Clean stale lock files from both profile directories
         from pathlib import Path
         for f in ["data/browser_profiles/nodriver.lock", "data/browser_profiles/nodriver.pid"]:
             try:
                 Path(f).unlink(missing_ok=True)
             except Exception:
                 pass
+        for profile_dir in ["data/browser_profiles/nodriver_profile", "data/browser_profiles/extension_default"]:
+            for lock_file in ["SingletonLock", "SingletonCookie", "SingletonSocket"]:
+                try:
+                    Path(profile_dir, lock_file).unlink(missing_ok=True)
+                except Exception:
+                    pass
 
         app = InternshipAutoApplier()
         try:

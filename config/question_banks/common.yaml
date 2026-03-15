@@ -88,7 +88,7 @@ questions:
     and/or participated personally and substantially in a procurement or contract valued at more than $10 million.• executive service position• senior executive service position• general or flag officer
     at pay grade o7 or above• program manager• deputy program manager• procuring contracting officer• administrative contracting officer• source selection official/authority/member of a source selection
     evaluation board• chief of a technical or financial evaluation team
-  : answer: 'Yes'
+  : answer: 'No'
     type: dropdown
   ? are you eligible to work in the country for which this role is located (for example, as a citizen, permanent resident, or holder of a valid work visa)?
   : answer: 'Yes'
@@ -158,7 +158,7 @@ questions:
     type: select
   ? by submitting this application, i hereby provide consent to knowbe4 to communicate directly with me, and any employment references i provide to knowbe4, via phone call, text message, email, and/or linkedin
     regarding my application for and potential employment with knowbe4. if at any time i want to opt-out of any form of communication, i will promptly inform knowbe4 of this choice.
-  : answer: LINKEDIN_FROM_CONFIG
+  : answer: 'Yes'
     type: select
   can you perform all of the essential functions of this role with or without reasonable accommodations?:
     answer: 'Yes'
@@ -266,7 +266,7 @@ questions:
     answer: 08
     type: text
   ? 'engineering organization involvement: indicate if you are an active participant in any of the following engineering student groups or competitions listed below:'
-  : answer: Given the lack of specific information in the c...
+  : answer: 'No'
     type: select
   ? 'export control and compliance: for the sole purpose of determining export licensing requirements, please list any countries of which you are a citizen or legal permanent resident, and when you obtained
     such status.'
@@ -302,7 +302,7 @@ questions:
     type: select
   ? have you ever been an amentum employee? please include employment by any of the companies or businesses that ultimately became part of amentum by virtue of mergers, acquisitions, joint ventures, or
     other corporate transactions.
-  : answer: 'Yes'
+  : answer: 'No'
     type: dropdown
   ? have you ever been convicted of a felony, or a misdemeanor involving any violent act, use or possession of a weapon or act of dishonesty for which the record has not been sealed or expunged?
   : answer: 'No'
@@ -587,7 +587,7 @@ questions:
     answer: May 2026
     type: text
   ? what year will you be graduating or expecting to graduate? this includes any anticipated, but not yet commenced studies e.g. a masters (even if you are still in the process of applying or awaiting confirmation).
-  : answer: 'No'
+  : answer: '2026'
     type: select
   ? while we don't require any cover letter as a part of our application, we understand you might want to share more than just your resume. is there anything else you'd like to share with our team at sigma?
   : answer: At Kruiz, I coordinated a data entry team of 3 and 2 web scraper engineers while building

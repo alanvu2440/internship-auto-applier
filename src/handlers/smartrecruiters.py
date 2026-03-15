@@ -1713,18 +1713,54 @@ class SmartRecruitersHandler(BaseHandler):
                         var r = document.querySelectorAll('fieldset, [role="radiogroup"], spl-radio').length;
                         var hs = document.querySelectorAll('select').length;
                         var ac = document.querySelectorAll('spl-autocomplete').length;
-                        // Sample first 3 spl-select labels
+                        // Sample labels using sibling-walking approach
+                        function findLabel(el) {
+                            var lbl = el.getAttribute('label') || el.getAttribute('aria-label') || '';
+                            if (!lbl) {
+                                var prev = el.previousElementSibling;
+                                while (prev && !lbl) {
+                                    var ptag = prev.tagName.toLowerCase();
+                                    if (ptag === 'p' || ptag === 'label' || ptag === 'legend' || ptag === 'span') {
+                                        var ptxt = prev.textContent.trim();
+                                        if (ptxt.length > 2 && ptxt.length < 300) lbl = ptxt;
+                                    }
+                                    if (ptag === 'spl-input' || ptag === 'spl-select' || ptag === 'spl-textarea') break;
+                                    prev = prev.previousElementSibling;
+                                }
+                            }
+                            if (!lbl) {
+                                var par = el.parentElement;
+                                for (var u = 0; u < 3 && par && !lbl; u++) {
+                                    var kids = par.children;
+                                    for (var kk = 0; kk < kids.length; kk++) {
+                                        var kt = kids[kk].tagName.toLowerCase();
+                                        if ((kt === 'p' || kt === 'label' || kt === 'legend') && kids[kk] !== el) {
+                                            var tx = kids[kk].textContent.trim();
+                                            if (tx.length > 2 && tx.length < 300) { lbl = tx; break; }
+                                        }
+                                    }
+                                    par = par.parentElement;
+                                }
+                            }
+                            return lbl;
+                        }
                         var labels = [];
                         var sels = document.querySelectorAll('spl-select');
                         for (var j = 0; j < Math.min(sels.length, 5); j++) {
-                            var lbl = sels[j].getAttribute('label') || sels[j].getAttribute('aria-label') || '';
+                            var lbl = findLabel(sels[j]);
                             var sr = sels[j].shadowRoot;
                             var selIdx = sr ? (sr.querySelector('select') || {}).selectedIndex : -1;
                             labels.push(lbl.substring(0, 40) + '(idx=' + selIdx + ')');
                         }
+                        var inputLabels = [];
+                        var inps = document.querySelectorAll('spl-input');
+                        for (var j2 = 0; j2 < Math.min(inps.length, 5); j2++) {
+                            inputLabels.push(findLabel(inps[j2]).substring(0, 40));
+                        }
                         return 'spl-select:' + s + ' spl-input:' + i + ' spl-textarea:' + t +
                                ' spl-checkbox:' + cb + ' spl-autocomplete:' + ac + ' fieldset/radio:' + r + ' html-select:' + hs +
-                               ' labels=[' + labels.join(', ') + ']';
+                               ' select-labels=[' + labels.join(', ') + ']' +
+                               ' input-labels=[' + inputLabels.join(', ') + ']';
                     })()
                 """)
                 logger.info(f"Screening pre-scan: {prescan}")
@@ -1748,43 +1784,90 @@ class SmartRecruitersHandler(BaseHandler):
                     ];
 
                     function getLabel(el) {
-                        var lbl = el.getAttribute('label') || el.getAttribute('aria-label') || '';
+                        var lbl = '';
+
+                        // Strategy 1: element attributes
+                        lbl = el.getAttribute('label') || el.getAttribute('aria-label') || '';
+
+                        // Strategy 1b: shadow DOM internal label
                         if (!lbl && el.shadowRoot) {
                             var l = el.shadowRoot.querySelector('label, .label, legend');
                             if (l) lbl = l.textContent.trim();
                         }
-                        // Check parent for label (try multiple levels)
-                        if (!lbl) {
-                            var parent = el.closest('.field, .form-group, [class*="field"], [class*="question"], [class*="screening"], oc-question, fieldset, .spl-mb-1, .spl-flex-col');
-                            if (parent) {
-                                var l2 = parent.querySelector('label, legend, .label, p, span.question-text, [class*="question"], [class*="label"]');
-                                if (l2) lbl = l2.textContent.trim();
-                            }
-                        }
-                        // Try previous sibling elements (common pattern: label before select)
+
+                        // Strategy 2: walk previous siblings looking for <p>, <label>, <legend>, <span>
+                        // SR renders screening questions as <p>Question?</p> <spl-input>...
                         if (!lbl) {
                             var prev = el.previousElementSibling;
-                            if (prev && (prev.tagName === 'LABEL' || prev.tagName === 'P' || prev.tagName === 'SPAN' || prev.tagName === 'DIV')) {
-                                var ptxt = prev.textContent.trim();
-                                if (ptxt.length > 5 && ptxt.length < 300) lbl = ptxt;
+                            while (prev && !lbl) {
+                                var tag = prev.tagName.toLowerCase();
+                                if (tag === 'p' || tag === 'label' || tag === 'legend' || tag === 'span') {
+                                    var ptxt = prev.textContent.trim();
+                                    if (ptxt.length > 2 && ptxt.length < 300) {
+                                        lbl = ptxt;
+                                    }
+                                }
+                                // Stop walking if we hit another input element (belongs to previous question)
+                                if (tag === 'spl-input' || tag === 'spl-select' || tag === 'spl-textarea'
+                                    || tag === 'spl-radio' || tag === 'fieldset') {
+                                    break;
+                                }
+                                prev = prev.previousElementSibling;
                             }
                         }
-                        // Try parent's text content (for wrapper divs)
+
+                        // Strategy 3: walk up parents (up to 4 levels), look for child <p>/<label>/<legend>
+                        if (!lbl) {
+                            var parent = el.parentElement;
+                            for (var up = 0; up < 4 && parent && !lbl; up++) {
+                                var kids = parent.children;
+                                for (var k = 0; k < kids.length; k++) {
+                                    var ktag = kids[k].tagName.toLowerCase();
+                                    if ((ktag === 'p' || ktag === 'label' || ktag === 'legend' || ktag === 'span')
+                                        && kids[k] !== el) {
+                                        var txt = kids[k].textContent.trim();
+                                        if (txt.length > 2 && txt.length < 300) {
+                                            lbl = txt;
+                                            break;
+                                        }
+                                    }
+                                }
+                                parent = parent.parentElement;
+                            }
+                        }
+
+                        // Strategy 4: closest question/field container
+                        if (!lbl) {
+                            var container = el.closest('.field, .form-group, [class*="field"], [class*="question"], [class*="screening"], oc-question, fieldset, .spl-mb-1, .spl-flex-col');
+                            if (container) {
+                                var l2 = container.querySelector('label, legend, .label, p, span.question-text, [class*="question"], [class*="label"]');
+                                if (l2 && l2 !== el) lbl = l2.textContent.trim();
+                            }
+                        }
+
+                        // Strategy 5: parent's direct text nodes and non-input children
                         if (!lbl && el.parentElement) {
                             var ptext = '';
                             var pChildren = el.parentElement.childNodes;
                             for (var ci = 0; ci < pChildren.length; ci++) {
-                                if (pChildren[ci].nodeType === 3) { // Text node
+                                if (pChildren[ci].nodeType === 3) {
                                     ptext += pChildren[ci].textContent.trim() + ' ';
                                 } else if (pChildren[ci] !== el && pChildren[ci].tagName !== 'SPL-SELECT' &&
                                            pChildren[ci].tagName !== 'SPL-INPUT' && pChildren[ci].tagName !== 'INPUT') {
                                     var ctxt = (pChildren[ci].textContent || '').trim();
-                                    if (ctxt.length > 5 && ctxt.length < 500) ptext += ctxt + ' ';
+                                    if (ctxt.length > 2 && ctxt.length < 500) ptext += ctxt + ' ';
                                 }
                             }
                             ptext = ptext.trim();
-                            if (ptext.length > 5) lbl = ptext.substring(0, 300);
+                            if (ptext.length > 2) lbl = ptext.substring(0, 300);
                         }
+
+                        // Strategy 6: shadow DOM placeholder as last resort
+                        if (!lbl && el.shadowRoot) {
+                            var inp = el.shadowRoot.querySelector('input, textarea, select');
+                            if (inp) lbl = inp.getAttribute('placeholder') || '';
+                        }
+
                         return lbl;
                     }
 
@@ -1806,8 +1889,9 @@ class SmartRecruitersHandler(BaseHandler):
                         if (isKnown(id, label)) continue;
                         // Get current value and options
                         var val = '', opts = [];
+                        var inner = null;
                         if (selects[i].shadowRoot) {
-                            var inner = selects[i].shadowRoot.querySelector('select');
+                            inner = selects[i].shadowRoot.querySelector('select');
                             if (inner) {
                                 val = inner.value || '';
                                 for (var o = 0; o < inner.options.length; o++) {
@@ -1820,7 +1904,7 @@ class SmartRecruitersHandler(BaseHandler):
                             }
                         }
                         // Skip if already has non-default selection
-                        if (inner.selectedIndex > 0) continue;
+                        if (inner && inner.selectedIndex > 0) continue;
                         var req = selects[i].hasAttribute('required');
                         questions.push({id: id, label: label, type: 'select', options: opts,
                                         required: req, tagName: 'spl-select', idx: i});
@@ -2339,6 +2423,12 @@ class SmartRecruitersHandler(BaseHandler):
                         logger.info(f"Step {step + 1} stall #{stall_count} (same page)")
                     else:
                         stall_count = 0
+                        # New page — fill any screening/custom questions visible on this step
+                        try:
+                            logger.info(f"Step {step + 1}: filling screening questions on new page")
+                            await self._nd_handle_screening_questions(nd_page, job_data)
+                        except Exception as sq_e:
+                            logger.debug(f"Screening question fill on step {step + 1} failed: {sq_e}")
                     prev_sections = sections
 
                     # If stuck on privacy/consent checkbox error, re-click checkboxes
@@ -3540,6 +3630,174 @@ class SmartRecruitersHandler(BaseHandler):
             except Exception as spec_e:
                 logger.warning(f"Special field scan failed: {spec_e}", exc_info=True)
 
+            # ====================================================================
+            # EEOC / Demographics: fill radio buttons and search-autocomplete fields
+            # These appear on the screening/consent page of many SR forms.
+            # Radio groups: disability, veteran status
+            # Search fields: gender, race/ethnicity
+            # ====================================================================
+            try:
+                eeoc_result = await nd_page.evaluate("""
+                    (function() {
+                        var results = [];
+                        var bodyText = (document.body.innerText || '').toLowerCase();
+
+                        // === RADIO BUTTONS: disability, veteran ===
+                        // Find all radio groups (visible radio inputs grouped by name)
+                        var radioNames = {};
+                        var allRadios = document.querySelectorAll('input[type="radio"]');
+                        for (var i = 0; i < allRadios.length; i++) {
+                            var r = allRadios[i];
+                            if (r.name && !r.checked) {
+                                if (!radioNames[r.name]) radioNames[r.name] = [];
+                                radioNames[r.name].push(r);
+                            }
+                        }
+                        // Also check shadow DOM radio inputs
+                        var splRadios = document.querySelectorAll('spl-radio, oc-radio-question');
+                        for (var sr = 0; sr < splRadios.length; sr++) {
+                            var root = splRadios[sr].shadowRoot || splRadios[sr];
+                            var radios = root.querySelectorAll('input[type="radio"]');
+                            for (var ri = 0; ri < radios.length; ri++) {
+                                if (radios[ri].name && !radios[ri].checked) {
+                                    if (!radioNames[radios[ri].name]) radioNames[radios[ri].name] = [];
+                                    radioNames[radios[ri].name].push(radios[ri]);
+                                }
+                            }
+                        }
+
+                        for (var name in radioNames) {
+                            var group = radioNames[name];
+                            if (group.length === 0) continue;
+                            // Get the group's label text from parent/fieldset
+                            var parent = group[0].closest('fieldset, [role="radiogroup"], div, oc-radio-question');
+                            var labelText = '';
+                            if (parent) {
+                                var lbl = parent.querySelector('legend, label, p, [class*="label"], [class*="question"]');
+                                if (lbl) labelText = lbl.textContent.trim().toLowerCase();
+                                if (!labelText) labelText = (parent.textContent || '').substring(0, 200).toLowerCase();
+                            }
+
+                            // Match disability question
+                            if (labelText.indexOf('disab') >= 0 || labelText.indexOf('history/record') >= 0) {
+                                // Select "I do not want to answer" or "No, I do not have a disability"
+                                for (var d = 0; d < group.length; d++) {
+                                    var optLabel = (group[d].closest('label') || group[d].parentElement || {}).textContent || '';
+                                    optLabel = optLabel.trim().toLowerCase();
+                                    if (optLabel.indexOf('do not want to answer') >= 0 || optLabel.indexOf('do not wish') >= 0) {
+                                        group[d].click();
+                                        group[d].checked = true;
+                                        group[d].dispatchEvent(new Event('change', {bubbles: true, composed: true}));
+                                        results.push('disability:' + optLabel.substring(0, 40));
+                                        break;
+                                    }
+                                }
+                            }
+                            // Match veteran question
+                            else if (labelText.indexOf('veteran') >= 0 || labelText.indexOf('protected veteran') >= 0) {
+                                // Select "No" or "Prefer not to answer"
+                                for (var v = 0; v < group.length; v++) {
+                                    var vLabel = (group[v].closest('label') || group[v].parentElement || {}).textContent || '';
+                                    vLabel = vLabel.trim().toLowerCase();
+                                    if (vLabel === 'no' || vLabel.indexOf('prefer not') >= 0 || vLabel.indexOf('not a protected') >= 0) {
+                                        group[v].click();
+                                        group[v].checked = true;
+                                        group[v].dispatchEvent(new Event('change', {bubbles: true, composed: true}));
+                                        results.push('veteran:' + vLabel.substring(0, 40));
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        // === SEARCH/AUTOCOMPLETE FIELDS: gender, race/ethnicity ===
+                        // These render as <input> inside <spl-input> inside <sr-screening-questions-form>
+                        // They have a search icon (magnifying glass) and a label before them
+                        var allSplInputs = document.querySelectorAll('spl-input');
+                        for (var si = 0; si < allSplInputs.length; si++) {
+                            var host = allSplInputs[si];
+                            var inp = host.shadowRoot ? host.shadowRoot.querySelector('input') : null;
+                            if (!inp) continue;
+                            // Skip if already filled
+                            if (inp.value && inp.value.trim()) continue;
+                            var rect = inp.getBoundingClientRect();
+                            if (rect.width < 20 || rect.height < 5) continue;
+
+                            // Get label: check parent's previous sibling, parent text, or attribute
+                            var inputLabel = host.getAttribute('label') || host.getAttribute('aria-label') || '';
+                            if (!inputLabel) {
+                                var prevSib = host.previousElementSibling;
+                                if (prevSib) inputLabel = (prevSib.textContent || '').trim();
+                            }
+                            if (!inputLabel) {
+                                var par = host.parentElement;
+                                if (par) {
+                                    var pLabel = par.querySelector('label, p, span');
+                                    if (pLabel && pLabel !== host) inputLabel = pLabel.textContent.trim();
+                                }
+                            }
+                            var il = inputLabel.toLowerCase();
+
+                            if (il.indexOf('gender') >= 0) {
+                                results.push('GENDER_FIELD:' + Math.round(rect.x + rect.width/2) + ',' + Math.round(rect.y + rect.height/2));
+                            } else if (il.indexOf('race') >= 0 || il.indexOf('ethnic') >= 0) {
+                                results.push('RACE_FIELD:' + Math.round(rect.x + rect.width/2) + ',' + Math.round(rect.y + rect.height/2));
+                            }
+                        }
+
+                        return results.length > 0 ? results.join('|') : 'NONE';
+                    })()
+                """)
+                if eeoc_result and eeoc_result != 'NONE':
+                    logger.info(f"EEOC fill result: {eeoc_result}")
+                    import nodriver.cdp as cdp_eeoc
+                    # Fill gender/race autocomplete fields
+                    for part in str(eeoc_result).split('|'):
+                        if part.startswith('GENDER_FIELD:') or part.startswith('RACE_FIELD:'):
+                            coords = part.split(':')[1].split(',')
+                            fx, fy = float(coords[0]), float(coords[1])
+                            answer = "Male" if 'GENDER' in part else "Decline To Self Identify"
+                            logger.info(f"Filling EEOC {'gender' if 'GENDER' in part else 'race'} at ({fx},{fy}) with '{answer}'")
+                            # CDP click to focus
+                            await nd_page.send(cdp_eeoc.input_.dispatch_mouse_event(
+                                type_="mousePressed", x=fx, y=fy,
+                                button=cdp_eeoc.input_.MouseButton.LEFT, click_count=1))
+                            await nd_page.send(cdp_eeoc.input_.dispatch_mouse_event(
+                                type_="mouseReleased", x=fx, y=fy,
+                                button=cdp_eeoc.input_.MouseButton.LEFT, click_count=1))
+                            await asyncio.sleep(0.5)
+                            # Type answer
+                            for char in answer:
+                                await nd_page.send(cdp_eeoc.input_.dispatch_key_event(type_="keyDown", key=char))
+                                await nd_page.send(cdp_eeoc.input_.dispatch_key_event(type_="char", text=char, key=char))
+                                await nd_page.send(cdp_eeoc.input_.dispatch_key_event(type_="keyUp", key=char))
+                                await asyncio.sleep(0.03)
+                            await asyncio.sleep(2)
+                            # Click first matching suggestion
+                            click_res = await nd_page.evaluate("""
+                                (function() {
+                                    // Check for suggestions: role=option, listbox items, cdk-overlay items
+                                    var selectors = [
+                                        '[role="option"]', '[role="listbox"] li',
+                                        'li[class*="option"]', '[class*="cdk-overlay"] li',
+                                        '[class*="suggestion"]', 'mat-option'
+                                    ];
+                                    var items = document.querySelectorAll(selectors.join(','));
+                                    for (var i = 0; i < items.length; i++) {
+                                        var r = items[i].getBoundingClientRect();
+                                        if (r.width > 0 && r.height > 0 && r.height < 200) {
+                                            items[i].click();
+                                            return 'CLICKED:' + (items[i].textContent || '').trim().substring(0, 60);
+                                        }
+                                    }
+                                    return 'NO_SUGGESTIONS';
+                                })()
+                            """)
+                            logger.info(f"EEOC suggestion click: {click_res}")
+                            await asyncio.sleep(0.5)
+            except Exception as eeoc_e:
+                logger.debug(f"EEOC fill failed: {eeoc_e}")
+
             # Handle spl-select dropdowns that need answers (screening questions as dropdowns)
             # This is a FALLBACK for any selects that _nd_handle_screening_questions missed
             # MUST trigger zone.js spl-change on the host for Angular to see the change
@@ -3738,12 +3996,100 @@ class SmartRecruitersHandler(BaseHandler):
                         # and never reaches inner button's zone.js handler.
                         # Fix: focus the inner button via JS, then send CDP Enter key (trusted).
                         await asyncio.sleep(0.3)
+
+                        # CRITICAL: Before clicking submit, ensure Angular sees checkbox changes.
+                        # Angular's spl-checkbox uses NgZone-patched event listeners. We need to:
+                        # 1. Toggle checkbox via the inner input (so DOM state is correct)
+                        # 2. Fire 'change' event on inner input (triggers component's ControlValueAccessor)
+                        # 3. Mark form control as dirty/touched via Angular's __ngContext__
+                        btn_target = 'submit' if action == 'SUBMIT' else 'next'
+                        click_result = await nd_page.evaluate("""
+                            (function() {
+                                var results = [];
+
+                                // First: ensure ALL spl-checkbox are properly marked as touched/dirty
+                                // Angular requires ng-touched + ng-dirty for form validation to pass submit
+                                var splChecks = document.querySelectorAll('spl-checkbox');
+                                for (var i = 0; i < splChecks.length; i++) {
+                                    var host = splChecks[i];
+                                    var sr = host.shadowRoot;
+                                    if (!sr) continue;
+                                    var inner = sr.querySelector('input[type="checkbox"]');
+                                    if (!inner) continue;
+
+                                    // Ensure checked
+                                    if (!inner.checked) inner.checked = true;
+
+                                    // Update Angular classes on host (remove pristine/untouched, add dirty/touched)
+                                    host.classList.remove('ng-pristine', 'ng-untouched');
+                                    host.classList.add('ng-dirty', 'ng-touched');
+
+                                    // Dispatch events that Angular's ControlValueAccessor listens for
+                                    inner.dispatchEvent(new Event('change', {bubbles: true, composed: true}));
+                                    inner.dispatchEvent(new Event('input', {bubbles: true, composed: true}));
+
+                                    // Try Angular's internal change detection via component ref
+                                    // The __ngContext__ on the host contains the LView
+                                    try {
+                                        if (host.__ngContext__ && typeof host.__ngContext__ === 'number') {
+                                            // Angular Ivy: __ngContext__ is the LView index
+                                            // We need to trigger change detection on the parent form
+                                        }
+                                    } catch(e) {}
+
+                                    results.push(host.id + ':dirty');
+                                }
+
+                                // Now update the parent form's Angular classes too
+                                var formEls = document.querySelectorAll('.ng-pristine');
+                                for (var f = 0; f < formEls.length; f++) {
+                                    formEls[f].classList.remove('ng-pristine', 'ng-untouched');
+                                    formEls[f].classList.add('ng-dirty', 'ng-touched');
+                                }
+
+                                // Finally: click the inner button directly (JS click within same execution
+                                // context runs inside NgZone automatically)
+                                var splBtns = document.querySelectorAll('spl-button');
+                                for (var b = 0; b < splBtns.length; b++) {
+                                    var text = (splBtns[b].textContent || '').trim().toLowerCase();
+                                    if (text.indexOf('""" + btn_target + """') >= 0) {
+                                        if (splBtns[b].shadowRoot) {
+                                            var innerBtn = splBtns[b].shadowRoot.querySelector('button');
+                                            if (innerBtn) {
+                                                innerBtn.click();
+                                                results.push('INNER_CLICK:' + text);
+                                            }
+                                        }
+                                        // Also click host for good measure
+                                        splBtns[b].click();
+                                        results.push('HOST_CLICK:' + text);
+                                    }
+                                }
+                                return results.join(',');
+                            })()
+                        """)
+                        logger.info(f"Angular-aware click result: {click_result}")
+
+                        # PRIMARY: use nodriver's native find+click (triggers real browser click
+                        # that Zone.js intercepts — most reliable for Angular forms)
+                        await asyncio.sleep(0.5)
+                        try:
+                            nd_btn_text = "Submit" if action == 'SUBMIT' else "Next"
+                            nd_btn = await nd_page.find(nd_btn_text, best_match=True, timeout=3)
+                            if nd_btn:
+                                await nd_btn.click()
+                                logger.info(f"nodriver native click on '{nd_btn_text}' succeeded")
+                        except Exception as nd_click_e:
+                            logger.debug(f"nodriver find+click failed: {nd_click_e}")
+
+                        await asyncio.sleep(0.1)
+                        # Also send Space key as backup — trusted CDP event on focused inner button
                         await nd_page.evaluate("""
                             (function() {
                                 var splBtns = document.querySelectorAll('spl-button');
                                 for (var i = 0; i < splBtns.length; i++) {
                                     var text = (splBtns[i].textContent || '').trim().toLowerCase();
-                                    if (text.indexOf('""" + ('submit' if action == 'SUBMIT' else 'next') + """') >= 0) {
+                                    if (text.indexOf('""" + btn_target + """') >= 0) {
                                         if (splBtns[i].shadowRoot) {
                                             var inner = splBtns[i].shadowRoot.querySelector('button');
                                             if (inner) inner.focus();
@@ -3754,8 +4100,6 @@ class SmartRecruitersHandler(BaseHandler):
                             })()
                         """)
                         await asyncio.sleep(0.1)
-                        # Send Space key to the focused inner button — trusted CDP event
-                        # IMPORTANT: <button type="button"> responds to SPACE not ENTER in Chrome
                         await nd_page.send(cdp_nav.dispatch_key_event(
                             type_="keyDown", key=" ",
                             code="Space", windows_virtual_key_code=32, native_virtual_key_code=32))
