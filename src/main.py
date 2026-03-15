@@ -2163,10 +2163,22 @@ def discover(max, ats):
 
                     if is_sr:
                         # SR uses nodriver — let handler do its thing, skip JS extraction
-                        await app.browser_manager.start_nodriver()
+                        try:
+                            await app.browser_manager.start_nodriver()
+                        except Exception:
+                            # Browser died — force cleanup and restart
+                            await app.browser_manager.close()
+                            await asyncio.sleep(1)
+                            await app.browser_manager.start_nodriver()
                         page = None
                     else:
-                        await app.browser_manager.start_playwright()
+                        try:
+                            await app.browser_manager.start_playwright()
+                        except Exception:
+                            # Persistent context died — force cleanup and restart
+                            await app.browser_manager.close()
+                            await asyncio.sleep(1)
+                            await app.browser_manager.start_playwright()
                         page = await app.browser_manager.create_stealth_page()
 
                     # ---- STEP 1: Navigate and snapshot BEFORE Simplify ----
@@ -2211,22 +2223,133 @@ def discover(max, ats):
                             logger.debug(f"Simplify test error: {simp_e}")
 
                     # ---- STEP 3: Let handler fill the form (dry-run) ----
+                    # Set dry_run flag on handler so it fills but NEVER submits or closes page
+                    handler.dry_run = True
                     try:
                         await asyncio.wait_for(
-                            handler.apply(page, url, job), timeout=120
+                            handler.apply(page, url, job), timeout=180
                         )
                     except asyncio.TimeoutError:
                         logger.warning(f"Handler timed out for {company}")
                     except Exception as handler_e:
                         logger.debug(f"Handler error (expected in discovery): {handler_e}")
+                    finally:
+                        handler.dry_run = False
 
                     # ---- STEP 4: Extract all questions ----
                     questions = []
                     if page is not None:
                         try:
-                            questions = await page.evaluate(EXTRACT_JS)
+                            # Page may have been closed by handler — check first
+                            if not page.is_closed():
+                                questions = await page.evaluate(EXTRACT_JS)
+                            else:
+                                logger.info("Page closed by handler — creating new page for next job")
                         except Exception as extract_e:
                             logger.warning(f"Question extraction failed: {extract_e}")
+                    elif is_sr:
+                        # SR uses nodriver — extract questions via nd_page.evaluate()
+                        try:
+                            nd_browser = app.browser_manager.nd_browser
+                            if nd_browser:
+                                # Get the active tab (not the keeper tab)
+                                tabs = list(nd_browser.tabs)
+                                nd_page = None
+                                for tab in tabs:
+                                    if tab != app.browser_manager.nd_keeper_tab:
+                                        nd_page = tab
+                                        break
+                                if nd_page:
+                                    # SR-specific extraction: scan spl-input, spl-select, spl-textarea, radio groups
+                                    sr_questions = await nd_page.evaluate("""
+                                        (function() {
+                                            var results = [];
+                                            var seen = {};
+                                            // Scan all spl-* form components
+                                            var types = ['spl-input', 'spl-select', 'spl-textarea', 'spl-checkbox', 'spl-radio', 'spl-autocomplete'];
+                                            for (var t = 0; t < types.length; t++) {
+                                                var els = document.querySelectorAll(types[t]);
+                                                for (var i = 0; i < els.length; i++) {
+                                                    var el = els[i];
+                                                    // Get label via multiple strategies
+                                                    var label = el.getAttribute('label') || el.getAttribute('aria-label') || '';
+                                                    if (!label) {
+                                                        var prev = el.previousElementSibling;
+                                                        while (prev && !label) {
+                                                            var ptag = prev.tagName.toLowerCase();
+                                                            if (ptag === 'p' || ptag === 'label' || ptag === 'legend' || ptag === 'span') {
+                                                                label = prev.textContent.trim();
+                                                            }
+                                                            prev = prev.previousElementSibling;
+                                                        }
+                                                    }
+                                                    if (!label) {
+                                                        var parent = el.parentElement;
+                                                        for (var up = 0; up < 3 && parent && !label; up++) {
+                                                            var kids = parent.children;
+                                                            for (var k = 0; k < kids.length; k++) {
+                                                                var ktag = kids[k].tagName.toLowerCase();
+                                                                if ((ktag === 'p' || ktag === 'label') && kids[k] !== el) {
+                                                                    var txt = kids[k].textContent.trim();
+                                                                    if (txt.length > 3 && txt.length < 300) { label = txt; break; }
+                                                                }
+                                                            }
+                                                            parent = parent.parentElement;
+                                                        }
+                                                    }
+                                                    if (!label || seen[label]) continue;
+                                                    seen[label] = true;
+                                                    // Get value and options from shadow DOM
+                                                    var val = '', opts = [];
+                                                    if (el.shadowRoot) {
+                                                        var inp = el.shadowRoot.querySelector('input, textarea, select');
+                                                        if (inp) {
+                                                            val = inp.value || '';
+                                                            if (inp.tagName === 'SELECT') {
+                                                                for (var o = 0; o < inp.options.length; o++) {
+                                                                    var ot = (inp.options[o].text || '').trim();
+                                                                    if (ot && ot.indexOf('Select') !== 0) opts.push(ot);
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    var req = el.hasAttribute('required');
+                                                    results.push({label: label.substring(0, 200), name: el.id || '', field_type: types[t].replace('spl-',''), value: val, options: opts, required: req});
+                                                }
+                                            }
+                                            // Also scan radio groups
+                                            var radioNames = {};
+                                            var allRadios = document.querySelectorAll('input[type="radio"]');
+                                            for (var r = 0; r < allRadios.length; r++) {
+                                                var name = allRadios[r].name;
+                                                if (!name || radioNames[name]) continue;
+                                                radioNames[name] = true;
+                                                var parent2 = allRadios[r].closest('fieldset, [role="radiogroup"], div');
+                                                var rlabel = '';
+                                                if (parent2) {
+                                                    var leg = parent2.querySelector('legend, label, p');
+                                                    if (leg) rlabel = leg.textContent.trim();
+                                                }
+                                                if (rlabel && !seen[rlabel]) {
+                                                    seen[rlabel] = true;
+                                                    var ropts = [];
+                                                    var rgroup = document.querySelectorAll('input[name="' + name + '"]');
+                                                    for (var rr = 0; rr < rgroup.length; rr++) {
+                                                        var rtext = (rgroup[rr].closest('label') || rgroup[rr].parentElement || {}).textContent || '';
+                                                        if (rtext.trim()) ropts.push(rtext.trim().substring(0, 50));
+                                                    }
+                                                    results.push({label: rlabel.substring(0, 200), name: name, field_type: 'radio', value: '', options: ropts, required: true});
+                                                }
+                                            }
+                                            return JSON.stringify(results);
+                                        })()
+                                    """)
+                                    import json as _sr_json
+                                    if sr_questions and isinstance(sr_questions, str):
+                                        questions = _sr_json.loads(sr_questions)
+                                        logger.info(f"SR nodriver extraction: {len(questions)} questions found")
+                        except Exception as sr_extract_e:
+                            logger.warning(f"SR question extraction failed: {sr_extract_e}")
 
                     # ---- STEP 5: Log questions + add to banks ----
                     bank_before = _count_bank_entries(app.ai_answerer)
@@ -2287,6 +2410,12 @@ def discover(max, ats):
                 except Exception as job_e:
                     logger.error(f"[DISCOVER] Error scanning {company}: {job_e}")
                 finally:
+                    # Close page to free resources (discovery doesn't keep tabs open)
+                    try:
+                        if page and not page.is_closed():
+                            await page.close()
+                    except Exception:
+                        pass
                     # Reset job to pending so it can be applied to later
                     try:
                         await app.queue.reset_job(job_id)
