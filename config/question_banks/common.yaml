@@ -798,3 +798,74 @@ questions:
   do you have (or have a history/record of having) a disability?:
     answer: 'I do not want to answer'
     type: select
+
+  # === Mined from KB (2944 questions) - cross-template ===
+  what type of degree are you currently pursuing?:
+    answer: "Bachelor's"
+    type: select
+  what is your major?:
+    answer: 'Software Engineering'
+    type: text
+  when is your anticipated graduation date?:
+    answer: 'May 2026'
+    type: text
+  what is your current overall gpa?:
+    answer: '3.5'
+    type: text
+  what is the name of the college or university are you attending?:
+    answer: 'San Jose State University'
+    type: text
+  what is your degree program field of study (major or discipline)?:
+    answer: 'Software Engineering'
+    type: text
+  what is your current academic status?:
+    answer: 'Senior'
+    type: select
+  are you eligible to work in the country you are applying?:
+    answer: 'Yes'
+    type: select
+  will you now or in the future require company sponsorship for an immigration-related employment benefit?:
+    answer: 'No'
+    type: select
+  what is your current visa status?:
+    answer: 'U.S. Citizen'
+    type: select
+  what is your nationality?:
+    answer: 'American'
+    type: text
+  are you open to relocation?:
+    answer: 'Yes'
+    type: select
+  are you willing to work onsite?:
+    answer: 'Yes'
+    type: select
+  what is your current state of residence?:
+    answer: 'California'
+    type: text
+  where are you currently based?:
+    answer: 'San Jose, CA'
+    type: text
+  have you previously worked for this organization:
+    answer: 'No'
+    type: select
+  how did you hear about this job?:
+    answer: 'Online Job Board'
+    type: select
+  how did you hear about this role?:
+    answer: 'Online Job Board'
+    type: select
+  how many years of relevant, professional experience do you have?:
+    answer: '1'
+    type: text
+  if offered a position with our organization, are you willing to submit to a background check?:
+    answer: 'Yes'
+    type: select
+  preferred name:
+    answer: 'Alan'
+    type: text
+  current job title:
+    answer: 'Data Engineer'
+    type: text
+  references:
+    answer: 'Available upon request'
+    type: textarea

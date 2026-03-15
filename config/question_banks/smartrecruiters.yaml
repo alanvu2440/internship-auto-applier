@@ -63,10 +63,10 @@ questions:
   : answer: 'Yes'
     type: select
   are you currently enrolled in a bachelors or masters program and will be returning back to school fall/winter 2026?:
-    answer: 'Yes'
+    answer: 'No'
     type: select
   are you currently enrolled in a graudate program and will be returning back to school fall/winter 2026?:
-    answer: 'Yes'
+    answer: 'No'
     type: select
   ? are you currently enrolled in and in pursuit of a collegiate or university degree and will be for the full duration of the internship position you are applying to?
   : answer: 'Yes'
@@ -642,3 +642,269 @@ questions:
   are you at least 18 years old?:
     answer: 'Yes'
     type: select
+
+  # ============================================================
+  # ENROLLMENT / EDUCATION (mined from KB - 2944 questions)
+  # ============================================================
+  are you currently enrolled in an undergraduate or graduate program?:
+    answer: 'Yes'
+    type: select
+  what type of degree are you currently pursuing?:
+    answer: "Bachelor's"
+    type: select
+  what is your major?:
+    answer: 'Software Engineering'
+    type: text
+  what is your expected date of graduation?:
+    answer: 'May 2026'
+    type: text
+  when is your anticipated graduation date?:
+    answer: 'May 2026'
+    type: text
+  when will you be completing your degree?:
+    answer: 'May 2026'
+    type: text
+  select your anticipated bachelors degree graduation date:
+    answer: 'May 2026'
+    type: select
+  what is your current overall gpa?:
+    answer: '3.5'
+    type: text
+  what will be your undergrad level as of may 2026?:
+    answer: 'Senior'
+    type: select
+  what is the name of the college or university are you attending?:
+    answer: 'San Jose State University'
+    type: text
+  which institution do you currently attend/have most recently attended?:
+    answer: 'San Jose State University'
+    type: text
+  which degree subject are you currently studying/have most recently studied?:
+    answer: 'Software Engineering'
+    type: text
+  what city and state is the college/university located in?:
+    answer: 'San Jose, CA'
+    type: text
+  what is your degree program field of study (major or discipline)?:
+    answer: 'Software Engineering'
+    type: text
+  highest level of education completed?:
+    answer: "Bachelor's degree"
+    type: select
+  are you currently enrolled in a phd program in the u.s.?:
+    answer: 'No'
+    type: select
+  please confirm your month of graduation.:
+    answer: 'May'
+    type: text
+  please confirm your year of graduation.:
+    answer: '2026'
+    type: text
+  if currently enrolled in an academic program, please write-in your anticipated graduation/completion date (month and year):
+    answer: 'May 2026'
+    type: text
+  what is your current academic status?:
+    answer: 'Senior'
+    type: select
+  # ============================================================
+  # WORK AUTHORIZATION (mined from KB)
+  # ============================================================
+  are you eligible to work in the country you are applying?:
+    answer: 'Yes'
+    type: select
+  are you eligible to work in the united states?:
+    answer: 'Yes'
+    type: select
+  are you authorized to work in the u.s.?:
+    answer: 'Yes'
+    type: select
+  are you eligible to work in the country for which this role is located?:
+    answer: 'Yes'
+    type: select
+  are you legally authorized to work in the country in which this role is located?:
+    answer: 'Yes'
+    type: select
+  will you now or in the future require company sponsorship for an immigration-related employment benefit?:
+    answer: 'No'
+    type: select
+  will you now or in the future require visa sponsorship to work in the us?:
+    answer: 'No'
+    type: select
+  will you now or at any time in the future require visa sponsorship?:
+    answer: 'No'
+    type: select
+  will you require visa sponsorship now, or in the future?:
+    answer: 'No'
+    type: select
+  will you require sponsorship to work in the united states at any time in the future?:
+    answer: 'No'
+    type: select
+  would you require a new h-1b sponsorship to work with us?:
+    answer: 'No'
+    type: select
+  do you now, or will you in the future, require employer sponsorship to remain employed in the u.s. on an indefinite basis?:
+    answer: 'No'
+    type: select
+  what is your current visa status?:
+    answer: 'U.S. Citizen'
+    type: select
+  citizenship status:
+    answer: 'U.S. Citizen'
+    type: select
+  what is your nationality?:
+    answer: 'American'
+    type: text
+  are you a u.s. citizen, a u.s. lawful permanent resident (i.e. green card holder), or a protected individual?:
+    answer: 'Yes'
+    type: select
+  # ============================================================
+  # AVAILABILITY / RELOCATION (mined from KB)
+  # ============================================================
+  are you open to relocation?:
+    answer: 'Yes'
+    type: select
+  willingness to relocate:
+    answer: 'Yes'
+    type: select
+  are you willing to work onsite?:
+    answer: 'Yes'
+    type: select
+  can you commit to the full 13 week in-person internship program?:
+    answer: 'Yes'
+    type: select
+  does the pay rate stated in the job description fit your compensation needs for an internship?:
+    answer: 'Yes'
+    type: select
+  what is your current state of residence?:
+    answer: 'California'
+    type: text
+  where are you currently based?:
+    answer: 'San Jose, CA'
+    type: text
+  state:
+    answer: 'CA'
+    type: text
+  country:
+    answer: 'United States'
+    type: text
+  # ============================================================
+  # COMPANY-SPECIFIC (returning intern, employee, referral)
+  # ============================================================
+  have you previously worked for this organization:
+    answer: 'No'
+    type: select
+  have you been employed with the trade desk?:
+    answer: 'No'
+    type: select
+  have you previously been employed by either alo or bella+canvas?:
+    answer: 'No'
+    type: select
+  do you have a family member who works at commvault?:
+    answer: 'No'
+    type: select
+  ? are you currently employed by, or have you previously been employed by, volkswagen group or any of its subsidiaries, including but not limited to scout motors, audi, porsche, bentley, ducati, cupra,
+    seat, or skoda?
+  : answer: 'No'
+    type: select
+  do you have any professional or personal connections to individuals currently employed by scout motors or any of its subsidiaries or related entities?:
+    answer: 'No'
+    type: select
+  are you subject to any restriction that could prevent or limit your ability to work for scout motors?:
+    answer: 'No'
+    type: select
+  do you have any conflicts of interest that could affect your ability to perform the duties of the role you are applying for?:
+    answer: 'No'
+    type: select
+  if referred, please list the name of the person who referred you.:
+    answer: 'N/A'
+    type: text
+  would you like to be considered for other openings that you may be qualified for?:
+    answer: 'Yes'
+    type: select
+  current job title:
+    answer: 'Data Engineer'
+    type: text
+  preferred name:
+    answer: 'Alan'
+    type: text
+  what is your preferred name?:
+    answer: 'Alan'
+    type: text
+  what are your gender pronouns?:
+    answer: 'He/Him'
+    type: text
+  personal pronouns:
+    answer: 'He/Him'
+    type: text
+  # ============================================================
+  # HOW DID YOU HEAR
+  # ============================================================
+  how did you hear about this job?:
+    answer: 'Online Job Board'
+    type: select
+  how did you hear about this role?:
+    answer: 'Online Job Board'
+    type: select
+  how did you hear about us?:
+    answer: 'Online Job Board'
+    type: select
+  how did you hear about this internship opportunity?:
+    answer: 'Online Job Board'
+    type: select
+  where did you hear about this role?:
+    answer: 'Online Job Board'
+    type: select
+  # ============================================================
+  # EXPERIENCE / SKILLS
+  # ============================================================
+  how many years of relevant, professional experience do you have?:
+    answer: '1'
+    type: text
+  how many years of relevant work experience do you have (excluding internships)?:
+    answer: '1'
+    type: text
+  how many years of experience do you have with python?:
+    answer: '3'
+    type: text
+  how many years of experience do you have with javascript?:
+    answer: '4'
+    type: text
+  please list any relevant professional certifications and/or licenses you currently hold.:
+    answer: 'None at this time.'
+    type: textarea
+  # ============================================================
+  # BACKGROUND CHECK / LEGAL
+  # ============================================================
+  if offered a position with our organization, are you willing to submit to a background check?:
+    answer: 'Yes'
+    type: select
+  are you currently, or have you ever been employed by the u.s. government in either a civilian or military capacity?:
+    answer: 'No'
+    type: select
+  please indicate whether you are either a citizen or resident of any of the following countries cuba, iran, north korea, sudan, syria, russia, belarus:
+    answer: 'No'
+    type: select
+  # ============================================================
+  # CONSENT / ACKNOWLEDGMENT
+  # ============================================================
+  i confirm that the information i have provided in my application and resume is true, complete, and accurate to the best of my knowledge.:
+    answer: 'Yes'
+    type: select
+  i have read and understand the job applicant privacy notice:
+    answer: 'Yes'
+    type: select
+  # ============================================================
+  # MISC
+  # ============================================================
+  references:
+    answer: 'Available upon request'
+    type: textarea
+  portfolio:
+    answer: 'N/A'
+    type: text
+  additional skills:
+    answer: 'Python, JavaScript, TypeScript, React.js, Node.js, Express.js, PostgreSQL, MongoDB, Docker, AWS'
+    type: textarea
+  did someone refer you to this company? if so, please provide the referrers name.:
+    answer: 'No'
+    type: text
