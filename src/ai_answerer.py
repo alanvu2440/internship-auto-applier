@@ -279,13 +279,23 @@ Role: {role}
         """Look up a question in per-template banks.
 
         Returns {answer, type} if found, None otherwise.
-        Priority: template-specific bank → common bank.
+        Priority: common bank (cross-ATS) → template-specific bank.
+        Common bank is checked first so cross-bank learned answers are found immediately.
         """
         self._load_template_banks()
         norm = re.sub(r'\s+', ' ', question.lower().strip())
         norm = re.sub(r'[*\n\r]', '', norm).strip()
 
-        # 1. Try template-specific bank (exact match)
+        # 1. Try common bank FIRST (cross-ATS answers available immediately)
+        if self._common_bank:
+            if norm in self._common_bank:
+                return self._common_bank[norm]
+            norm_clean = norm.rstrip('?. ')
+            for key, val in self._common_bank.items():
+                if key.startswith(norm_clean[:40]) or norm_clean.startswith(key[:40]):
+                    return val
+
+        # 2. Try template-specific bank
         if ats_type and ats_type in self._template_banks:
             bank = self._template_banks[ats_type]
             if norm in bank:
@@ -293,15 +303,6 @@ Role: {role}
             # Try fuzzy: strip trailing punctuation and try prefix match
             norm_clean = norm.rstrip('?. ')
             for key, val in bank.items():
-                if key.startswith(norm_clean[:40]) or norm_clean.startswith(key[:40]):
-                    return val
-
-        # 2. Try common bank
-        if self._common_bank:
-            if norm in self._common_bank:
-                return self._common_bank[norm]
-            norm_clean = norm.rstrip('?. ')
-            for key, val in self._common_bank.items():
                 if key.startswith(norm_clean[:40]) or norm_clean.startswith(key[:40]):
                     return val
 
@@ -371,30 +372,41 @@ Role: {role}
         entry = {"answer": templatized, "type": field_type or "text"}
         bank_dict[norm_q] = entry
 
-        # Update in-memory reference
+        # Update in-memory reference for ATS-specific bank
         if ats_type and ats_type in self._template_banks:
             self._template_banks[ats_type][norm_q] = entry
-        elif self._common_bank is not None:
+
+        # ALWAYS update common bank in-memory (cross-bank learning)
+        if self._common_bank is not None:
             self._common_bank[norm_q] = entry
 
         # Append to YAML file (append-only for performance)
-        try:
-            with open(bank_file, "a", encoding="utf-8") as f:
-                # YAML-safe: use double-quoted key if it contains apostrophes,
-                # otherwise use unquoted key. Quote answer with single quotes
-                # (double-escaping any apostrophes in the answer value).
-                safe_answer = templatized.replace("'", "''")
+        def _write_to_bank_file(filepath):
+            safe_answer = templatized.replace("'", "''")
+            with open(filepath, "a", encoding="utf-8") as f:
                 if "'" in norm_q:
-                    # Double-quote the key and escape any internal double quotes
                     safe_question = norm_q.replace('"', '\\"')
                     f.write(f'\n  "{safe_question}":\n')
                 else:
                     f.write(f"\n  {norm_q}:\n")
                 f.write(f"    answer: '{safe_answer}'\n")
                 f.write(f"    type: {field_type or 'text'}\n")
+
+        # Write to primary bank file
+        try:
+            _write_to_bank_file(bank_file)
             logger.debug(f"Auto-learned question to {bank_file.name}: '{norm_q[:50]}' -> '{templatized[:30]}'")
         except Exception as e:
-            logger.debug(f"Failed to auto-learn question: {e}")
+            logger.debug(f"Failed to auto-learn question to {bank_file}: {e}")
+
+        # Cross-bank: also write to common.yaml if we wrote to an ATS-specific bank
+        common_path = Path("config/question_banks/common.yaml")
+        if bank_file != common_path and common_path.exists():
+            try:
+                _write_to_bank_file(common_path)
+                logger.debug(f"Cross-bank learned to common.yaml: '{norm_q[:50]}'")
+            except Exception as e:
+                logger.debug(f"Failed to cross-bank learn to common.yaml: {e}")
 
     def _get_model(self):
         """Get or create Gemini model."""

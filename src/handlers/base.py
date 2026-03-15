@@ -40,6 +40,7 @@ class BaseHandler(ABC):
         self.review_mode = False  # Set by main.py — pause before submit for manual review
         self.captcha_solver = captcha_solver
         self._last_status = "failed"  # Default; handlers update on success/closed/etc.
+        self._simplify_status = "not_checked"  # Simplify extension status tracking
         self._fields_filled = {}  # Track which fields were filled
         self._fields_missed = {}  # Track which fields were missed/empty
 
@@ -607,6 +608,7 @@ class BaseHandler(ABC):
 
             if not simplify_host:
                 logger.debug("Simplify extension not detected on page")
+                self._simplify_status = "not_detected"
                 return False
 
             # Debug: dump all simplify-related elements so we can find the right click target
@@ -748,6 +750,7 @@ class BaseHandler(ABC):
 
             if not autofill_clicked:
                 logger.warning("Simplify detected but could NOT click Autofill — proceeding without")
+                self._simplify_status = "detected_no_click"
             else:
                 logger.info("Simplify triggered — waiting for fields to fill...")
 
@@ -850,6 +853,43 @@ class BaseHandler(ABC):
                     logger.warning(f"[SIMPLIFY FLAG] email field '{field_key}' has bad value: '{value}'")
                 elif ('first' in low_key or 'last' in low_key or 'name' in low_key) and len(value) > 40:
                     logger.warning(f"[SIMPLIFY FLAG] name field '{field_key}' looks long: '{value}'")
+
+            # Set Simplify status based on results
+            if autofill_clicked and net_filled == 0:
+                self._simplify_status = "clicked_no_fill"
+            elif autofill_clicked and net_filled > 0:
+                # Check if all visible fields were filled (full vs partial)
+                total_visible = await page.evaluate("""() => {
+                    let count = 0;
+                    for (const inp of document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="file"]), textarea, select')) {
+                        const rect = inp.getBoundingClientRect();
+                        if (rect.width > 0 && rect.height > 0) count++;
+                    }
+                    return count;
+                }""")
+                unfilled_count = await page.evaluate("""() => {
+                    let count = 0;
+                    for (const inp of document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="file"]), textarea')) {
+                        const rect = inp.getBoundingClientRect();
+                        if (rect.width > 0 && rect.height > 0 && (!inp.value || !inp.value.trim())) count++;
+                    }
+                    return count;
+                }""")
+                if unfilled_count == 0:
+                    self._simplify_status = "clicked_full"
+                else:
+                    self._simplify_status = "clicked_partial"
+                logger.info(f"[SIMPLIFY STATUS] {self._simplify_status} (filled={net_filled}, unfilled={unfilled_count}, total={total_visible})")
+
+            # Check if Simplify already submitted the application
+            try:
+                page_text = (await page.text_content("body") or "").lower()
+                if any(phrase in page_text for phrase in ["thank you for applying", "application submitted",
+                                                          "application received", "we've received your application"]):
+                    self._simplify_status = "already_submitted"
+                    logger.info("[SIMPLIFY STATUS] already_submitted — Simplify submitted before bot")
+            except Exception:
+                pass
 
             return net_filled > 0
 

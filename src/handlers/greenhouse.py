@@ -6,6 +6,7 @@ URLs: boards.greenhouse.io, job-boards.greenhouse.io
 """
 
 import asyncio
+import random
 from typing import Dict, Any
 from playwright.async_api import Page, Frame
 from loguru import logger
@@ -4614,6 +4615,8 @@ class GreenhouseHandler(BaseHandler):
             try:
                 btn = await page.query_selector(selector)
                 if btn and await btn.is_visible():
+                    # Human-like delay before submit to avoid bot detection
+                    await asyncio.sleep(random.uniform(2.0, 5.0))
                     await self.browser_manager.human_delay(500, 1000)
                     await btn.click()
                     logger.info("Clicked submit button")
@@ -4654,6 +4657,8 @@ class GreenhouseHandler(BaseHandler):
                     continue
                 text = (await btn.text_content() or "").strip().lower()
                 if any(w in text for w in ["submit", "apply", "send", "continue"]):
+                    # Human-like delay before fallback submit
+                    await asyncio.sleep(random.uniform(2.0, 5.0))
                     await self.browser_manager.human_delay(500, 1000)
                     await btn.scroll_into_view_if_needed()
                     await btn.click()

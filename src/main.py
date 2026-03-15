@@ -354,7 +354,7 @@ class InternshipAutoApplier:
         # CHECK: Don't apply if we have an active interview at this company
         try:
             interview_statuses = ("interview_invite", "assessment", "offer", "follow_up")
-            existing = await self.queue.db.execute(
+            existing = await self.queue._db.execute(
                 "SELECT response_status FROM jobs WHERE company = ? AND response_status IN (?, ?, ?, ?)",
                 (company, *interview_statuses)
             )
@@ -370,7 +370,7 @@ class InternshipAutoApplier:
             #   Priority 1: Software Engineer, SWE, Backend, Frontend, Full Stack
             #   Priority 2: Data Engineer, Data Scientist, ML, AI
             #   Priority 3: Everything else
-            company_apps = await self.queue.db.execute(
+            company_apps = await self.queue._db.execute(
                 "SELECT role FROM jobs WHERE company = ? AND status = 'applied'",
                 (company,)
             )
@@ -697,6 +697,10 @@ class InternshipAutoApplier:
             except Exception:
                 pass
 
+            # Log Simplify extension status
+            simplify_status = getattr(handler, '_simplify_status', 'not_checked')
+            logger.info(f"[SIMPLIFY] {company}: {simplify_status}")
+
             # Build detailed application record
             app_record = {
                 "timestamp": _time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -709,6 +713,7 @@ class InternshipAutoApplier:
                 "duration_seconds": round(duration, 1),
                 "success": success,
                 "handler_status": handler_status,
+                "simplify_status": simplify_status,
                 "fields_filled": fields_filled,
                 "fields_missed": fields_missed,
                 "questions_answered": questions_answered,

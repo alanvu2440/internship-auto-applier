@@ -6,6 +6,8 @@ Handles text inputs, dropdowns, checkboxes, radio buttons, and file uploads.
 """
 
 import re
+import random
+import asyncio
 from typing import Any, Dict, List, Optional
 from playwright.async_api import Page, ElementHandle
 from loguru import logger
@@ -247,21 +249,32 @@ class FormFiller:
         critical_filled = await self._fill_critical_fields(page)
         filled.update(critical_filled)
 
+        # Human-like delay between form sections to avoid bot detection
+        await asyncio.sleep(random.uniform(0.5, 1.5))
+
         # Fill text inputs
         text_filled = await self._fill_text_inputs(page)
         filled.update(text_filled)
+
+        await asyncio.sleep(random.uniform(0.3, 1.0))
 
         # Fill standard HTML dropdowns (<select>)
         dropdown_filled = await self._fill_dropdowns(page)
         filled.update(dropdown_filled)
 
+        await asyncio.sleep(random.uniform(0.3, 1.0))
+
         # Fill custom dropdowns (Greenhouse/React style)
         custom_dropdown_filled = await self._fill_custom_dropdowns(page)
         filled.update(custom_dropdown_filled)
 
+        await asyncio.sleep(random.uniform(0.3, 0.8))
+
         # Fill checkboxes
         checkbox_filled = await self._fill_checkboxes(page)
         filled.update(checkbox_filled)
+
+        await asyncio.sleep(random.uniform(0.3, 0.8))
 
         # Fill radio buttons
         radio_filled = await self._fill_radio_buttons(page)
@@ -1092,7 +1105,8 @@ class FormFiller:
                             filled[name or id_attr or placeholder] = current_value
                             continue
 
-                        # Only fill if empty
+                        # Only fill if empty — human-like delay between text inputs
+                        await asyncio.sleep(random.uniform(0.5, 1.5))
                         await element.click()
                         await element.fill("")
                         await element.fill(str(value))
@@ -1139,6 +1153,9 @@ class FormFiller:
                             continue
 
                     selected = False
+
+                    # Human-like delay between dropdown selections
+                    await asyncio.sleep(random.uniform(0.3, 1.0))
 
                     # Get all options first for quick matching
                     options = await element.query_selector_all("option")
@@ -2550,12 +2567,14 @@ class FormFiller:
                     if any(word in f"{name} {id_attr}".lower() for word in ["resume", "cv", "file"]):
                         await file_input.set_input_files(resume_path)
                         logger.info(f"Uploaded resume to '{name or id_attr}'")
+                        await asyncio.sleep(random.uniform(1.0, 3.0))  # Human-like pause after upload
                         return True
 
                     # If accept includes pdf, likely resume
                     if ".pdf" in accept.lower() or "application/pdf" in accept.lower():
                         await file_input.set_input_files(resume_path)
                         logger.info(f"Uploaded resume to file input")
+                        await asyncio.sleep(random.uniform(1.0, 3.0))  # Human-like pause after upload
                         return True
 
                 except Exception as e:
@@ -2565,6 +2584,7 @@ class FormFiller:
             if len(file_inputs) == 1:
                 await file_inputs[0].set_input_files(resume_path)
                 logger.info("Uploaded resume to single file input")
+                await asyncio.sleep(random.uniform(1.0, 3.0))  # Human-like pause after upload
                 return True
 
         except Exception as e:
@@ -2599,6 +2619,11 @@ class FormFiller:
                     try:
                         element = await page.query_selector(selector)
                         if element and await element.is_visible():
+                            # Human-like delay before submit (longer) or next (shorter)
+                            if action == 'submit':
+                                await asyncio.sleep(random.uniform(2.0, 5.0))
+                            else:
+                                await asyncio.sleep(random.uniform(0.5, 1.5))
                             await element.click()
                             logger.info(f"Clicked {action} button: {pattern}")
                             return action
