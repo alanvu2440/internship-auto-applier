@@ -53,9 +53,11 @@ class OptionMatcher:
 
         # Authorization questions - including "unrestricted right to work"
         if any(x in q for x in ["authorized", "eligible", "legally", "right to work", "unrestricted"]):
-            # Read config explicitly; absence of key → False (don't assume authorized)
-            is_authorized = work_auth.get("us_work_authorized") or work_auth.get("us_citizen", False)
-            if is_authorized:
+            # Read config explicitly; missing keys → return None (don't guess)
+            auth = work_auth.get("us_work_authorized")
+            citizen = work_auth.get("us_citizen")
+            if auth is True or citizen is True:
+                # Explicitly authorized
                 for i, opt in enumerate(options_lower):
                     if "yes" in opt:
                         return options[i]
@@ -63,10 +65,14 @@ class OptionMatcher:
                 for i, opt in enumerate(options_lower):
                     if "permanent" in opt or "authorized" in opt:
                         return options[i]
-            else:
+            elif auth is False and citizen is False:
+                # Explicitly NOT authorized
                 for i, opt in enumerate(options_lower):
                     if "no" in opt:
                         return options[i]
+            else:
+                # Missing config — return None, don't guess
+                return None
 
         # Work permit type / authorization type (conditional follow-up)
         if any(x in q for x in ["work permit", "permit type", "authorization type", "work authorization"]):

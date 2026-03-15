@@ -425,6 +425,7 @@ class InternshipAutoApplier:
             HANDLER_TIMEOUT_SECONDS = 300
             start_time = _time.time()
             esc_interrupted = False
+            handler._simplify_status = "not_checked"  # Reset per job — handlers are reused
             try:
                 handler_task = asyncio.create_task(
                     asyncio.wait_for(handler.apply(page, url, job_data), timeout=HANDLER_TIMEOUT_SECONDS)

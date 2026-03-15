@@ -4070,43 +4070,64 @@ class SmartRecruitersHandler(BaseHandler):
                         """)
                         logger.info(f"Angular-aware click result: {click_result}")
 
+                        # Check if Angular click already navigated the page
+                        await asyncio.sleep(1)
+                        current_url_before = await nd_page.evaluate("window.location.href")
+                        post_angular_url = current_url_before  # Will be compared after each fallback
+
                         # PRIMARY: use nodriver's native find+click (triggers real browser click
                         # that Zone.js intercepts — most reliable for Angular forms)
-                        await asyncio.sleep(0.5)
-                        try:
-                            nd_btn_text = "Submit" if action == 'SUBMIT' else "Next"
-                            nd_btn = await nd_page.find(nd_btn_text, best_match=True, timeout=3)
-                            if nd_btn:
-                                await nd_btn.click()
-                                logger.info(f"nodriver native click on '{nd_btn_text}' succeeded")
-                        except Exception as nd_click_e:
-                            logger.debug(f"nodriver find+click failed: {nd_click_e}")
+                        if 'INNER_CLICK' not in str(click_result) and 'HOST_CLICK' not in str(click_result):
+                            # Angular click didn't fire — try nodriver
+                            pass  # fall through to nodriver click below
+                        else:
+                            # Angular click fired — check if page navigated
+                            post_angular_url = await nd_page.evaluate("window.location.href")
 
-                        await asyncio.sleep(0.1)
-                        # Also send Space key as backup — trusted CDP event on focused inner button
-                        await nd_page.evaluate("""
-                            (function() {
-                                var splBtns = document.querySelectorAll('spl-button');
-                                for (var i = 0; i < splBtns.length; i++) {
-                                    var text = (splBtns[i].textContent || '').trim().toLowerCase();
-                                    if (text.indexOf('""" + btn_target + """') >= 0) {
-                                        if (splBtns[i].shadowRoot) {
-                                            var inner = splBtns[i].shadowRoot.querySelector('button');
-                                            if (inner) inner.focus();
+                        if post_angular_url != current_url_before:
+                            logger.info(f"Page navigated after Angular click — skipping fallbacks")
+                        else:
+                            await asyncio.sleep(0.5)
+                            try:
+                                nd_btn_text = "Submit" if action == 'SUBMIT' else "Next"
+                                nd_btn = await nd_page.find(nd_btn_text, best_match=True, timeout=3)
+                                if nd_btn:
+                                    await nd_btn.click()
+                                    logger.info(f"nodriver native click on '{nd_btn_text}' succeeded")
+                            except Exception as nd_click_e:
+                                logger.debug(f"nodriver find+click failed: {nd_click_e}")
+
+                            # Check if nodriver click navigated the page
+                            await asyncio.sleep(1)
+                            post_nodriver_url = await nd_page.evaluate("window.location.href")
+                            if post_nodriver_url != current_url_before:
+                                logger.info(f"Page navigated after nodriver click — skipping Space key")
+                            else:
+                                await asyncio.sleep(0.1)
+                                # Send Space key as last resort — trusted CDP event on focused inner button
+                                await nd_page.evaluate("""
+                                    (function() {
+                                        var splBtns = document.querySelectorAll('spl-button');
+                                        for (var i = 0; i < splBtns.length; i++) {
+                                            var text = (splBtns[i].textContent || '').trim().toLowerCase();
+                                            if (text.indexOf('""" + btn_target + """') >= 0) {
+                                                if (splBtns[i].shadowRoot) {
+                                                    var inner = splBtns[i].shadowRoot.querySelector('button');
+                                                    if (inner) inner.focus();
+                                                }
+                                                return;
+                                            }
                                         }
-                                        return;
-                                    }
-                                }
-                            })()
-                        """)
-                        await asyncio.sleep(0.1)
-                        await nd_page.send(cdp_nav.dispatch_key_event(
-                            type_="keyDown", key=" ",
-                            code="Space", windows_virtual_key_code=32, native_virtual_key_code=32))
-                        await nd_page.send(cdp_nav.dispatch_key_event(
-                            type_="keyUp", key=" ",
-                            code="Space", windows_virtual_key_code=32, native_virtual_key_code=32))
-                        logger.info(f"Also sent Space key to focused inner button for '{btn_text}'")
+                                    })()
+                                """)
+                                await asyncio.sleep(0.1)
+                                await nd_page.send(cdp_nav.dispatch_key_event(
+                                    type_="keyDown", key=" ",
+                                    code="Space", windows_virtual_key_code=32, native_virtual_key_code=32))
+                                await nd_page.send(cdp_nav.dispatch_key_event(
+                                    type_="keyUp", key=" ",
+                                    code="Space", windows_virtual_key_code=32, native_virtual_key_code=32))
+                                logger.info(f"Sent Space key to focused inner button for '{btn_text}'")
                     except Exception as cdp_click_e:
                         logger.info(f"CDP click failed ({cdp_click_e}), trying nodriver find")
                         try:

@@ -237,7 +237,18 @@ class JobQueue:
             query += f" AND ({or_clauses})"
             params.extend(url_patterns)
 
-        query += f" ORDER BY priority DESC, {ats_priority} DESC, attempts ASC, created_at DESC LIMIT 1"
+        software_role_boost = """
+            CASE
+                WHEN lower(role) LIKE '%software%' OR lower(role) LIKE '%swe %'
+                     OR lower(role) LIKE '%developer%' OR lower(role) LIKE '%data engineer%'
+                     OR lower(role) LIKE '%backend%' OR lower(role) LIKE '%frontend%'
+                     OR lower(role) LIKE '%full stack%' OR lower(role) LIKE '%ml %'
+                     OR lower(role) LIKE '%machine learning%'
+                THEN 0
+                ELSE 1
+            END
+        """
+        query += f" ORDER BY priority DESC, {software_role_boost}, {ats_priority} DESC, attempts ASC, created_at DESC LIMIT 1"
 
         cursor = await self._db.execute(query, params)
         row = await cursor.fetchone()
