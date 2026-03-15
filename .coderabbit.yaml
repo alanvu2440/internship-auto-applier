@@ -7,7 +7,9 @@ reviews:
   review_status: true
   auto_review:
     enabled: true
-    drafts: false
+    drafts: true
+    base_branches:
+      - ".*"
   path_instructions:
     - path: "src/handlers/**"
       instructions: "Review for: proper Simplify-first flow (check if field filled before overwriting), template bank usage, required field detection, and browser stability. Never spawn multiple Chrome windows."
