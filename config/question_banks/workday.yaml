@@ -11,7 +11,7 @@ questions:
     answer: 'Yes'
     type: dropdown
   ? are you available to work full-time for at least 10 weeks (12 weeks preferred) during the summer? interns will start work in may or june with flexibility depending on school schedule.
-  : answer: 'No'
+  : answer: 'Yes'
     type: dropdown
   ? are you currently an enrolled student attending a college or university with an expected graduation date on or after august 2026?
   : answer: 'Yes'
@@ -95,7 +95,7 @@ questions:
     type: dropdown
   ? i have uploaded both my cover letter and resume/cv. if not, please click on the "back" button at the bottom of this page and upload your cover letter and resume/cv (in the "cover letter and resume/cv"
     section on the my experience page).
-  : answer: I am writing to express my strong interest in this position. As a Software Engineering
+  : answer: I am writing to express my strong interest in this internship position. As a Computer Science student, I am eager to contribute my technical skills and learn from your team.
     type: dropdown
   if hired, can you provide proof of eiligibility?:
     answer: 'Yes'
@@ -138,11 +138,11 @@ questions:
     answer: 'Yes'
     type: dropdown
   'previous first american employment end date (most recent):':
-    answer: 'No'
-    type: text
+    answer: ''
+    type: date
   'previous first american employment start date (most recent):':
-    answer: 'No'
-    type: text
+    answer: ''
+    type: date
   ? the boeing company is a government contractor and does business all over the world. governments impose certain regulatory requirements that affect boeing, its employees and candidates for employment.
     boeing reviews all potential hires as part of its anti-corruption program. in order to ensure compliance with these regulatory requirements, boeing requires all applicants to complete this form.throughout
     the conflict of interest (coi) questions, "boeing" refers to any business unit, operating group or function of the boeing company and its subsidiaries.if you are a government employee, you know the
@@ -188,7 +188,7 @@ questions:
     answer: '3.6'
     type: dropdown
   what is your graduation month?:
-    answer: May 2026
+    answer: May
     type: dropdown
   what is your graduation year?:
     answer: '2026'

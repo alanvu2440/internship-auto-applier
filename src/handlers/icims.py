@@ -32,7 +32,6 @@ ICIMS_COOKIE_DIR.mkdir(parents=True, exist_ok=True)
 # Account tracker
 ICIMS_ACCOUNT_TRACKER = Path("data/icims_accounts.json")
 
-_ICIMS_PASSWORD_FALLBACK = "CHANGE_ME"
 
 
 def _load_icims_accounts() -> Dict[str, Any]:
@@ -74,7 +73,11 @@ class ICIMSHandler(BaseHandler):
 
     @property
     def _icims_password(self):
-        return self.form_filler.config.get("accounts", {}).get("icims_password", "") or _ICIMS_PASSWORD_FALLBACK
+        password = self.form_filler.config.get("accounts", {}).get("icims_password")
+        if not password:
+            logger.error("iCIMS handler: icims_password not configured — skipping auth")
+            return None
+        return password
 
     # Step indicators in the progress bar
     STEP_NAMES = [
@@ -442,10 +445,14 @@ class ICIMSHandler(BaseHandler):
                         await self.browser_manager.human_delay(200, 400)
 
                     # Password fields
+                    if self._icims_password is None:
+                        return False
                     pw_fields = await frame.query_selector_all('input[type="password"]')
                     for pw in pw_fields:
                         if await pw.is_visible():
-                            await pw.fill(self._icims_password)
+                            current = await pw.input_value()
+                            if not current or not current.strip():
+                                await pw.fill(self._icims_password)
                             await self.browser_manager.human_delay(200, 400)
 
                     # First name
@@ -598,9 +605,13 @@ class ICIMSHandler(BaseHandler):
                         await self.browser_manager.human_delay(200, 400)
 
                     # Password
+                    if self._icims_password is None:
+                        return False
                     pw = await frame.query_selector('input[type="password"]')
                     if pw and await pw.is_visible():
-                        await pw.fill(self._icims_password)
+                        current = await pw.input_value()
+                        if not current or not current.strip():
+                            await pw.fill(self._icims_password)
                         await self.browser_manager.human_delay(200, 400)
 
                     if filled:

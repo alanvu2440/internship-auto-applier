@@ -294,6 +294,10 @@ class BaseHandler(ABC):
                 for (const inp of inputs) {
                     const rect = inp.getBoundingClientRect();
                     if (rect.width === 0 || rect.height === 0) continue;
+                    // Skip disabled/readonly inputs — they are never fillable and must not block submit
+                    if (inp.disabled || inp.readOnly ||
+                            inp.getAttribute('aria-disabled') === 'true' ||
+                            inp.getAttribute('aria-readonly') === 'true') continue;
                     let labelText = "";
                     let p = inp.parentElement;
                     for (let i = 0; i < 5 && p; i++) {

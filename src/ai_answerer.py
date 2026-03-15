@@ -380,10 +380,16 @@ Role: {role}
         # Append to YAML file (append-only for performance)
         try:
             with open(bank_file, "a", encoding="utf-8") as f:
-                # YAML-safe: quote the answer to handle colons, special chars
+                # YAML-safe: use double-quoted key if it contains apostrophes,
+                # otherwise use unquoted key. Quote answer with single quotes
+                # (double-escaping any apostrophes in the answer value).
                 safe_answer = templatized.replace("'", "''")
-                safe_question = norm_q.replace("'", "''")
-                f.write(f"\n  {safe_question}:\n")
+                if "'" in norm_q:
+                    # Double-quote the key and escape any internal double quotes
+                    safe_question = norm_q.replace('"', '\\"')
+                    f.write(f'\n  "{safe_question}":\n')
+                else:
+                    f.write(f"\n  {norm_q}:\n")
                 f.write(f"    answer: '{safe_answer}'\n")
                 f.write(f"    type: {field_type or 'text'}\n")
             logger.debug(f"Auto-learned question to {bank_file.name}: '{norm_q[:50]}' -> '{templatized[:30]}'")
@@ -1595,24 +1601,21 @@ Role: {role}
             self._log_to_kb(question, cached, "cache", field_type=field_type)
             return cached
 
-        # Try generic fallback BEFORE AI — only use if HIGH confidence (85+)
-        # Lower confidence answers should go to AI for better quality
+        # Pre-compute generic fallback (used only if AI fails or is unavailable)
         generic_answer, generic_confidence = self._generate_generic_answer_with_confidence(question, field_type, max_length)
-        if generic_confidence >= 85:
-            # Good config-based answer — skip AI entirely
-            source = "config_fallback" if generic_confidence >= 85 else "config_fallback_broad"
-            logger.info(f"Config fallback (confidence={generic_confidence}): '{question[:50]}...' -> '{generic_answer[:50]}...'")
-            self.session_answers.append({"question": question, "answer": generic_answer, "source": source, "confidence": generic_confidence})
-            self._log_to_kb(question, generic_answer, source, field_type=field_type)
-            # Cache it for instant reuse next time
-            self._answer_cache[cache_key] = self._to_template(generic_answer)
-            self._save_answer_cache()
-            self._auto_learn_to_template_bank(question, generic_answer, field_type, "config_fallback")
-            return generic_answer
 
-        # Generic confidence is low (0) — try AI for a better answer
+        # Try AI for a better answer
         if not GENAI_AVAILABLE or not self._ai_available or not self.api_key or not isinstance(self.api_key, str):
-            logger.warning(f"AI unavailable — leaving unsolved for manual: '{question[:50]}...'")
+            logger.warning(f"AI unavailable — trying generic fallback: '{question[:50]}...'")
+            if generic_confidence >= 85:
+                source = "config_fallback"
+                logger.info(f"Config fallback (confidence={generic_confidence}): '{question[:50]}...' -> '{generic_answer[:50]}...'")
+                self.session_answers.append({"question": question, "answer": generic_answer, "source": source, "confidence": generic_confidence})
+                self._log_to_kb(question, generic_answer, source, field_type=field_type)
+                self._answer_cache[cache_key] = self._to_template(generic_answer)
+                self._save_answer_cache()
+                self._auto_learn_to_template_bank(question, generic_answer, field_type, "config_fallback")
+                return generic_answer
             self.session_answers.append({"question": question, "answer": "", "source": "unsolved", "confidence": 0})
             self._log_to_kb(question, f"[UNSOLVED - AI unavailable] generic_suggestion={generic_answer}", "unsolved", field_type=field_type)
             return ""
@@ -1728,7 +1731,18 @@ Role: {role}
                 logger.error(f"AI answering failed: {e}")
                 break
 
-        # AI failed and generic confidence is low — leave field EMPTY for manual review
+        # AI failed — try generic fallback (only if confidence >= 85)
+        if generic_confidence >= 85:
+            source = "config_fallback"
+            logger.info(f"Config fallback after AI failure (confidence={generic_confidence}): '{question[:50]}...' -> '{generic_answer[:50]}...'")
+            self.session_answers.append({"question": question, "answer": generic_answer, "source": source, "confidence": generic_confidence})
+            self._log_to_kb(question, generic_answer, source, field_type=field_type)
+            self._answer_cache[cache_key] = self._to_template(generic_answer)
+            self._save_answer_cache()
+            self._auto_learn_to_template_bank(question, generic_answer, field_type, "config_fallback")
+            return generic_answer
+
+        # Generic confidence is also low — leave field EMPTY for manual review
         # Don't fill garbage answers that hurt the application
         logger.warning(f"UNSOLVED QUESTION — leaving empty for manual: '{question[:80]}...'")
         self.session_answers.append({"question": question, "answer": "", "source": "unsolved", "confidence": 0})

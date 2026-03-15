@@ -11,6 +11,14 @@ from playwright.async_api import Page, ElementHandle
 from loguru import logger
 
 
+# Option text patterns that indicate a placeholder/unselected dropdown.
+# Module-level so it's created once, not on every loop iteration.
+_PLACEHOLDER_OPTION_PATTERNS = {
+    "select", "choose", "please select", "please choose", "--", "- select -",
+    "- choose -", "select...", "choose...", "select one", "choose one"
+}
+
+
 class FormFiller:
     """Fills job application forms using config data."""
 
@@ -1079,8 +1087,8 @@ class FormFiller:
                     if value:
                         # Check if already filled (e.g. by Simplify extension) — don't override
                         current_value = await element.input_value()
-                        if current_value and len(current_value.strip()) > 0:
-                            logger.debug(f"Text field '{name or id_attr}' already filled with '{current_value}' — preserving")
+                        if current_value and current_value.strip():
+                            logger.debug(f"Text field '{name or id_attr}' already filled ([{len(current_value)} chars]) — preserving")
                             filled[name or id_attr or placeholder] = current_value
                             continue
 
@@ -1114,11 +1122,21 @@ class FormFiller:
                 if value:
                     # Check if already selected (e.g. by Simplify) — don't override
                     current_val = await element.input_value()
-                    placeholder_values = {"0", "", "select", "select...", "choose", "please select", "please choose", "--", "- select -", "- choose -"}
-                    if current_val and current_val.strip() and current_val.strip().lower() not in placeholder_values:
-                        logger.debug(f"Dropdown '{name or id_attr}' already has value '{current_val}' — preserving")
-                        filled[name or id_attr] = current_val
-                        continue
+                    # Fast path: empty value is always a placeholder — skip CDP round-trip
+                    if current_val and current_val.strip() and current_val.strip() != "0":
+                        selected_option_text = await element.evaluate(
+                            "el => el.options[el.selectedIndex] ? el.options[el.selectedIndex].text.trim().toLowerCase() : ''"
+                        )
+                        is_placeholder = (
+                            selected_option_text in _PLACEHOLDER_OPTION_PATTERNS or
+                            selected_option_text.startswith("select") or
+                            selected_option_text.startswith("choose") or
+                            selected_option_text.startswith("--")
+                        )
+                        if not is_placeholder:
+                            logger.debug(f"Dropdown '{name or id_attr}' already has value ([{len(current_val)} chars]) — preserving")
+                            filled[name or id_attr] = current_val
+                            continue
 
                     selected = False
 

@@ -3,7 +3,7 @@ description: Pre-mapped questions for smartrecruiters forms
 questions:
   ? 1. in the past three years from today’s date, have you been employed by a private sector organization/company & personally participated in a bid, proposal, capture, or competition for any program(s)
     in which northrop grumman may be/has been a competitor?
-  : answer: ‘No’
+  : answer: 'No'
     type: dropdown
   ? 2. are you currently employed or have you been employed in the past five years by a state or local government entity (other than temporary summer or part-time positions, e.g. lifeguard, emt, not involved
     in government contracting/procurement activities)?
@@ -338,7 +338,6 @@ questions:
     type: select
   please list name(s) and nature of relationship(s).:
     answer: N/A
-      to software engineering.
     type: textarea
   please select the ethnicity which most accurately describes how you identify yourself.:
     answer: Asian (Not Hispanic or Latino) (United States of America)
@@ -363,7 +362,7 @@ questions:
   : answer: Bachelor of Science
     type: dropdown
   solely for the purpose of determining if an export control license is needed please indicate yes if you are currently a citizen of iran syria n. korea cuba ukraine china hong kong macau or russia:
-    answer: ‘No’
+    answer: 'No'
     type: dropdown
   terminal leave date, if applicable:
     answer: N/A
@@ -391,9 +390,6 @@ questions:
     to vevraa, we request this information in order to measure the effectiveness of the outreach and positive recruitment efforts we undertake pursuant to vevraa.'
   : answer: I IDENTIFY AS A VETERAN, JUST NOT A PROTECTED VETERAN
     type: dropdown
-  ? this is a full time internship role for 3 months starting may-august 2026. are you able to commit to a full time work schedule (8 hours per day) during this time frame.
-  : answer: 'Yes'
-    type: select
   ? this is a full time internship role for 3 months starting may-august 2026. are you able to commit to a full time work schedule (8 hours per day) during this time frame?
   : answer: 'Yes'
     type: select

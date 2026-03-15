@@ -47,7 +47,7 @@ questions:
     answer: 'Yes'
     type: select
   'beta career site: linkedin':
-    answer: LINKEDIN_FROM_CONFIG
+    answer: LinkedIn
     type: select
   'boise, id: san francisco, ca':
     answer: 'Yes'
@@ -84,7 +84,7 @@ questions:
     answer: N/A
     type: text
   field ai:
-    answer: I'm enthusiastic about Field AI's innovative work in AI and eager to apply my software engineering
+    answer: I'm enthusiastic about Field AI's innovative work in AI and eager to apply my software engineering skills to real-world robotics challenges.
     type: text
   ? 'fieldai has my consent to contact me about future job opportunities.: fieldai has my consent to contact me about future job opportunities.'
   : answer: 'Yes'
@@ -177,7 +177,7 @@ questions:
   : answer: 'Yes'
     type: select
   linkedin:
-    answer: LINKEDIN_FROM_CONFIG
+    answer: LinkedIn
     type: select
   linkedin or personal website url✱:
     answer: LINKEDIN_FROM_CONFIG

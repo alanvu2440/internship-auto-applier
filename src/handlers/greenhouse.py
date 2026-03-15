@@ -665,7 +665,9 @@ class GreenhouseHandler(BaseHandler):
                 '[data-field="resume"] button'
             )
             if upload_btn:
-                async with page_or_frame.expect_file_chooser() as fc_info:
+                # Get Page from Frame if needed — Frame objects don't have expect_file_chooser()
+                page_obj = page_or_frame.page if hasattr(page_or_frame, 'page') else page_or_frame
+                async with page_obj.expect_file_chooser() as fc_info:
                     await upload_btn.click()
                 file_chooser = await fc_info.value
                 await file_chooser.set_files(resume_path)
@@ -4672,7 +4674,13 @@ class GreenhouseHandler(BaseHandler):
         # Check if Simplify already submitted (page shows "Thank you for applying")
         try:
             body_text = await page.text_content("body") or ""
-            if "thank you for applying" in body_text.lower() or "application has been received" in body_text.lower():
+            body_lower = body_text.lower()
+            _context_keywords = {"application", "submitted", "applied", "received", "candidacy"}
+            _thank_you_match = (
+                "thank you for applying" in body_lower
+                and any(kw in body_lower for kw in _context_keywords)
+            )
+            if _thank_you_match or "application has been received" in body_lower:
                 logger.info("Simplify already submitted the application! (detected 'Thank you for applying')")
                 self._last_status = "success"
                 return True
