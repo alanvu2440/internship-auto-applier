@@ -1,0 +1,207 @@
+ats_type: workday
+description: Pre-mapped questions for workday forms
+questions:
+  (select one) what is the highest level u.s. security clearance you currently hold or have held in the past 24 months?:
+    answer: None of the above
+    type: dropdown
+  annual compensation expectations:
+    answer: Open to discuss
+    type: input
+  are you a junior/senior undergraduate student or a graduate student enrolled at an accredited institution?:
+    answer: 'Yes'
+    type: dropdown
+  ? are you available to work full-time for at least 10 weeks (12 weeks preferred) during the summer? interns will start work in may or june with flexibility depending on school schedule.
+  : answer: 'No'
+    type: dropdown
+  ? are you currently an enrolled student attending a college or university with an expected graduation date on or after august 2026?
+  : answer: 'Yes'
+    type: dropdown
+  ? are you currently, or within the last three (3) years, have you been:an employee of non-u.s. government or state-owned, controlled or operated entity (including a military service or civil aviation
+    authority); oran employee of public international organization (such as the world trade organization, the international civil aviation organization or the world bank); ora manager, executive, controlling
+    shareholder, director or officer (including member of a board of directors) of a non-u.s. airline or aircraft holding or leasing company; ora candidate or representative of a non-u.s. political party?
+  : answer: 'Yes'
+    type: dropdown
+  are you legally entitled to work in canada? || êtes-vous légalement autorisé à travailler au canada?:
+    answer: 'Yes'
+    type: dropdown
+  are you of hispanic or latino descent?:
+    answer: 'No'
+    type: dropdown
+  are you open to relocation to the primary posting location?:
+    answer: 'Yes'
+    type: dropdown
+  are you related to a current nlr employee?:
+    answer: 'No'
+    type: dropdown
+  ? 'are you related to any current healthfirst employee? note: this includes immediate family (parents, children, spouses, siblings) as well as extended family (in-laws, cousins, uncles/aunts, nieces/nephews,
+    grandparents, etc).'
+  : answer: 'No'
+    type: dropdown
+  are you willing to have ai review your application?:
+    answer: 'Yes'
+    type: dropdown
+  ? boeing engages deloitte, llp for auditing purposes. this question identifies personal and family connections to deloitte, llp. at any time within the last four (4) years from today's date, have you
+    or a "close family member" been employed (full-time or part-time) by deloitte, llp? a "close family member" includes a person's spouse, spousal equivalent, parent, dependent, nondependent child or sibling.
+    "deloitte, llp" includes deloitte llp, deloitte and touche llp, deloitte tax llp, deloitte fas llp, and deloitte consulting llp, as well as any affiliates of such entities.
+  : answer: 'No'
+    type: dropdown
+  did you attach your transcript? it is a requirement to complete your application.:
+    answer: N/A
+    type: dropdown
+  do you have relatives currently employed by clearwater analytics?:
+    answer: 'No'
+    type: dropdown
+  do you have the ability to code in r/python and sql?:
+    answer: 'Yes'
+    type: dropdown
+  do you meet all the basic qualification for this job?:
+    answer: 'Yes'
+    type: dropdown
+  ? have you ever been employed by the u.s. government (federal, state, county, or local, including publicly funded institutions) in either a civilian or military capacity?
+  : answer: 'No'
+    type: dropdown
+  have you ever worked at clearwater analytics in the past?:
+    answer: 'No'
+    type: radio
+  have you ever worked at nlr?:
+    answer: 'No'
+    type: dropdown
+  have you ever worked for a csi company before ?:
+    answer: 'No'
+    type: dropdown
+  ? have you ever worked for any of the first american family of companies? if so, please answer these additional questions below to help us ensure we have accurate information of your record.
+  : answer: 'No'
+    type: radio
+  have you graduated or will you graduate from post-secondary in less than 4 months?:
+    answer: 'Yes'
+    type: dropdown
+  ? have you previously worked for zoom in any capacity (employee, intern, contract, etc)? if you are a current employee, please navigate to jobs hub in workday to apply.
+  : answer: 'No'
+    type: dropdown
+  have you worked at arrowstreet capital before?:
+    answer: 'No'
+    type: radio
+  how many previous coop/internship placements have you completed?:
+    answer: '1'
+    type: dropdown
+  how many years of experience do you have in a cloud computing environment e.g. azure/aws/google cloud?:
+    answer: '2'
+    type: dropdown
+  how much are you willing to travel ?:
+    answer: 25%
+    type: dropdown
+  ? how much prior leadership experience do you have (leading people and/or projects in a classroom, student organization, or business environment)?
+  : answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy
+    type: dropdown
+  ? i have uploaded both my cover letter and resume/cv. if not, please click on the "back" button at the bottom of this page and upload your cover letter and resume/cv (in the "cover letter and resume/cv"
+    section on the my experience page).
+  : answer: I am writing to express my strong interest in this position. As a Software Engineering
+    type: dropdown
+  if hired, can you provide proof of eiligibility?:
+    answer: 'Yes'
+    type: dropdown
+  if known, provide previous boeing employee number (bemsid)?:
+    answer: N/A
+    type: input
+  'if previously employed by a first american company, please provide company name(s):':
+    answer: N/A
+    type: textarea
+  if so, what is the workday requisition number on the risc intern agreement?:
+    answer: N/A
+    type: textarea
+  ? 'if you would like to explain any gap in employment, you may do so here (please be aware that periods of unemployment on their own shall not necessarily disqualify you from the position(s) for which
+    you have applied.):'
+  : answer: 'No'
+    type: textarea
+  job title:
+    answer: Software Developer Intern
+    type: input
+  language:
+    answer: English
+    type: dropdown
+  'most recent position - reason for leaving:':
+    answer: Seeking internship opportunity
+    type: textarea
+  overall result (gpa):
+    answer: '3.6'
+    type: input
+  please enter the name of your university and the campus.:
+    answer: SCHOOL_FROM_CONFIG
+    type: textarea
+  please indicate if you are hispanic or latino.:
+    answer: 'No'
+    type: dropdown
+  please indicate if you are hispanic or latino?:
+    answer: 'No'
+    type: dropdown
+  please note that healthfirst does not reimburse for relocation, housing or transportation costs.:
+    answer: 'Yes'
+    type: dropdown
+  'previous first american employment end date (most recent):':
+    answer: 'No'
+    type: text
+  'previous first american employment start date (most recent):':
+    answer: 'No'
+    type: text
+  ? the boeing company is a government contractor and does business all over the world. governments impose certain regulatory requirements that affect boeing, its employees and candidates for employment.
+    boeing reviews all potential hires as part of its anti-corruption program. in order to ensure compliance with these regulatory requirements, boeing requires all applicants to complete this form.throughout
+    the conflict of interest (coi) questions, "boeing" refers to any business unit, operating group or function of the boeing company and its subsidiaries.if you are a government employee, you know the
+    importance of complying with conflict of interest laws restricting the discussion of possible employment with government contractors. failure to comply with such laws can result in severe penalties
+    for you and boeing. therefore, we require all government employees to complete questions that relate to your employment. boeing requires you to provide a copy of any applicable disqualification, recusal,
+    ethics opinion, or other writing that evidences your compliance with these laws.when responding, please do not include classified, controlled unclassified, or other sensitive information. do your current
+    job duties involve boeing under any of the following conditions?test (e.g. test pilot), acceptance, inspections, safety rulings, or approval of boeing products or services financial responsibilities
+    including work on contracts, procurements, program management, funding decisions, trade issues, claims, and import or export licenses audits, investigations, and litigation serving as an employee of
+    the u.s. federal aviation administration (faa), u.s. defense contract audit agency (dcaa), u.s. defense contract management agency (dcma) or an equivalent non-u.s. government agency
+  : answer: 'No'
+    type: dropdown
+  ? to the best of your knowledge, do you have a "family member" who currently works for any of the below? a "family member" includes spouses, parents, stepparents, legal guardians, mothers-in-law, fathers-in-law,
+    children, stepchildren, siblings, sons-in-law, daughters-in-law, sisters-in-law, brothers-in-law, grandparents, spouse's grandparents, grandchildren, uncles, aunts, nephews, nieces, and first cousins.
+    a non-u.s. government, including, a military, state-owned entity or civil aviation authority; ora public international organization (such as the world trade organization, the international civil aviation
+    organization or the world bank); ora non-u.s. airline or aircraft holding company as a manager, executive, officer, or controlling shareholder
+  : answer: 'Yes'
+    type: dropdown
+  were you referred by a clearwater analytics employee?:
+    answer: 'No'
+    type: dropdown
+  what are your preferred pronouns?:
+    answer: He/Him
+    type: textarea
+  what is the level of degree you are currently pursuing?:
+    answer: Bachelor of Science
+    type: dropdown
+  what is the name of your most recent employer?:
+    answer: Kruiz
+    type: textarea
+  what is your current year of study?:
+    answer: Year 4 / Senior
+    type: dropdown
+  what is your desired annual salary?:
+    answer: Open to discuss
+    type: textarea
+  what is your desired start date?:
+    answer: May 2026
+    type: text
+  what is your expected graduation date?:
+    answer: May 2026
+    type: text
+  what is your gpa as a percentage?:
+    answer: '3.6'
+    type: dropdown
+  what is your graduation month?:
+    answer: May 2026
+    type: dropdown
+  what is your graduation year?:
+    answer: '2026'
+    type: dropdown
+  what is your overall gpa based on a 4.0 scale?:
+    answer: '3.6'
+    type: dropdown
+  what position type are you applying to?:
+    answer: Intern
+    type: dropdown
+  what was your ciena email address?:
+    answer: N/A
+    type: input
+  which of the core engineering/applied sciences disciplines are you currently majoring in or do you possess?:
+    answer: Software Engineering
+    type: dropdown

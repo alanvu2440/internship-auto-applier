@@ -8,8 +8,6 @@ Coordinates all components to automatically apply to jobs from SimplifyJobs.
 import asyncio
 import sys
 import os
-import threading
-import select
 from pathlib import Path
 from typing import Dict, Any, Optional
 import yaml
@@ -34,94 +32,7 @@ from gemini_form_scanner import GeminiFormScanner
 from extension_manager import ExtensionManager
 
 
-class EscMonitor:
-    """Monitor ESC key to toggle between auto/manual mode.
-
-    Press ESC during automation -> bot pauses, you control the browser.
-    Press ESC during manual mode -> bot resumes with next job.
-    """
-
-    def __init__(self):
-        self.is_manual = False
-        self._stop = False
-        self._thread = None
-        self._loop = None
-        self._toggle_event = None
-        self._old_settings = None
-        self._fd = None
-
-    def start(self, loop):
-        if not sys.stdin.isatty():
-            return
-        import tty, termios
-        self._loop = loop
-        self._fd = sys.stdin.fileno()
-        self._old_settings = termios.tcgetattr(self._fd)
-        self._toggle_event = asyncio.Event()
-        tty.setcbreak(self._fd)
-        self._thread = threading.Thread(target=self._listen, daemon=True)
-        self._thread.start()
-        import atexit
-        atexit.register(self.stop)
-        logger.info("ESC monitor active — press ESC to toggle manual/auto mode")
-        sys.stdout.write(
-            "\r\n══════════════════════════════════════════════\r\n"
-            "  ESC MONITOR ACTIVE — Press ESC to pause bot\r\n"
-            "══════════════════════════════════════════════\r\n"
-        )
-        sys.stdout.flush()
-
-    def stop(self):
-        self._stop = True
-        if self._old_settings and self._fd is not None:
-            try:
-                import termios
-                termios.tcsetattr(self._fd, termios.TCSADRAIN, self._old_settings)
-            except Exception:
-                pass
-            self._old_settings = None
-
-    def _listen(self):
-        while not self._stop:
-            try:
-                r, _, _ = select.select([self._fd], [], [], 0.15)
-                if not r:
-                    continue
-                ch = os.read(self._fd, 1)
-                if ch == b'\x1b':
-                    # Distinguish standalone ESC from escape sequences (arrow keys)
-                    r2, _, _ = select.select([self._fd], [], [], 0.05)
-                    if r2:
-                        os.read(self._fd, 10)  # consume sequence
-                        continue
-                    # Standalone ESC — toggle
-                    self.is_manual = not self.is_manual
-                    if self._loop and self._toggle_event:
-                        self._loop.call_soon_threadsafe(self._toggle_event.set)
-                    if self.is_manual:
-                        sys.stdout.write(
-                            "\a\r\n  >>> MANUAL MODE — Browser is yours. Press ESC to resume bot. <<<\r\n"
-                        )
-                        logger.warning("ESC toggle: MANUAL MODE — bot paused, browser is yours")
-                    else:
-                        sys.stdout.write(
-                            "\a\r\n  >>> AUTO MODE — Bot resuming. Press ESC to take over. <<<\r\n"
-                        )
-                        logger.warning("ESC toggle: AUTO MODE — bot resuming")
-                    sys.stdout.flush()
-            except (OSError, ValueError):
-                break
-            except Exception:
-                continue
-
-    async def wait_for_toggle(self):
-        """Async: wait for next ESC press. Blocks forever if no terminal."""
-        if self._loop:
-            self._toggle_event = asyncio.Event()  # Fresh event — no stale state from prior ESC
-            await self._toggle_event.wait()
-        else:
-            # No terminal — block forever (never resolve)
-            await asyncio.Event().wait()
+from modes.esc_monitor import EscMonitor
 
 
 class InternshipAutoApplier:
@@ -296,10 +207,16 @@ class InternshipAutoApplier:
                 "password": proxy_config.get("password", ""),
             }
             logger.info(f"Proxy enabled: {proxy_config['host']}:{proxy_config['port']}")
+        # Always use persistent context so we get ONE window with tabs (never multiple windows)
+        # Use extension_default profile — has Simplify login data already saved
+        from pathlib import Path
+        browser_profile = Path("data/browser_profiles/extension_default")
+        browser_profile.mkdir(parents=True, exist_ok=True)
         self.browser_manager = BrowserManager(
             headless=headless,
             slow_mo=50,
             proxy=proxy,
+            user_data_dir=str(browser_profile),
         )
 
         # Initialize form filler
@@ -433,14 +350,47 @@ class InternshipAutoApplier:
         attempts = job_data.get("attempts", 0)
 
         progress = f"[{job_index}/{total_jobs}] " if total_jobs > 0 else ""
+
+        # CHECK: Don't apply if we have an active interview at this company
+        try:
+            interview_statuses = ("interview_invite", "assessment", "offer", "follow_up")
+            existing = await self.queue.db.execute(
+                "SELECT response_status FROM jobs WHERE company = ? AND response_status IN (?, ?, ?, ?)",
+                (company, *interview_statuses)
+            )
+            row = await existing.fetchone() if hasattr(existing, 'fetchone') else None
+            if row:
+                logger.warning(f"[SKIP] {company} — active interview process ({row[0]}). Not applying to more roles.")
+                await self.queue.mark_skipped(job_id, f"Active interview at {company}")
+                self.stats["skipped"] += 1
+                return False
+
+            # CHECK: Don't apply to more than 3 roles at the same company
+            # When a company has multiple roles, prioritize target roles:
+            #   Priority 1: Software Engineer, SWE, Backend, Frontend, Full Stack
+            #   Priority 2: Data Engineer, Data Scientist, ML, AI
+            #   Priority 3: Everything else
+            company_apps = await self.queue.db.execute(
+                "SELECT role FROM jobs WHERE company = ? AND status = 'applied'",
+                (company,)
+            )
+            applied_roles = [r[0] for r in await company_apps.fetchall()]
+            if len(applied_roles) >= 3:
+                logger.warning(f"[SKIP] {company} — already applied to {len(applied_roles)} roles. Max 3 per company.")
+                await self.queue.mark_skipped(job_id, f"Max applications per company reached ({len(applied_roles)})")
+                self.stats["skipped"] += 1
+                return False
+        except Exception as e:
+            logger.debug(f"Interview check failed: {e}")
+
         logger.info(f"\n{'='*60}")
         logger.info(f"{progress}Applying to: {company} — {role}")
         logger.info(f"  ATS: {ats_type.value} | URL: {url}")
         logger.info(f"  Attempt: {attempts + 1}/3")
         logger.info(f"{'='*60}")
 
-        # Set AI context for this job
-        self.ai_answerer.set_job_context(company, role)
+        # Set AI context for this job (including ATS type for template bank lookup)
+        self.ai_answerer.set_job_context(company, role, ats_type=ats_type.value)
 
         # Get handler
         handler = self.handlers.get(ats_type, self.handlers[ATSType.UNKNOWN])
@@ -456,13 +406,18 @@ class InternshipAutoApplier:
         questions_answered = {}
         error_msg = None
         success = False
-        _close_tab = False  # Set True for skipped/closed jobs that don't need manual help
-        _timed_out = False   # Set True if job hit 5-min stall timeout
+        _close_tab = False  # Only True for skipped/closed/login jobs — failures ALWAYS leave tab open
 
-        # Create page
+        # Create page — SR uses nodriver Chrome, everything else uses Playwright Chrome
         try:
-            await self.browser_manager.start()
-            page = await self.browser_manager.create_stealth_page()
+            if ats_type == ATSType.SMARTRECRUITERS:
+                # Start nodriver browser (if not already running)
+                await self.browser_manager.start_nodriver()
+                page = None  # SR handler uses nodriver directly via browser_manager.nd_browser
+            else:
+                # Start Playwright browser (if not already running)
+                await self.browser_manager.start_playwright()
+                page = await self.browser_manager.create_stealth_page()
 
             # Apply with timeout — ESC cancels handler and enters manual mode
             import time as _time
@@ -504,15 +459,15 @@ class InternshipAutoApplier:
                     success = await handler_task
             except asyncio.TimeoutError:
                 success = False
-                _timed_out = True
-                error_msg = "Timed out after 300s — tab left open for manual review"
-                logger.warning(f"Application timed out after 300s — leaving tab open for manual review")
+                error_msg = "Timed out after 180s — tab left open for manual help"
+                logger.warning(f"Application timed out after 180s — tab left open")
             except asyncio.CancelledError:
                 success = False
                 esc_interrupted = True
 
             # SMART MODE: If handler failed and page is still up, run Gemini scanner
-            if not success and self._smart_mode and not error_msg and not esc_interrupted:
+            # (skip for SmartRecruiters — uses nodriver, not Playwright page)
+            if not success and self._smart_mode and not error_msg and not esc_interrupted and page is not None:
                 try:
                     logger.info(f"[SMART] Running Gemini form scanner on {company}...")
                     scan_result = await asyncio.wait_for(
@@ -558,7 +513,7 @@ class InternshipAutoApplier:
 
             # ASSIST MODE: If failed (or ESC interrupted), pause for user.
             # Browser stays open. Bot watches for submit or next ESC.
-            if not success and (self._assist_mode or self._smart_mode or esc_interrupted) and not error_msg and sys.stdin.isatty():
+            if not success and (self._assist_mode or self._smart_mode or esc_interrupted) and not error_msg and sys.stdin.isatty() and page is not None:
                 try:
                     # Show what's missing
                     scan_info = await self.gemini_scanner.quick_scan(page)
@@ -706,8 +661,12 @@ class InternshipAutoApplier:
                 screenshots_dir.mkdir(parents=True, exist_ok=True)
                 status_tag = "PASS" if success else "FAIL"
                 screenshot_path = screenshots_dir / f"{status_tag}_{safe_company}_{timestamp}.png"
-                await page.screenshot(path=str(screenshot_path), full_page=True)
-                logger.info(f"Screenshot saved: {screenshot_path}")
+                if page is not None:
+                    await page.screenshot(path=str(screenshot_path), full_page=True)
+                    logger.info(f"Screenshot saved: {screenshot_path}")
+                else:
+                    # SmartRecruiters takes its own screenshots via nodriver
+                    logger.debug(f"No Playwright page for screenshot (SR handler manages its own)")
             except Exception as e:
                 logger.debug(f"Could not take screenshot: {e}")
 
@@ -715,6 +674,8 @@ class InternshipAutoApplier:
             confirmation_text = ""
             final_url = ""
             try:
+                if page is None:
+                    raise Exception("No Playwright page (SmartRecruiters)")
                 final_url = page.url
                 body_text = await page.text_content("body") or ""
                 # Extract key confirmation phrases
@@ -765,18 +726,10 @@ class InternshipAutoApplier:
                     self.stats["applied"] += 1
                     logger.info(f"[PASS] {company} — {role} ({duration}s)")
 
-                # Save to successful folder
-                self._save_application_log("successful", safe_company, safe_role, timestamp, app_record, screenshot_path)
-
-                # Track successful application
-                if self.tracker:
-                    self.tracker.record_application(
-                        job_data=job_data,
-                        status="submitted",
-                        fields_filled=fields_filled,
-                        fields_missed=fields_missed,
-                        questions_answered=questions_answered
-                    )
+                self._record_result("submitted", job_data, app_record, safe_company, safe_role,
+                                    timestamp, screenshot_path, log_folder="successful",
+                                    fields_filled=fields_filled, fields_missed=fields_missed,
+                                    questions_answered=questions_answered)
 
                 return True
             else:
@@ -786,7 +739,8 @@ class InternshipAutoApplier:
                     # Don't mark as failed or skipped — leave as pending for retry
                     # Browser stays open via the finally block
                     app_record["status"] = "fill_only"
-                    self._save_application_log("fill_only", safe_company, safe_role, timestamp, app_record, screenshot_path)
+                    self._record_result("fill_only", job_data, app_record, safe_company, safe_role,
+                                        timestamp, screenshot_path)
                     return False
 
                 # Check if handler already flagged as closed
@@ -805,16 +759,10 @@ class InternshipAutoApplier:
                     logger.info(f"[CLOSED] {company} — job is no longer available")
                     _close_tab = True  # Nothing to manually fix
 
-                    app_record["error"] = "Job closed/unavailable"
-                    self._save_application_log("skipped", safe_company, safe_role, timestamp, app_record, screenshot_path)
-
-                    if self.tracker:
-                        self.tracker.record_application(
-                            job_data=job_data,
-                            status="skipped",
-                            error_message="Job closed/unavailable",
-                            questions_answered=questions_answered
-                        )
+                    self._record_result("skipped", job_data, app_record, safe_company, safe_role,
+                                        timestamp, screenshot_path,
+                                        error_msg="Job closed/unavailable",
+                                        questions_answered=questions_answered)
 
                     return False
 
@@ -832,17 +780,11 @@ class InternshipAutoApplier:
                         self.stats["skipped"] += 1
                         logger.info(f"[LOGIN] {company} — requires login, skipping")
 
-                    app_record["error"] = "Login/account required"
-                    self._save_application_log("skipped" if ats_type.value not in ats_with_auth or attempts >= 2 else "failed",
-                                               safe_company, safe_role, timestamp, app_record, screenshot_path)
-
-                    if self.tracker:
-                        self.tracker.record_application(
-                            job_data=job_data,
-                            status="skipped" if ats_type.value not in ats_with_auth or attempts >= 2 else "failed",
-                            error_message="Login/account required",
-                            questions_answered=questions_answered
-                        )
+                    login_status = "skipped" if ats_type.value not in ats_with_auth or attempts >= 2 else "failed"
+                    self._record_result(login_status, job_data, app_record, safe_company, safe_role,
+                                        timestamp, screenshot_path,
+                                        error_msg="Login/account required",
+                                        questions_answered=questions_answered)
 
                     return False
 
@@ -855,29 +797,61 @@ class InternshipAutoApplier:
                     except Exception:
                         pass
                 if captcha_blocked:
-                    _close_tab = True  # Nothing to manually fix for CAPTCHA
-                    error_msg = "CAPTCHA blocked"
-                    if attempts >= 2:
-                        await self.queue.mark_skipped(job_id, "CAPTCHA blocked (max retries)")
-                        self.stats["skipped"] += 1
-                    else:
-                        await self.queue.mark_failed(job_id, "CAPTCHA blocked", retry=True)
-                        self.stats["failed"] += 1
-
-                    app_record["error"] = error_msg
-                    self._save_application_log("failed", safe_company, safe_role, timestamp, app_record, screenshot_path)
-
-                    if self.tracker:
-                        self.tracker.record_application(
-                            job_data=job_data,
-                            status="failed",
-                            fields_filled=fields_filled,
-                            fields_missed=fields_missed,
-                            error_message=error_msg,
-                            questions_answered=questions_answered
-                        )
-
-                    return False
+                    # Leave tab open for manual CAPTCHA solving instead of auto-closing
+                    _close_tab = False
+                    error_msg = None  # Don't set error_msg — allow assist mode to trigger
+                    logger.warning(f"[CAPTCHA] CAPTCHA detected — leaving tab open for manual solve")
+                    # If stdin available, wait for manual help
+                    if sys.stdin.isatty() and page is not None:
+                        try:
+                            sys.stdout.write(f"\r\n{'='*60}\r\n")
+                            sys.stdout.write(f"  CAPTCHA DETECTED — {company} — {role}\r\n")
+                            sys.stdout.write(f"  Solve the CAPTCHA manually in the browser.\r\n")
+                            sys.stdout.write(f"  Then press [Enter] to continue submission.\r\n")
+                            sys.stdout.write(f"  Press [s] + Enter to skip this job.\r\n")
+                            sys.stdout.write(f"{'='*60}\r\n")
+                            sys.stdout.flush()
+                            user_input = await asyncio.get_event_loop().run_in_executor(None, input)
+                            if user_input.strip().lower() == 's':
+                                logger.info("[CAPTCHA] User chose to skip")
+                                _close_tab = True
+                                error_msg = "CAPTCHA skipped by user"
+                                await self.queue.mark_skipped(job_id, "CAPTCHA skipped by user")
+                                self.stats["skipped"] += 1
+                                self._record_result("skipped", job_data, app_record, safe_company, safe_role,
+                                                    timestamp, screenshot_path, log_folder="failed",
+                                                    error_msg=error_msg,
+                                                    fields_filled=fields_filled, fields_missed=fields_missed,
+                                                    questions_answered=questions_answered)
+                                return False
+                            else:
+                                # User solved CAPTCHA — try to submit
+                                logger.info("[CAPTCHA] User indicated CAPTCHA solved — attempting submit")
+                                try:
+                                    submit_result = await asyncio.wait_for(
+                                        handler.apply(page, url, job_data), timeout=60
+                                    )
+                                    if submit_result:
+                                        success = True
+                                except Exception as captcha_submit_e:
+                                    logger.debug(f"Post-CAPTCHA submit failed: {captcha_submit_e}")
+                        except (EOFError, KeyboardInterrupt):
+                            pass
+                    # If no stdin or still not solved, mark as failed with retry
+                    if not success:
+                        error_msg = "CAPTCHA blocked"
+                        if attempts >= 2:
+                            await self.queue.mark_skipped(job_id, "CAPTCHA blocked (max retries)")
+                            self.stats["skipped"] += 1
+                        else:
+                            await self.queue.mark_failed(job_id, "CAPTCHA blocked", retry=True)
+                            self.stats["failed"] += 1
+                        self._record_result("failed", job_data, app_record, safe_company, safe_role,
+                                            timestamp, screenshot_path,
+                                            error_msg=error_msg,
+                                            fields_filled=fields_filled, fields_missed=fields_missed,
+                                            questions_answered=questions_answered)
+                        return False
 
                 # SPAM FLAG HANDLING — never retry, skip all remaining jobs of this ATS
                 if handler_status == "spam_flagged":
@@ -891,35 +865,25 @@ class InternshipAutoApplier:
                         skip_count = await self._skip_all_ats_jobs(ats_type_str, "Spam flagged — ATS disabled")
                         logger.error(f"SAFETY: Skipped {skip_count} remaining {ats_type_str} jobs due to spam flag")
 
-                    app_record["error"] = error_msg
-                    self._save_application_log("failed", safe_company, safe_role, timestamp, app_record, screenshot_path)
-                    if self.tracker:
-                        self.tracker.record_application(
-                            job_data=job_data, status="spam_flagged",
-                            fields_filled=fields_filled, fields_missed=fields_missed,
-                            error_message=error_msg, questions_answered=questions_answered
-                        )
+                    self._record_result("spam_flagged", job_data, app_record, safe_company, safe_role,
+                                        timestamp, screenshot_path, log_folder="failed",
+                                        error_msg=error_msg,
+                                        fields_filled=fields_filled, fields_missed=fields_missed,
+                                        questions_answered=questions_answered)
                     return False
 
                 # Get error message from page or handler status
-                page_error = await handler.get_error_message(page)
+                page_error = await handler.get_error_message(page) if page is not None else None
                 error_msg = page_error or handler_status or "Application failed"
                 await self.queue.mark_failed(job_id, error_msg, retry=(attempts < 2))
                 self.stats["failed"] += 1
                 logger.warning(f"[FAIL] {company} — {role}: {error_msg} ({duration}s)")
 
-                app_record["error"] = error_msg
-                self._save_application_log("failed", safe_company, safe_role, timestamp, app_record, screenshot_path)
-
-                if self.tracker:
-                    self.tracker.record_application(
-                        job_data=job_data,
-                        status="failed",
-                        fields_filled=fields_filled,
-                        fields_missed=fields_missed,
-                        error_message=error_msg,
-                        questions_answered=questions_answered
-                    )
+                self._record_result("failed", job_data, app_record, safe_company, safe_role,
+                                    timestamp, screenshot_path,
+                                    error_msg=error_msg,
+                                    fields_filled=fields_filled, fields_missed=fields_missed,
+                                    questions_answered=questions_answered)
 
                 return False
 
@@ -939,69 +903,107 @@ class InternshipAutoApplier:
                 await self.queue.mark_skipped(job_id, error_msg)
                 self.stats["skipped"] += 1
 
-            if self.tracker:
-                self.tracker.record_application(
-                    job_data=job_data,
-                    status="failed",
-                    fields_filled=fields_filled,
-                    fields_missed=fields_missed,
-                    error_message=error_msg,
-                    questions_answered=questions_answered
-                )
+            # app_record/safe_company/etc. may not exist if exception happened before they were set
+            try:
+                self._record_result("failed", job_data, app_record, safe_company, safe_role,
+                                    timestamp, screenshot_path,
+                                    error_msg=error_msg,
+                                    fields_filled=fields_filled, fields_missed=fields_missed,
+                                    questions_answered=questions_answered)
+            except NameError:
+                # Variables not yet defined when exception occurred — just track
+                if self.tracker:
+                    self.tracker.record_application(
+                        job_data=job_data,
+                        status="failed",
+                        fields_filled=fields_filled,
+                        fields_missed=fields_missed,
+                        error_message=error_msg,
+                        questions_answered=questions_answered
+                    )
 
             return False
 
         finally:
             if success and screenshot_path and Path(screenshot_path).exists():
-                # SUCCESS with screenshot — close this tab, move on
-                logger.info(f"[BROWSER] SUCCESS + SCREENSHOT — closing tab")
+                # SUCCESS — wait 10s to confirm, then close tab
+                logger.info(f"[BROWSER] SUCCESS confirmed — waiting 10s before closing tab")
                 try:
                     sys.stdout.write("\a\a\a")  # Triple bell
                     sys.stdout.write(f"\r\n{'='*60}\r\n")
                     sys.stdout.write(f"  >>> APPLIED SUCCESSFULLY — {company} — {role}\r\n")
-                    sys.stdout.write(f"  >>> Screenshot saved. Moving to next job.\r\n")
+                    sys.stdout.write(f"  >>> Screenshot saved. Closing tab in 10s.\r\n")
                     sys.stdout.write(f"{'='*60}\r\n")
                     sys.stdout.flush()
                 except Exception:
                     pass
-                # Close successful tab to keep browser clean
+                await asyncio.sleep(10)  # Wait 10s so user can verify success
                 try:
                     if page and not page.is_closed():
                         await page.close()
                 except Exception:
                     pass
-                await asyncio.sleep(2)
             elif _close_tab:
-                # SKIPPED/CLOSED job — close tab, nothing to manually fix
-                logger.info(f"[BROWSER] Skipped job — closing tab")
+                # SKIPPED/CLOSED/LOGIN — close tab, nothing to manually fix
+                logger.info(f"[BROWSER] Skipped — closing tab")
                 try:
                     if page and not page.is_closed():
                         await page.close()
                 except Exception:
                     pass
                 await asyncio.sleep(1)
-            elif _timed_out:
-                # TIMEOUT — leave tab open for manual review, move on
-                logger.warning(f"[BROWSER] Tab left open for manual review (timed out): {company} — {role}")
+            elif page is not None:
+                # FAILURE/TIMEOUT/CAPTCHA — ALWAYS leave tab open for manual help
+                logger.warning(f"[BROWSER] Tab left open for manual help: {company} — {role}")
                 try:
                     sys.stdout.write(f"\r\n{'='*60}\r\n")
-                    sys.stdout.write(f"  MANUAL REVIEW NEEDED: {company} — {role}\r\n")
-                    sys.stdout.write(f"  Tab left open — fill and submit it yourself.\r\n")
+                    sys.stdout.write(f"  TAB LEFT OPEN: {company} — {role}\r\n")
+                    sys.stdout.write(f"  Fix remaining fields / solve CAPTCHA manually.\r\n")
                     sys.stdout.write(f"  Moving to next job...\r\n")
                     sys.stdout.write(f"{'='*60}\r\n")
                     sys.stdout.flush()
                 except Exception:
                     pass
                 await asyncio.sleep(1)
-            else:
-                # FAILURE — close tab and move on autonomously, no manual help needed
-                logger.warning(f"[BROWSER] Closing failed tab — moving on autonomously.")
-                try:
-                    if page and not page.is_closed():
-                        await page.close()
-                except Exception:
-                    pass
-                await asyncio.sleep(1)
+            # else: SmartRecruiters (page=None) — handler manages its own nodriver tabs
+
+    def _record_result(self, status, job_data, app_record, safe_company, safe_role,
+                       timestamp, screenshot_path, log_folder=None,
+                       error_msg=None, fields_filled=None, fields_missed=None,
+                       questions_answered=None):
+        """Consolidate all tracking/logging boilerplate for application results.
+
+        Args:
+            status: Tracker status (e.g. "submitted", "failed", "skipped", "spam_flagged", "fill_only")
+            job_data: The job dict
+            app_record: The application record dict to save
+            safe_company: Sanitized company name for filenames
+            safe_role: Sanitized role name for filenames
+            timestamp: Timestamp string for filenames
+            screenshot_path: Path to screenshot file
+            log_folder: Folder name for _save_application_log (defaults to status)
+            error_msg: Error message (sets app_record["error"] if provided)
+            fields_filled: Dict of filled fields
+            fields_missed: Dict of missed fields
+            questions_answered: Dict of questions answered
+        """
+        if log_folder is None:
+            log_folder = status
+
+        if error_msg is not None:
+            app_record["error"] = error_msg
+
+        self._save_application_log(log_folder, safe_company, safe_role, timestamp, app_record, screenshot_path)
+
+        if self.tracker:
+            self.tracker.record_application(
+                job_data=job_data,
+                status=status,
+                fields_filled=fields_filled or {},
+                fields_missed=fields_missed or {},
+                error_message=error_msg or "",
+                questions_answered=questions_answered or {}
+            )
 
     def _save_application_log(self, outcome: str, company: str, role: str, timestamp: str,
                               record: dict, screenshot_path=None):
@@ -1139,13 +1141,13 @@ class InternshipAutoApplier:
             # SmartRecruiters: DataDome anti-bot per page
             # Workday: login walls, session-based detection
             ats_delays = {
-                "ashby": 120,          # 30/hour — BURNED, max spacing to avoid further flags
-                "greenhouse": 30,      # 120/hour — highest success, keep fast
-                "lever": 90,           # 40/hour — heavy CAPTCHA, space out
-                "smartrecruiters": 60, # 60/hour — DataDome per-page checks
-                "workday": 90,         # 40/hour — login walls, session detection
-                "icims": 60,           # 60/hour — login walls
-                "unknown": 45,         # 80/hour — varies
+                "ashby": 180,          # BURNED — max spacing, consider skipping entirely
+                "greenhouse": 90,      # ~40/hour — safe rate, avoid recruiter suspicion
+                "lever": 120,          # ~30/hour — less aggressive
+                "smartrecruiters": 90, # ~40/hour — DataDome watches velocity
+                "workday": 120,        # ~30/hour — login walls, session detection
+                "icims": 90,           # ~40/hour — login walls
+                "unknown": 90,         # ~40/hour — varies, play it safe
             }
             job_ats = job.get("ats_type", "unknown")
             ats_delay = max(ats_delays.get(job_ats, delay_seconds), delay_seconds)
@@ -1399,13 +1401,33 @@ def run(max):
 @click.option("--review", is_flag=True, help="Fill forms, pause for your review, YOU click submit")
 @click.option("--ats", default=None, help="Only process specific ATS type (greenhouse, lever, ashby, smartrecruiters)")
 @click.option("--smart", is_flag=True, help="Enable Gemini form scanner — catches empty fields after handler fill")
-@click.option("--with-simplify", is_flag=True, help="Load Simplify Copilot extension for boilerplate autofill")
+@click.option("--with-simplify", is_flag=True, hidden=True, help="(Deprecated — Simplify is now always loaded)")
 @click.option("--workday-accounts", is_flag=True, help="Only apply to Workday jobs where we already have accounts (slow mode)")
 @click.option("--assist", is_flag=True, help="Assist mode — bot fills what it can, YOU finish the rest, bot submits + screenshots")
 @click.option("--max-open-tabs", default=0, help="Max tabs to leave open for manual help (0=unlimited)")
 def backfill(max, headless, dry_run, review, ats, smart, with_simplify, workday_accounts, assist, max_open_tabs):
     """Apply to all existing jobs in the database."""
     async def main():
+        # Kill any orphaned nodriver Chrome from previous crashed runs
+        import subprocess
+        try:
+            result = subprocess.run(["pgrep", "-f", "nodriver_persistent"],
+                                    capture_output=True, text=True, timeout=5)
+            if result.stdout.strip():
+                logger.warning(f"Killing orphaned Chrome from previous run")
+                subprocess.run(["pkill", "-9", "-f", "nodriver_persistent"],
+                               capture_output=True, timeout=5)
+                import time; time.sleep(1)
+        except Exception:
+            pass
+        # Clean stale lock files
+        from pathlib import Path
+        for f in ["data/browser_profiles/nodriver.lock", "data/browser_profiles/nodriver.pid"]:
+            try:
+                Path(f).unlink(missing_ok=True)
+            except Exception:
+                pass
+
         app = InternshipAutoApplier()
         try:
             await app.initialize()
@@ -1438,17 +1460,22 @@ def backfill(max, headless, dry_run, review, ats, smart, with_simplify, workday_
                 app.browser_manager.headless = False  # Must be headed for user interaction
                 logger.info("ASSIST MODE — bot fills what it can, YOU finish the rest, bot submits + screenshots")
 
-            # Simplify extension — load browser extension for autofill
-            if with_simplify:
+            # Simplify extension — ALWAYS loaded (auto-detect path)
+            try:
                 ext_mgr = ExtensionManager()
                 ext_path = await ext_mgr.ensure_extension()
                 if ext_path:
                     app._extension_path = ext_path
                     app.browser_manager.extension_paths = [ext_path]
                     app.browser_manager.headless = False  # Extensions require headed mode
+                    # Also pass extension to SmartRecruiters handler (uses nodriver, not Playwright)
+                    from handlers.smartrecruiters import SmartRecruitersHandler
+                    SmartRecruitersHandler._simplify_extension_path = ext_path
                     logger.info(f"SIMPLIFY EXTENSION loaded from {ext_path}")
                 else:
-                    logger.warning("Failed to load Simplify extension — continuing without it")
+                    logger.warning("Simplify extension not found — continuing without it")
+            except Exception as ext_e:
+                logger.warning(f"Could not load Simplify extension: {ext_e}")
 
             # Workday accounts only — filter to jobs where we have existing accounts + slow mode
             if workday_accounts:
@@ -1500,24 +1527,25 @@ def backfill(max, headless, dry_run, review, ats, smart, with_simplify, workday_
                 app.tracker.save_session_report()
             await app.cleanup()
 
-            # If there are open tabs for manual help, keep browser alive
-            if app.browser_manager and (app.browser_manager._persistent_context or app.browser_manager._browser):
-                open_pages = []
-                if app.browser_manager._persistent_context:
-                    open_pages = [p for p in app.browser_manager._persistent_context.pages if not p.is_closed()]
-                if open_pages:
-                    try:
-                        sys.stdout.write(f"\r\n{'='*60}\r\n")
-                        sys.stdout.write(f"  DONE — {len(open_pages)} tab(s) still open for manual help\r\n")
-                        sys.stdout.write(f"  Fill out the remaining fields and submit manually.\r\n")
-                        sys.stdout.write(f"  Press Enter here when you're done to close browser.\r\n")
-                        sys.stdout.write(f"{'='*60}\r\n")
-                        sys.stdout.flush()
-                        await asyncio.get_event_loop().run_in_executor(None, input)
-                    except (EOFError, KeyboardInterrupt):
-                        pass
-                # Now close browser
+            # Browser NEVER closes automatically — always stays open
+            # User closes it themselves when done with manual tabs
+            try:
+                sys.stdout.write(f"\r\n{'='*60}\r\n")
+                sys.stdout.write(f"  BATCH COMPLETE — browser stays open.\r\n")
+                sys.stdout.write(f"  Fix any remaining tabs manually.\r\n")
+                sys.stdout.write(f"  Press Enter when done to exit.\r\n")
+                sys.stdout.write(f"{'='*60}\r\n")
+                sys.stdout.flush()
+                await asyncio.get_event_loop().run_in_executor(None, input)
+            except (EOFError, KeyboardInterrupt):
+                pass
+
+            # Only NOW close browser (user explicitly pressed Enter)
+            if app.browser_manager:
                 await app.browser_manager.close()
+            from handlers.smartrecruiters import SmartRecruitersHandler
+            SmartRecruitersHandler._shared_nd_browser = None
+            SmartRecruitersHandler._release_browser_lock()
 
     asyncio.run(main())
 
@@ -1587,7 +1615,7 @@ def assist(max, ats):
 @click.option("--dry-run", is_flag=True, help="Fill form but don't submit")
 @click.option("--review", is_flag=True, help="Fill form, pause for your review, YOU click submit")
 @click.option("--smart", is_flag=True, help="Enable Gemini form scanner")
-@click.option("--with-simplify", is_flag=True, help="Load Simplify Copilot extension")
+@click.option("--with-simplify", is_flag=True, hidden=True, help="(Deprecated — Simplify is now always loaded)")
 def apply(url, dry_run, review, smart, with_simplify):
     """Apply to a single job URL."""
     async def main():
@@ -1604,14 +1632,19 @@ def apply(url, dry_run, review, smart, with_simplify):
             if smart:
                 app._smart_mode = True
                 logger.info("SMART MODE enabled")
-            if with_simplify:
+            # Simplify always-on
+            try:
                 ext_mgr = ExtensionManager()
                 ext_path = await ext_mgr.ensure_extension()
                 if ext_path:
                     app._extension_path = ext_path
                     app.browser_manager.extension_paths = [ext_path]
                     app.browser_manager.headless = False
+                    from handlers.smartrecruiters import SmartRecruitersHandler
+                    SmartRecruitersHandler._simplify_extension_path = ext_path
                     logger.info(f"SIMPLIFY EXTENSION loaded from {ext_path}")
+            except Exception as ext_e:
+                logger.warning(f"Could not load Simplify: {ext_e}")
             await app.apply_to_url(url)
         finally:
             await app.cleanup()

@@ -1,29 +1,35 @@
 """
-Browser Manager Module
+Dual Browser Manager
 
-Manages Playwright browser instances with stealth mode to avoid detection.
-Handles multiple browser contexts for parallel processing.
+TWO independent browsers, each with its own driver:
+  Browser 1: nodriver Chrome — for SmartRecruiters (DataDome bypass)
+  Browser 2: Playwright Chrome — for Greenhouse, Lever, Ashby, Workday, etc.
+
+WHY: nodriver and Playwright both use CDP (Chrome DevTools Protocol).
+Connecting both to the SAME Chrome causes CDP collisions and crashes.
+Keeping them separate = each driver has exclusive control = no crashes.
+
+Both browsers:
+  - Load Simplify extension via --load-extension
+  - Use persistent profiles (cookies/sessions preserved)
+  - Stay alive for the entire session (never auto-close)
+  - Have keeper tabs to prevent auto-shutdown
 """
 
 import asyncio
 import random
+import subprocess
 from pathlib import Path
 from typing import Optional
+from loguru import logger
+
+# Playwright imports
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 from playwright_stealth import Stealth
-from loguru import logger
 
 
 class BrowserManager:
-    """Manages stealth browser instances for job applications."""
-
-    # Common user agents for rotation
-    USER_AGENTS = [
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-    ]
+    """Dual browser manager — nodriver for SR, Playwright for everything else."""
 
     def __init__(
         self,
@@ -33,56 +39,118 @@ class BrowserManager:
         proxy: Optional[dict] = None,
         extension_paths: Optional[list] = None,
     ):
-        """
-        Initialize browser manager.
-
-        Args:
-            headless: Run browser in headless mode (more detectable)
-            slow_mo: Slow down operations by X ms (more human-like)
-            user_data_dir: Path to Chrome user data for session persistence
-            proxy: Proxy config dict with host, port, username, password
-            extension_paths: List of unpacked extension directories to load
-        """
         self.headless = headless
         self.slow_mo = slow_mo
-        self.user_data_dir = user_data_dir
         self.proxy = proxy
         self.extension_paths = extension_paths or []
+
+        # Profile directories (SEPARATE to avoid lock conflicts between browsers)
+        # Playwright gets the old extension_default profile (has Simplify login data)
+        # nodriver gets its own profile
+        self._nodriver_profile = str(Path("data/browser_profiles/nodriver_profile"))
+        self._playwright_profile = str(Path("data/browser_profiles/extension_default"))
+
+        # Playwright state (for GH/Lever/Ashby/Workday/Generic)
         self._playwright = None
         self._browser: Optional[Browser] = None
+        self._context: Optional[BrowserContext] = None
         self._persistent_context: Optional[BrowserContext] = None
         self._contexts: list[BrowserContext] = []
-        self._keeper_page: Optional[Page] = None  # Blank tab to keep browser window alive
+        self._keeper_page: Optional[Page] = None
+        self._pw_started = False
 
-    async def start(self):
-        """Start the browser."""
-        # Avoid leaking resources if start() called multiple times
-        if self._browser or self._persistent_context:
+        # nodriver state (for SmartRecruiters)
+        self._nd_browser = None
+        self._nd_keeper_tab = None
+        self._nd_started = False
+
+        # Shared stealth instance (reuse instead of creating per-page)
+        self._stealth = Stealth()
+
+    @property
+    def nd_browser(self):
+        """Get the nodriver browser (used by SmartRecruiters handler)."""
+        return self._nd_browser
+
+    @property
+    def nd_keeper_tab(self):
+        """Get the nodriver keeper tab."""
+        return self._nd_keeper_tab
+
+    # ── NODRIVER BROWSER (SmartRecruiters) ────────────────────────────
+
+    async def start_nodriver(self):
+        """Start nodriver Chrome for SmartRecruiters.
+
+        Uses real Chrome with stealth patches — bypasses DataDome.
+        Loads Simplify extension. Stays alive for entire session.
+        """
+        if self._nd_started and self._nd_browser:
             return
-        if self._playwright:
-            try:
-                await self._playwright.stop()
-            except Exception:
-                pass
+
+        profile = Path(self._nodriver_profile)
+        profile.mkdir(parents=True, exist_ok=True)
+
+        # Clean stale locks and kill orphaned Chrome
+        self._clean_stale_locks(str(profile))
+        self._kill_orphaned_chrome(str(profile))
+
+        try:
+            import nodriver as uc
+
+            browser_args = [
+                "--window-size=1920,1080",
+                "--disable-infobars",
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--disable-session-crashed-bubble",
+                "--disable-features=TranslateUI",
+                "--noerrdialogs",
+            ]
+
+            if self.extension_paths:
+                ext_list = ",".join(self.extension_paths)
+                browser_args.append(f"--load-extension={ext_list}")
+                browser_args.append(f"--disable-extensions-except={ext_list}")
+                logger.info(f"[nodriver] Loading extensions: {ext_list}")
+
+            self._nd_browser = await uc.start(
+                headless=self.headless,
+                browser_args=browser_args,
+                user_data_dir=str(profile),
+            )
+
+            self._nd_keeper_tab = await self._nd_browser.get("about:blank")
+            self._nd_started = True
+            logger.info("nodriver Chrome started — keeper tab ready (for SmartRecruiters)")
+
+        except Exception as e:
+            logger.error(f"nodriver launch failed: {e}")
+            self._nd_browser = None
+            self._nd_started = False
+            raise
+
+    # ── PLAYWRIGHT BROWSER (GH/Lever/Ashby/Workday/Generic) ──────────
+
+    async def start_playwright(self):
+        """Start Playwright Chrome for non-SR handlers.
+
+        Uses persistent context with Simplify extension loaded.
+        Stays alive for entire session.
+        """
+        if self._pw_started and (self._persistent_context or self._browser):
+            return
+
+        profile = Path(self._playwright_profile)
+        profile.mkdir(parents=True, exist_ok=True)
+
+        # Clean stale locks
+        self._clean_stale_locks(str(profile))
+
+        # Kill any orphaned Chrome using this profile
+        self._kill_orphaned_chrome(str(profile))
 
         self._playwright = await async_playwright().start()
-
-        # Extensions require headed mode + persistent context
-        headless = self.headless
-        if self.extension_paths:
-            headless = False
-            if not self.user_data_dir:
-                from pathlib import Path
-                # Use copied Chrome profile (has user's cookies/logins)
-                chrome_profile = Path("data/browser_profiles/chrome_profile")
-                if chrome_profile.exists():
-                    self.user_data_dir = str(chrome_profile)
-                    logger.info(f"Using Chrome profile with user data: {self.user_data_dir}")
-                else:
-                    profile = Path("data/browser_profiles/extension_default")
-                    profile.mkdir(parents=True, exist_ok=True)
-                    self.user_data_dir = str(profile)
-                    logger.info(f"Auto-created browser profile: {self.user_data_dir}")
 
         chrome_args = [
             "--disable-blink-features=AutomationControlled",
@@ -99,97 +167,68 @@ class BrowserManager:
             "--noerrdialogs",
         ]
 
-        # Add extension loading args
         if self.extension_paths:
             ext_list = ",".join(self.extension_paths)
             chrome_args.append(f"--load-extension={ext_list}")
             chrome_args.append(f"--disable-extensions-except={ext_list}")
-            logger.info(f"Loading extensions: {ext_list}")
+            logger.info(f"[Playwright] Loading extensions: {ext_list}")
 
-        launch_args = {
-            "headless": headless,
-            "slow_mo": self.slow_mo,
-            "args": chrome_args,
-        }
+        # Use persistent context (preserves cookies, extensions, profile)
+        self._persistent_context = await self._playwright.chromium.launch_persistent_context(
+            user_data_dir=str(profile),
+            headless=False,  # Extensions require headed mode
+            slow_mo=self.slow_mo,
+            args=chrome_args,
+            viewport={"width": 1920, "height": 1080},
+        )
+        self._context = self._persistent_context
+        self._browser = None  # Not used with persistent context
 
-        # Add proxy if configured
-        if self.proxy:
-            proxy_server = f"http://{self.proxy['host']}:{self.proxy['port']}"
-            launch_args["proxy"] = {
-                "server": proxy_server,
-                "username": self.proxy.get("username", ""),
-                "password": self.proxy.get("password", ""),
-            }
-            logger.info(f"Using proxy: {self.proxy['host']}:{self.proxy['port']}")
-
-        # Use persistent context if user data dir provided
-        if self.user_data_dir:
-            # launch_persistent_context returns a BrowserContext, not Browser
-            self._persistent_context = await self._playwright.chromium.launch_persistent_context(
-                user_data_dir=self.user_data_dir,
-                **launch_args,
-            )
-            self._browser = None  # Not a Browser object
-            logger.info(f"Started persistent browser with profile: {self.user_data_dir}")
-
-            # Close any extra pages that Chrome restored, except keep ONE blank tab alive
-            # so the browser window never closes between jobs (one window, multiple tabs)
-            pages = self._persistent_context.pages
-            if len(pages) > 1:
-                logger.info(f"Closing {len(pages) - 1} extra tabs from previous session")
-                for extra_page in pages[1:]:
-                    try:
-                        await extra_page.close()
-                    except Exception:
-                        pass
-            # Keep one blank page as the permanent keeper tab
-            if pages:
-                self._keeper_page = pages[0]
+        # Set up keeper page
+        pages = self._persistent_context.pages
+        if len(pages) > 1:
+            for extra in pages[1:]:
                 try:
-                    await self._keeper_page.goto("about:blank")
+                    await extra.close()
                 except Exception:
                     pass
-            else:
-                self._keeper_page = await self._persistent_context.new_page()
-                try:
-                    await self._keeper_page.goto("about:blank")
-                except Exception:
-                    pass
-            logger.info("Browser keeper tab ready — one window, multiple tabs mode")
+        if pages:
+            self._keeper_page = pages[0]
+            try:
+                await self._keeper_page.goto("about:blank")
+            except Exception:
+                pass
         else:
-            self._persistent_context = None
-            self._browser = await self._playwright.chromium.launch(**launch_args)
-            logger.info("Started browser")
+            self._keeper_page = await self._persistent_context.new_page()
+
+        self._pw_started = True
+        logger.info("Playwright Chrome started — keeper tab ready (for GH/Lever/Ashby)")
+
+    # ── UNIFIED START (backward compat) ──────────────────────────────
+
+    async def start(self):
+        """Start the Playwright browser (default for non-SR handlers).
+
+        nodriver is started on-demand by SmartRecruiters handler.
+        """
+        await self.start_playwright()
+
+    # ── PAGE CREATION ────────────────────────────────────────────────
 
     async def create_context(self) -> BrowserContext:
-        """Create a new browser context with stealth settings."""
-        if not self._browser and not self._persistent_context:
-            await self.start()
+        """Get the Playwright browser context for creating pages."""
+        if not self._pw_started:
+            await self.start_playwright()
 
-        # Persistent context IS the context — reuse it directly
+        if self._context:
+            return self._context
         if self._persistent_context:
             return self._persistent_context
 
-        context = await self._browser.new_context(
-            viewport={"width": 1920, "height": 1080},
-            user_agent=random.choice(self.USER_AGENTS),
-            locale="en-US",
-            timezone_id="America/Los_Angeles",
-            geolocation={"latitude": 37.7749, "longitude": -122.4194},
-            permissions=["geolocation"],
-        )
-
-        # Block unnecessary resources for speed (but not on all pages — some need them)
-        await context.route(
-            "**/*.{woff,woff2,ttf,eot}",
-            lambda route: route.abort(),
-        )
-
-        self._contexts.append(context)
-        return context
+        raise RuntimeError("No Playwright browser context available — call start_playwright() first")
 
     async def create_stealth_page(self, context: Optional[BrowserContext] = None) -> Page:
-        """Create a new page with stealth mode enabled."""
+        """Create a new Playwright page with stealth mode enabled."""
         if context is None:
             context = await self.create_context()
 
@@ -197,55 +236,36 @@ class BrowserManager:
             page = await context.new_page()
         except Exception as e:
             if "has been closed" in str(e):
-                logger.warning("Browser was closed — restarting...")
-                # Force-clear stale references so start() creates a fresh browser
-                self._browser = None
+                logger.warning("Playwright browser was closed — restarting...")
                 self._persistent_context = None
+                self._context = None
                 self._contexts.clear()
                 self._keeper_page = None
+                self._pw_started = False
+                self._browser = None
                 if self._playwright:
                     try:
                         await self._playwright.stop()
                     except Exception:
                         pass
                     self._playwright = None
-                await self.start()
+                await self.start_playwright()
                 context = await self.create_context()
                 page = await context.new_page()
             else:
                 raise
 
-        # Apply stealth to page
-        stealth = Stealth()
-        await stealth.apply_stealth_async(page)
+        # Apply stealth (reuse cached instance)
+        await self._stealth.apply_stealth_async(page)
 
-        # Additional stealth measures (lighter when extensions loaded)
-        if self.extension_paths:
-            # Skip plugins/chrome overrides — they break extension functionality
-            await page.add_init_script("""
-                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-                Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-            """)
-        else:
-            await page.add_init_script("""
-                // Override navigator properties
-                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-                Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-                Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-
-                // Override chrome property
-                window.chrome = { runtime: {} };
-
-                // Override permissions
-                const originalQuery = window.navigator.permissions.query;
-                window.navigator.permissions.query = (parameters) => (
-                    parameters.name === 'notifications' ?
-                        Promise.resolve({ state: Notification.permission }) :
-                        originalQuery(parameters)
-                );
-            """)
+        await page.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+        """)
 
         return page
+
+    # ── HUMAN-LIKE INTERACTIONS ───────────────────────────────────────
 
     async def human_delay(self, min_ms: int = 500, max_ms: int = 2000):
         """Add a random human-like delay."""
@@ -260,24 +280,18 @@ class BrowserManager:
 
         for char in text:
             await page.keyboard.type(char, delay=random.randint(50, 150))
-            if random.random() < 0.1:  # 10% chance of small pause
+            if random.random() < 0.1:
                 await self.human_delay(100, 300)
 
     async def human_click(self, page: Page, selector: str):
         """Click with human-like behavior."""
         element = await page.wait_for_selector(selector, timeout=10000)
-
-        # Get element position
         box = await element.bounding_box()
         if box:
-            # Add slight randomness to click position
             x = box["x"] + box["width"] / 2 + random.randint(-5, 5)
             y = box["y"] + box["height"] / 2 + random.randint(-5, 5)
-
-            # Move mouse to element (human-like)
             await page.mouse.move(x, y, steps=random.randint(5, 15))
             await self.human_delay(100, 300)
-
         await element.click()
         await self.human_delay(300, 800)
 
@@ -287,6 +301,37 @@ class BrowserManager:
         await element.scroll_into_view_if_needed()
         await self.human_delay(200, 500)
 
+    # ── CLEANUP HELPERS ──────────────────────────────────────────────
+
+    def _clean_stale_locks(self, profile_dir: str):
+        """Remove stale Chrome lock files from a profile directory."""
+        for lock_file in ["SingletonLock", "SingletonCookie", "SingletonSocket"]:
+            lock_path = Path(profile_dir) / lock_file
+            if lock_path.exists():
+                try:
+                    lock_path.unlink()
+                except Exception:
+                    pass
+
+    def _kill_orphaned_chrome(self, profile_dir: str):
+        """Kill orphaned Chrome processes using a specific profile."""
+        try:
+            result = subprocess.run(
+                ["pgrep", "-f", profile_dir],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.stdout.strip():
+                logger.warning(f"Killing orphaned Chrome from previous run ({profile_dir})")
+                subprocess.run(
+                    ["pkill", "-9", "-f", profile_dir],
+                    capture_output=True, timeout=5
+                )
+                # Brief sync sleep OK here — only runs once at startup before event loop is hot
+                import time as _time
+                _time.sleep(1)
+        except Exception:
+            pass
+
     async def close_context(self, context: BrowserContext):
         """Close a browser context."""
         if context in self._contexts:
@@ -294,7 +339,8 @@ class BrowserManager:
         await context.close()
 
     async def close(self):
-        """Close all contexts and the browser."""
+        """Close everything — both browsers."""
+        # Close Playwright contexts
         for context in self._contexts:
             try:
                 await context.close()
@@ -302,19 +348,21 @@ class BrowserManager:
                 pass
         self._contexts.clear()
 
-        if self._persistent_context:
-            try:
-                await self._persistent_context.close()
-            except Exception:
-                pass
-            self._persistent_context = None
-
+        # Close Playwright browser
         if self._browser:
             try:
                 await self._browser.close()
             except Exception:
                 pass
             self._browser = None
+
+        if self._persistent_context:
+            try:
+                await self._persistent_context.close()
+            except Exception:
+                pass
+            self._persistent_context = None
+            self._context = None
 
         if self._playwright:
             try:
@@ -323,28 +371,18 @@ class BrowserManager:
                 pass
             self._playwright = None
 
+        self._pw_started = False
+        self._keeper_page = None
 
-async def main():
-    """Test the browser manager."""
-    manager = BrowserManager(headless=False, slow_mo=100)
+        # Close nodriver Chrome
+        if self._nd_browser:
+            try:
+                self._nd_browser.stop()
+            except Exception:
+                pass
+            self._nd_browser = None
 
-    try:
-        await manager.start()
-        page = await manager.create_stealth_page()
+        self._nd_started = False
+        self._nd_keeper_tab = None
 
-        # Test on a bot detection site
-        await page.goto("https://bot.sannysoft.com/")
-        await asyncio.sleep(5)
-
-        # Take screenshot
-        await page.screenshot(path="data/stealth_test.png")
-        print("Screenshot saved to data/stealth_test.png")
-
-        await asyncio.sleep(3)
-
-    finally:
-        await manager.close()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        logger.info("Both browsers closed")

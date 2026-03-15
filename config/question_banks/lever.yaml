@@ -1,0 +1,300 @@
+ats_type: lever
+description: Pre-mapped questions for lever forms
+questions:
+  2nd year:
+    answer: 'No'
+    type: select
+  'acknowledged: acknowledged':
+    answer: 'Yes'
+    type: select
+  'african american/black: hispanic, latinx, or spanish origin':
+    answer: 'No'
+    type: select
+  'agree: agree':
+    answer: 'Yes'
+    type: select
+  'american indian or alaskan native: american indian or alaskan native':
+    answer: 'No'
+    type: select
+  'american indian or alaskan native: asian':
+    answer: 'Yes'
+    type: select
+  'american indian or alaskan native: black or african american':
+    answer: 'No'
+    type: select
+  'american indian or alaskan native: i do not wish to answer':
+    answer: 'No'
+    type: select
+  'american indian or alaskan native: native hawaiian or other pacific islander':
+    answer: 'No'
+    type: select
+  'american indian or alaskan native: white':
+    answer: 'No'
+    type: select
+  'applicant acknowledgement: applicant acknowledgement':
+    answer: 'Yes'
+    type: select
+  bachelor's:
+    answer: Bachelor of Science
+    type: select
+  'beta career site: beta employee referral':
+    answer: 'No'
+    type: select
+  'beta career site: college fair':
+    answer: 'No'
+    type: select
+  'beta career site: college job posting platform (e.g. handshake)':
+    answer: 'Yes'
+    type: select
+  'beta career site: linkedin':
+    answer: LINKEDIN_FROM_CONFIG
+    type: select
+  'boise, id: san francisco, ca':
+    answer: 'Yes'
+    type: select
+  'boise, id: seattle, wa':
+    answer: 'Yes'
+    type: select
+  ? 'built structured python applications using modules, classes, and clearly defined inputs/outputs: built structured python applications using modules, classes, and clearly defined inputs/outputs'
+  : answer: 'Yes'
+    type: select
+  ? 'built structured python applications using modules, classes, and clearly defined inputs/outputs: implemented error handling and logging in production-oriented code'
+  : answer: 'Yes'
+    type: select
+  'built structured python applications using modules, classes, and clearly defined inputs/outputs: none of the above':
+    answer: 'No'
+    type: select
+  ? 'built structured python applications using modules, classes, and clearly defined inputs/outputs: primarily written exploratory scripts or notebooks'
+  : answer: 'Yes'
+    type: select
+  ? 'built structured python applications using modules, classes, and clearly defined inputs/outputs: processed structured data (csv, json, logs, images) using libraries such as pandas or numpy'
+  : answer: 'Yes'
+    type: select
+  ? 'by checking this box, i confirm that i have read and understood the information regarding u.s. export control laws and regulations as outlined above.: by checking this box, i confirm that i have read
+    and understood the information regarding u.s. export control laws and regulations as outlined above.'
+  : answer: United States — citizen since birth
+    type: select
+  currently enrolled in a master's program:
+    answer: 'No'
+    type: select
+  'employer alignment: learner voice and community':
+    answer: 'No'
+    type: select
+  facebook url:
+    answer: N/A
+    type: text
+  field ai:
+    answer: I'm enthusiastic about Field AI's innovative work in AI and eager to apply my software engineering
+    type: text
+  ? 'fieldai has my consent to contact me about future job opportunities.: fieldai has my consent to contact me about future job opportunities.'
+  : answer: 'Yes'
+    type: select
+  'freshman: year 1 grad student':
+    answer: 'No'
+    type: select
+  'freshman: year 2 grad student':
+    answer: 'No'
+    type: select
+  full-time:
+    answer: 'Yes'
+    type: select
+  github url✱:
+    answer: GITHUB_FROM_CONFIG
+    type: text
+  'guangzhou, china: i''m not open to other locations':
+    answer: 'Yes'
+    type: select
+  h1b visa:
+    answer: Not Applicable
+    type: select
+  'hispanic or latino: 2 or more races':
+    answer: 'No'
+    type: select
+  'hispanic or latino: american indian or alaska native (not hispanic or latino)':
+    answer: 'No'
+    type: select
+  'hispanic or latino: asian (not hispanic or latino)':
+    answer: 'No'
+    type: select
+  'hispanic or latino: black or african american (not hispanic or latino)':
+    answer: 'No'
+    type: select
+  'hispanic or latino: decline to answer':
+    answer: 'No'
+    type: select
+  'hispanic or latino: hispanic or latino':
+    answer: 'No'
+    type: select
+  'hispanic or latino: native hawaiian or other pacific islander (not hispanic or latino)':
+    answer: 'No'
+    type: select
+  'hispanic or latino: white (not hispanic or latino)':
+    answer: 'No'
+    type: select
+  'i accept: i accept':
+    answer: 'Yes'
+    type: select
+  'i acknowledge: i acknowledge':
+    answer: 'Yes'
+    type: select
+  'i agree: i agree':
+    answer: 'Yes'
+    type: select
+  i am a us citizen:
+    answer: 'Yes'
+    type: select
+  i decline to answer:
+    answer: I am not a Protected Veteran
+    type: select
+  i have read and understand the selection criteria.:
+    answer: 'Yes'
+    type: select
+  'i live outside of the united states: i live outside of the united states':
+    answer: 'No'
+    type: select
+  'i understand and agree: i do not agree':
+    answer: 'No'
+    type: select
+  'i understand and agree: i understand and agree':
+    answer: 'Yes'
+    type: select
+  'i will be local to the chicago area from june - august 2026: i will be local to the chicago area from june - august 2026':
+    answer: 'Yes'
+    type: select
+  ? 'i''ve published, documented tested code libraries publicly, or shared within a research department: i''ve published, documented tested code libraries publicly, or shared within a research department'
+  : answer: 'No'
+    type: select
+  'i''ve published, documented tested code libraries publicly, or shared within a research department: none of the above':
+    answer: 'No'
+    type: select
+  instagram url:
+    answer: N/A
+    type: text
+  'ios: machine learning':
+    answer: 'No'
+    type: select
+  ? 'larian studios has my consent to contact me about future job opportunities.: larian studios has my consent to contact me about future job opportunities.'
+  : answer: 'Yes'
+    type: select
+  linkedin:
+    answer: LINKEDIN_FROM_CONFIG
+    type: select
+  linkedin or personal website url✱:
+    answer: LINKEDIN_FROM_CONFIG
+    type: text
+  other url:
+    answer: N/A
+    type: text
+  other website:
+    answer: N/A
+    type: text
+  other/autres url:
+    answer: N/A
+    type: text
+  portfolio (artstation, github, personal website etc) url:
+    answer: GITHUB_FROM_CONFIG
+    type: text
+  portfolio url:
+    answer: N/A
+    type: text
+  sunwater capital:
+    answer: I'm enthusiastic about Sunwater Capital's mission. My data engineering experience at Kruiz and
+    type: text
+  tiktok url:
+    answer: N/A
+    type: text
+  transcripts (if applying for co-op/internship) url:
+    answer: N/A
+    type: text
+  university career fair/ event:
+    answer: SCHOOL_FROM_CONFIG
+    type: select
+  us citizen:
+    answer: 'Yes'
+    type: select
+  'white / caucasian: asian':
+    answer: 'Yes'
+    type: select
+  'white / caucasian: black or african american':
+    answer: 'No'
+    type: select
+  'white / caucasian: hispanic, latino, or spanish origin':
+    answer: 'No'
+    type: select
+  'white / caucasian: indigenous peoples, first nations, native american, or alaska native':
+    answer: 'No'
+    type: select
+  'white / caucasian: middle eastern or north african':
+    answer: 'No'
+    type: select
+  'white / caucasian: native hawaiian or other pacific islander':
+    answer: 'No'
+    type: select
+  'white / caucasian: some other race, ethnicity, or origin':
+    answer: East Asian
+    type: select
+  'white / caucasian: white / caucasian':
+    answer: 'No'
+    type: select
+  x url:
+    answer: N/A
+    type: text
+  ? 'yes, appen can contact me about future job opportunities for up to 3 yearsprivacy policy: yes, appen can contact me about future job opportunities for up to 3 yearsprivacy policy'
+  : answer: 'No'
+    type: select
+  ? 'yes, daniels health can contact me about future job opportunities for up to 3 yearsprivacy policy: yes, daniels health can contact me about future job opportunities for up to 3 yearsprivacy policy'
+  : answer: 'No'
+    type: select
+  ? 'yes, fehr & peers can contact me about future job opportunities for up to 2 yearsprivacy policy: yes, fehr & peers can contact me about future job opportunities for up to 2 yearsprivacy policy'
+  : answer: 'No'
+    type: select
+  'yes, i agree: yes, i agree':
+    answer: 'Yes'
+    type: select
+  yes, i am currently eligible for employment.:
+    answer: Yes, I am currently eligible for employment.
+    type: select
+  yes, i am located within a commutable distance to this office:
+    answer: Yes, I am located within a commutable distance to this office
+    type: select
+  yes, i am willing to relocate to a commutable distance of this office.:
+    answer: Yes, I am willing to relocate to a commutable distance of this office.
+    type: select
+  yes, i can work without sponsorship now and in the future:
+    answer: Yes, I can work WITHOUT sponsorship now and in the FUTURE
+    type: select
+  ? 'yes, i consent to ekimetrics retaining my data for up to 2 years after my application for the purposes of considering me for employment and for contacting me about future job opportunities. i understand
+    i may withdraw my consent at any time.: yes, i consent to ekimetrics retaining my data for up to 2 years after my application for the purposes of considering me for employment and for contacting me
+    about future job opportunities. i understand i may withdraw my consent at any time.'
+  : answer: 'Yes'
+    type: select
+  yes, i have lived in the u.s. 3 of the last 5 years:
+    answer: 'Yes'
+    type: select
+  ? 'yes, i was previously a regular full-time employee with kabam: yes, i was previously a regular full-time employee with kabam'
+  : answer: 'Yes'
+    type: select
+  yes, i will need sponsorship.:
+    answer: 'No'
+    type: select
+  yes, i will require sponsorship to work in the united states:
+    answer: 'No'
+    type: select
+  yes, i'm us citizen:
+    answer: 'Yes'
+    type: select
+  ? 'yes, parallel wireless can contact me about future job opportunities for up to 1 year: yes, parallel wireless can contact me about future job opportunities for up to 1 year'
+  : answer: 'No'
+    type: select
+  ? 'yes, veeva systems can contact me about future job opportunities for up to 2 yearsprivacy policy: yes, veeva systems can contact me about future job opportunities for up to 2 yearsprivacy policy'
+  : answer: 'No'
+    type: select
+  ? 'yes, weride.ai can contact me about future job opportunities for up to 1 yearprivacy policy: yes, weride.ai can contact me about future job opportunities for up to 1 yearprivacy policy'
+  : answer: 'No'
+    type: select
+  'yes: not applicable':
+    answer: 'Yes'
+    type: select
+  zoox careers page:
+    answer: Online Job Board
+    type: select

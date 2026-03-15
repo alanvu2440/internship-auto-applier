@@ -7,7 +7,7 @@ URLs: boards.greenhouse.io, job-boards.greenhouse.io
 
 import asyncio
 from typing import Dict, Any
-from playwright.async_api import Page
+from playwright.async_api import Page, Frame
 from loguru import logger
 
 from .base import BaseHandler
@@ -17,6 +17,17 @@ class GreenhouseHandler(BaseHandler):
     """Handler for Greenhouse ATS applications."""
 
     name = "greenhouse"
+
+    @staticmethod
+    def _get_keyboard(page_or_frame):
+        """Get the keyboard from a Page or Frame object.
+
+        Playwright Frame objects don't have .keyboard directly —
+        keyboard events must go through frame.page.keyboard.
+        """
+        if isinstance(page_or_frame, Frame):
+            return page_or_frame.page.keyboard
+        return page_or_frame.keyboard
 
     async def apply(self, page: Page, job_url: str, job_data: Dict[str, Any]) -> bool:
         """Apply to a Greenhouse job."""
@@ -63,6 +74,9 @@ class GreenhouseHandler(BaseHandler):
                     logger.warning("Could not find/click Apply button")
                     return False
                 await self.browser_manager.human_delay(1000, 2000)
+
+                # Re-trigger Simplify on the form page (it was only triggered on the listing page)
+                await self.wait_for_extension_autofill(page)
 
             # Detect form type
             form_type = await self.detect_form_type(page)
@@ -452,62 +466,83 @@ class GreenhouseHandler(BaseHandler):
         logger.warning(f"Form type: unknown - no form elements detected on {url}")
         return "unknown"
 
+    async def _fill_form_fields(self, target, job_data: Dict[str, Any]) -> None:
+        """Shared form-filling pipeline used by both standard and embedded forms.
+
+        Args:
+            target: Either a Page (standard) or Frame (embedded iframe).
+            job_data: Job metadata dict with company/role.
+        """
+        # Fill basic fields using form filler
+        await self.form_filler.fill_form(target)
+        await self.browser_manager.human_delay(500, 1000)
+
+        # CRITICAL: Re-verify and trigger events on basic fields (fixes React validation)
+        await self._verify_and_trigger_basic_fields(target)
+        await self.browser_manager.human_delay(300, 500)
+
+        # Fill Greenhouse-specific education fields (hidden inputs)
+        await self._fill_greenhouse_education_fields(target)
+        await self.browser_manager.human_delay(300, 600)
+        await self._force_fill_education_hidden_inputs(target)
+
+        # Fill work experience fields (company, title, dates)
+        await self._fill_greenhouse_work_experience_fields(target)
+        await self.browser_manager.human_delay(300, 600)
+
+        # Fill country field (React-Select dropdown)
+        await self._fill_greenhouse_country(target)
+        await self.browser_manager.human_delay(200, 400)
+
+        # Fill phone country code dropdown (React-Select)
+        await self._fill_greenhouse_phone_country_code(target)
+        await self.browser_manager.human_delay(200, 400)
+
+        # Fill source/referral dropdown
+        await self._fill_greenhouse_source_dropdown(target)
+        await self.browser_manager.human_delay(200, 400)
+
+        # Fill location field (handles hidden input sync)
+        await self._fill_greenhouse_location(target)
+        await self.browser_manager.human_delay(300, 600)
+
+        # Upload resume
+        resume_path = self._resolve_file_path(self.form_filler.config.get("files", {}).get("resume"))
+        if resume_path:
+            uploaded = await self._upload_resume(target, resume_path)
+            if uploaded:
+                await self._verify_resume_upload(target)
+
+        # Upload cover letter ONLY if there's a clearly labeled cover letter field
+        cover_letter_path = self._resolve_file_path(self.form_filler.config.get("files", {}).get("cover_letter"))
+        if cover_letter_path:
+            has_cl_field = await target.query_selector(
+                'input[type="file"][data-field*="cover"], input[type="file"][name*="cover"], '
+                'input[type="file"]#cover_letter, input[type="file"][id*="cover"]'
+            )
+            if has_cl_field:
+                await self._upload_cover_letter(target, cover_letter_path)
+            else:
+                logger.debug("No cover letter field found — skipping upload")
+
+        # Upload transcript if available
+        transcript_path = self._resolve_file_path(self.form_filler.config.get("files", {}).get("transcript"))
+        if transcript_path:
+            await self._upload_transcript(target, transcript_path)
+
+        # Handle custom questions
+        await self._handle_custom_questions(target, job_data)
+
+        # Fill demographic questions if present
+        await self._fill_demographics(target)
+
+        # CRITICAL: Sync all hidden question_XXXXXXXX inputs that might still be empty
+        await self._sync_all_hidden_question_inputs(target)
+
     async def _fill_standard_form(self, page: Page, job_data: Dict[str, Any]) -> bool:
         """Fill standard Greenhouse application form."""
         try:
-            # Fill basic fields using form filler
-            await self.form_filler.fill_form(page)
-            await self.browser_manager.human_delay(500, 1000)
-
-            # CRITICAL: Re-verify and trigger events on basic fields (fixes React validation)
-            await self._verify_and_trigger_basic_fields(page)
-            await self.browser_manager.human_delay(300, 500)
-
-            # Fill Greenhouse-specific education fields (hidden inputs)
-            await self._fill_greenhouse_education_fields(page)
-            await self.browser_manager.human_delay(300, 600)
-
-            # Fill country field (React-Select dropdown)
-            await self._fill_greenhouse_country(page)
-            await self.browser_manager.human_delay(200, 400)
-
-            # Fill phone country code dropdown (React-Select)
-            await self._fill_greenhouse_phone_country_code(page)
-            await self.browser_manager.human_delay(200, 400)
-
-            # Fill source/referral dropdown
-            await self._fill_greenhouse_source_dropdown(page)
-            await self.browser_manager.human_delay(200, 400)
-
-            # Fill location field specifically (handles hidden input sync)
-            await self._fill_greenhouse_location(page)
-            await self.browser_manager.human_delay(300, 600)
-
-            # Upload resume
-            resume_path = self._resolve_file_path(self.form_filler.config.get("files", {}).get("resume"))
-            if resume_path:
-                uploaded = await self._upload_resume(page, resume_path)
-                if uploaded:
-                    await self._verify_resume_upload(page)
-
-            # Upload cover letter if available
-            cover_letter_path = self._resolve_file_path(self.form_filler.config.get("files", {}).get("cover_letter"))
-            if cover_letter_path:
-                await self._upload_cover_letter(page, cover_letter_path)
-
-            # Upload transcript if available and there's a field for it
-            transcript_path = self._resolve_file_path(self.form_filler.config.get("files", {}).get("transcript"))
-            if transcript_path:
-                await self._upload_transcript(page, transcript_path)
-
-            # Handle custom questions
-            await self._handle_custom_questions(page, job_data)
-
-            # Fill demographic questions if present
-            await self._fill_demographics(page)
-
-            # CRITICAL: Sync all hidden question_XXXXXXXX inputs that might still be empty
-            await self._sync_all_hidden_question_inputs(page)
+            await self._fill_form_fields(page, job_data)
 
             # Handle email verification code if present (must be before submit)
             await self._handle_email_verification(page)
@@ -520,7 +555,11 @@ class GreenhouseHandler(BaseHandler):
             return False
 
     async def _fill_embedded_form(self, page: Page, job_data: Dict[str, Any]) -> bool:
-        """Fill embedded Greenhouse iframe form."""
+        """Fill embedded Greenhouse iframe form.
+
+        Finds the iframe, fills form fields inside it using the shared pipeline,
+        then handles CAPTCHA and submit on the parent page.
+        """
         try:
             # Find and switch to iframe
             iframe = await page.query_selector('iframe[src*="greenhouse"]')
@@ -541,58 +580,14 @@ class GreenhouseHandler(BaseHandler):
                 logger.warning("Iframe doesn't contain form inputs, falling back to standard form")
                 return await self._fill_standard_form(page, job_data)
 
-            # Fill form in iframe context using the full form filler
-            # Note: Playwright handles frames, so we work with the frame like a page
+            # Wait for Simplify to auto-fill (operates on parent page)
+            await self.wait_for_extension_autofill(page)
+
+            # Fill form inside iframe using shared pipeline
             logger.info("Filling embedded form fields")
+            await self._fill_form_fields(frame, job_data)
 
-            # Use the form filler directly on the frame
-            filled = await self.form_filler.fill_form(frame)
-            logger.info(f"Filled {len(filled)} fields in embedded form")
-            await self.browser_manager.human_delay(500, 1000)
-
-            # Fill education fields in iframe
-            await self._fill_greenhouse_education_fields_in_frame(frame)
-            await self.browser_manager.human_delay(300, 600)
-
-            # Fill location field in iframe
-            await self._fill_greenhouse_location_in_frame(frame)
-            await self.browser_manager.human_delay(300, 600)
-
-            # Upload resume
-            resume_path = self._resolve_file_path(self.form_filler.config.get("files", {}).get("resume"))
-            if resume_path:
-                uploaded = await self._upload_resume_in_frame(frame, resume_path)
-                if uploaded:
-                    logger.info("Resume uploaded to iframe")
-
-            # Fill phone country code dropdown in iframe
-            await self._fill_greenhouse_phone_country_code(frame)
-            await self.browser_manager.human_delay(200, 400)
-
-            # Fill source/referral dropdown in iframe
-            await self._fill_greenhouse_source_dropdown(frame)
-            await self.browser_manager.human_delay(200, 400)
-
-            # Upload cover letter if available
-            cover_letter_path = self._resolve_file_path(self.form_filler.config.get("files", {}).get("cover_letter"))
-            if cover_letter_path:
-                await self._upload_cover_letter_in_frame(frame, cover_letter_path)
-
-            # Upload transcript if available (was previously missing from iframe path)
-            transcript_path = self._resolve_file_path(self.form_filler.config.get("files", {}).get("transcript"))
-            if transcript_path:
-                await self._upload_transcript_in_frame(frame, transcript_path)
-
-            # Handle custom questions
-            await self._handle_custom_questions_in_frame(frame, job_data)
-
-            # Fill demographic questions
-            await self._fill_demographics_in_frame(frame)
-
-            # CRITICAL: Sync all hidden question_XXXXXXXX inputs in iframe
-            await self._sync_all_hidden_question_inputs(frame)
-
-            # Handle email verification code if present (check parent page — code field is outside iframe)
+            # Handle email verification code (check parent page — code field is outside iframe)
             await self._handle_email_verification(page)
 
             # Submit (check for dry run)
@@ -600,10 +595,19 @@ class GreenhouseHandler(BaseHandler):
                 logger.info("DRY RUN: Embedded form filled, running validation on iframe")
                 return await self._run_dry_run_validation(frame)
 
-            # Solve invisible reCAPTCHA before submit (check parent page - reCAPTCHA is usually there)
+            # Solve invisible reCAPTCHA on parent page (reCAPTCHA is usually outside the iframe)
             captcha_solved = await self.solve_invisible_recaptcha(page)
             if not captcha_solved:
                 logger.error("Failed to solve reCAPTCHA for embedded form - cannot submit")
+                return False
+
+            # Check required fields before submit
+            empty_fields = await self._check_required_fields_before_submit(frame)
+            if empty_fields:
+                logger.warning(
+                    f"IFRAME PRE-SUBMIT: {len(empty_fields)} required fields still empty: {empty_fields} — "
+                    f"leaving tab open for manual completion"
+                )
                 return False
 
             submit_selectors = [
@@ -629,269 +633,14 @@ class GreenhouseHandler(BaseHandler):
 
         except Exception as e:
             logger.error(f"Error with embedded Greenhouse form: {e}")
-            # Fall back to standard form
             logger.info("Falling back to standard form after iframe error")
             return await self._fill_standard_form(page, job_data)
 
-    async def _fill_greenhouse_education_fields_in_frame(self, frame) -> None:
-        """Fill Greenhouse education fields in iframe context."""
-        # Reuse the same logic but with frame instead of page
-        education = self.form_filler.config.get("education", [])
-        if isinstance(education, list) and education:
-            edu = education[0]
-        else:
-            edu = education if isinstance(education, dict) else {}
-
-        if not edu:
-            return
-
-        logger.info("Filling education fields in iframe")
-
-        # Find all React-select dropdowns in the frame
-        dropdowns = await frame.query_selector_all('.select__control, [role="combobox"]')
-
-        for dropdown in dropdowns:
-            try:
-                if not await dropdown.is_visible():
-                    continue
-
-                label_text = await dropdown.evaluate('''(el) => {
-                    let container = el.closest('.field, .select, [class*="field"]');
-                    if (!container) container = el.parentElement?.parentElement?.parentElement;
-                    if (!container) return "";
-                    let label = container.querySelector("label, .select__label, [class*='label']");
-                    return label ? label.textContent.toLowerCase().trim() : "";
-                }''')
-
-                value = None
-                keywords = []
-
-                if any(x in label_text for x in ["school", "university", "college"]):
-                    value = edu.get("school", "")
-                    keywords = ["school"]
-                elif "degree" in label_text and "discipline" not in label_text:
-                    value = edu.get("degree", "Bachelor's degree")
-                    keywords = ["degree"]
-                elif any(x in label_text for x in ["discipline", "major", "field of study"]):
-                    value = edu.get("field_of_study", "Software Engineering")
-                    keywords = ["discipline"]
-                elif any(x in label_text for x in ["end month", "graduation month"]):
-                    value = "May"
-                    keywords = ["month"]
-                elif any(x in label_text for x in ["end year", "graduation year", "expected"]):
-                    grad = edu.get("graduation_date", "May 2026")
-                    import re
-                    year_match = re.search(r'20\d{2}', str(grad))
-                    value = year_match.group() if year_match else "2026"
-                    keywords = ["year"]
-
-                if not value:
-                    continue
-
-                # Check if already filled — check BOTH display AND hidden input
-                display_val = await dropdown.evaluate('''(el) => {
-                    const sv = el.querySelector('.select__single-value, [class*="singleValue"]');
-                    if (sv && sv.textContent && sv.textContent.trim() !== "Select..." && sv.textContent.trim().length > 1) {
-                        return sv.textContent.trim();
-                    }
-                    return "";
-                }''')
-                if display_val:
-                    logger.debug(f"Iframe dropdown '{label_text}' already filled: {display_val}")
-                    continue
-
-                logger.info(f"Filling iframe dropdown: {label_text} -> {value}")
-
-                # Discipline alternatives
-                values_to_try = [value]
-                if "discipline" in keywords:
-                    values_to_try = [value, "Engineering", "Computer Science", "Computer Engineering"]
-
-                found = False
-                for try_value in values_to_try:
-                    await dropdown.click()
-                    await self.browser_manager.human_delay(400, 600)
-
-                    if "school" in keywords:
-                        await frame.page.keyboard.type(try_value[:20], delay=50)
-                        await self.browser_manager.human_delay(600, 900)
-
-                    found = await self.form_filler._select_dropdown_option(frame, try_value)
-                    if found:
-                        value = try_value
-                        break
-                    await frame.page.keyboard.press("Escape")
-                    await self.browser_manager.human_delay(200, 300)
-
-                if not found and "school" in keywords:
-                    await dropdown.click()
-                    await self.browser_manager.human_delay(300, 500)
-                    await frame.page.keyboard.type(value[:20], delay=50)
-                    await self.browser_manager.human_delay(600, 900)
-                    await frame.page.keyboard.press("Enter")
-                    found = True
-
-                await self.browser_manager.human_delay(300, 500)
-
-            except Exception as e:
-                logger.debug(f"Error filling iframe education dropdown: {e}")
-
-    async def _fill_greenhouse_location_in_frame(self, frame) -> None:
-        """Fill location field in iframe context."""
-        personal = self.form_filler.config.get("personal_info", {})
-        city = personal.get("city", "")
-        if not city:
-            return
-
-        location_input = await frame.query_selector('input#candidate-location, input[name="candidate-location"], .geosuggest input')
-        if not location_input or not await location_input.is_visible():
-            return
-
-        current = await location_input.input_value()
-        if current and len(current.strip()) > 2:
-            return
-
-        logger.info(f"Filling location in iframe: {city}")
-        await location_input.click()
-        await location_input.type(city, delay=80)
-        await self.browser_manager.human_delay(800, 1200)
-
-        # Try to select from autocomplete
-        await frame.page.keyboard.press("ArrowDown")
-        await self.browser_manager.human_delay(200, 400)
-        await frame.page.keyboard.press("Enter")
-        await self.browser_manager.human_delay(300, 500)
-
-    async def _fill_demographics_in_frame(self, frame) -> None:
-        """Fill optional demographic questions in iframe."""
-        demographics = self.form_filler.config.get("demographics", {})
-        logger.info("Filling demographics in iframe")
-
-        # Gender
-        gender_select = await frame.query_selector('select[name*="gender"], select[id*="gender"]')
-        if gender_select and demographics.get("gender"):
-            try:
-                await gender_select.select_option(label=demographics["gender"])
-                logger.info("Filled gender select in iframe")
-            except Exception:
-                pass
-
-        # Ethnicity
-        ethnicity_select = await frame.query_selector(
-            'select[name*="race"], select[name*="ethnic"], select[id*="ethnic"]'
-        )
-        if ethnicity_select and demographics.get("ethnicity"):
-            try:
-                await ethnicity_select.select_option(label=demographics["ethnicity"])
-                logger.info("Filled ethnicity select in iframe")
-            except Exception:
-                pass
-
-        # Veteran
-        veteran_select = await frame.query_selector('select[name*="veteran"], select[id*="veteran"]')
-        if veteran_select and demographics.get("veteran_status"):
-            try:
-                await veteran_select.select_option(label=demographics["veteran_status"])
-                logger.info("Filled veteran status select in iframe")
-            except Exception:
-                pass
-
-        # Also handle React-select style dropdowns in iframe
-        await self._fill_react_select_demographics_in_frame(frame, demographics)
-
-    async def _fill_react_select_demographics_in_frame(self, frame, demographics: Dict) -> None:
-        """Fill React-select style demographics dropdowns in iframe."""
-        demographic_mappings = [
-            ("gender", demographics.get("gender", "Prefer not to say")),
-            ("race", demographics.get("ethnicity", "Prefer not to say")),
-            ("ethnic", demographics.get("ethnicity", "Prefer not to say")),
-            ("veteran", demographics.get("veteran_status", "No")),
-            ("disability", demographics.get("disability_status", "Prefer not to say")),
-        ]
-
-        dropdowns = await frame.query_selector_all('.select__control, [role="combobox"]')
-
-        for dropdown in dropdowns:
-            try:
-                if not await dropdown.is_visible():
-                    continue
-
-                label_text = await dropdown.evaluate('''(el) => {
-                    let container = el.closest('.field, .select, [class*="field"]');
-                    if (!container) container = el.parentElement?.parentElement?.parentElement;
-                    if (!container) return "";
-                    let label = container.querySelector("label, .select__label, [class*='label']");
-                    return label ? label.textContent.toLowerCase().trim() : "";
-                }''')
-
-                for keyword, value in demographic_mappings:
-                    if keyword not in label_text:
-                        continue
-
-                    # Check if already filled
-                    current_text = (await dropdown.text_content() or "").strip().lower()
-                    if current_text and "select" not in current_text and "choose" not in current_text:
-                        continue
-
-                    logger.info(f"Filling iframe demographics dropdown: {label_text} -> {value}")
-                    await dropdown.click()
-                    await self.browser_manager.human_delay(400, 600)
-
-                    # Find and click option
-                    options = await frame.query_selector_all('.select__option, [class*="option"], [role="option"]')
-                    for opt in options:
-                        if not await opt.is_visible():
-                            continue
-                        opt_text = (await opt.text_content() or "").strip().lower()
-
-                        if value.lower() in opt_text:
-                            await opt.click()
-                            break
-                        # Handle "prefer not to say" variations
-                        if "prefer" in value.lower() and any(x in opt_text for x in ["prefer not", "decline", "do not want"]):
-                            await opt.click()
-                            break
-                    else:
-                        await frame.page.keyboard.press("Escape")
-
-                    await self.browser_manager.human_delay(200, 400)
-                    break
-
-            except Exception as e:
-                logger.debug(f"Error filling iframe demographics dropdown: {e}")
-
-    async def _fill_basic_fields(self, page_or_frame) -> None:
-        """Fill basic application fields."""
-        field_mappings = {
-            'input[name="first_name"], #first_name': self.form_filler.config.get("personal_info", {}).get("first_name"),
-            'input[name="last_name"], #last_name': self.form_filler.config.get("personal_info", {}).get("last_name"),
-            'input[name="email"], #email': self.form_filler.config.get("personal_info", {}).get("email"),
-            'input[name="phone"], #phone': self.form_filler.config.get("personal_info", {}).get("phone"),
-        }
-
-        # Wait briefly for Simplify extension to autofill first
-        await self.browser_manager.human_delay(2000, 3000)
-
-        for selector, value in field_mappings.items():
-            if value:
-                try:
-                    element = await page_or_frame.query_selector(selector)
-                    if element and await element.is_visible():
-                        # Don't overwrite if extension already filled it
-                        current = await element.input_value()
-                        if current and current.strip():
-                            logger.info(f"Skipping {selector} — already filled: '{current[:30]}'")
-                            continue
-                        await element.fill(str(value))
-                        await self.browser_manager.human_delay(100, 300)
-                except Exception as e:
-                    logger.debug(f"Could not fill {selector}: {e}")
-
-    async def _upload_resume(self, page: Page, resume_path: str) -> bool:
-        """Upload resume file."""
+    async def _upload_resume(self, page_or_frame, resume_path: str) -> bool:
+        """Upload resume file. Works with both Page and Frame objects."""
         try:
             # Greenhouse typically uses data-field="resume" or similar
-            file_input = await page.query_selector(
+            file_input = await page_or_frame.query_selector(
                 'input[type="file"][data-field*="resume"], '
                 'input[type="file"][name*="resume"], '
                 'input[type="file"]#resume, '
@@ -910,13 +659,13 @@ class GreenhouseHandler(BaseHandler):
                 return True
 
             # Try clicking a button that triggers file upload
-            upload_btn = await page.query_selector(
+            upload_btn = await page_or_frame.query_selector(
                 'button:has-text("Upload"), '
                 'button:has-text("Attach"), '
                 '[data-field="resume"] button'
             )
             if upload_btn:
-                async with page.expect_file_chooser() as fc_info:
+                async with page_or_frame.expect_file_chooser() as fc_info:
                     await upload_btn.click()
                 file_chooser = await fc_info.value
                 await file_chooser.set_files(resume_path)
@@ -928,23 +677,11 @@ class GreenhouseHandler(BaseHandler):
 
         return False
 
-    async def _upload_resume_in_frame(self, frame, resume_path: str) -> bool:
-        """Upload resume in iframe context."""
-        try:
-            file_input = await frame.query_selector('input[type="file"]')
-            if file_input:
-                await file_input.set_input_files(resume_path)
-                logger.info("Resume uploaded in iframe")
-                return True
-        except Exception as e:
-            logger.warning(f"Could not upload resume in iframe: {e}")
-        return False
-
-    async def _upload_cover_letter(self, page: Page, cover_letter_path: str) -> bool:
-        """Upload cover letter file if there's a field for it."""
+    async def _upload_cover_letter(self, page_or_frame, cover_letter_path: str) -> bool:
+        """Upload cover letter file if there's a field for it. Works with both Page and Frame objects."""
         try:
             # Strategy 1: Look for cover letter specific file inputs
-            file_input = await page.query_selector(
+            file_input = await page_or_frame.query_selector(
                 'input[type="file"][data-field*="cover"], '
                 'input[type="file"][name*="cover"], '
                 'input[type="file"]#cover_letter, '
@@ -958,7 +695,7 @@ class GreenhouseHandler(BaseHandler):
                 return True
 
             # Strategy 2: Find by label text containing "cover letter"
-            labels = await page.query_selector_all(
+            labels = await page_or_frame.query_selector_all(
                 '.upload-label, label[class*="upload"], label, .field-label, '
                 '[class*="label"], legend, .attachment-label'
             )
@@ -978,7 +715,7 @@ class GreenhouseHandler(BaseHandler):
                             return True
 
             # Strategy 3: Check for a labeled cover letter section by attributes
-            cover_sections = await page.query_selector_all('[data-field*="cover"], [class*="cover-letter"], [id*="cover"]')
+            cover_sections = await page_or_frame.query_selector_all('[data-field*="cover"], [class*="cover-letter"], [id*="cover"]')
             for section in cover_sections:
                 file_input = await section.query_selector('input[type="file"]')
                 if file_input:
@@ -987,7 +724,7 @@ class GreenhouseHandler(BaseHandler):
                     return True
 
             # Strategy 4: Second file input is often cover letter (first is resume)
-            all_file_inputs = await page.query_selector_all('input[type="file"]')
+            all_file_inputs = await page_or_frame.query_selector_all('input[type="file"]')
             if len(all_file_inputs) >= 2:
                 await all_file_inputs[1].set_input_files(cover_letter_path)
                 logger.info("Cover letter uploaded to second file input")
@@ -1000,11 +737,11 @@ class GreenhouseHandler(BaseHandler):
             logger.debug(f"Could not upload cover letter: {e}")
         return False
 
-    async def _upload_transcript(self, page: Page, transcript_path: str) -> bool:
-        """Upload transcript file if there's a field for it."""
+    async def _upload_transcript(self, page_or_frame, transcript_path: str) -> bool:
+        """Upload transcript file if there's a field for it. Works with both Page and Frame objects."""
         try:
             # Strategy 1: Find by transcript-specific attributes
-            file_input = await page.query_selector(
+            file_input = await page_or_frame.query_selector(
                 'input[type="file"][data-field*="transcript"], '
                 'input[type="file"][name*="transcript"], '
                 'input[type="file"][id*="transcript"], '
@@ -1017,7 +754,7 @@ class GreenhouseHandler(BaseHandler):
                 return True
 
             # Strategy 2: Find by label text containing "transcript" (broad selector set)
-            labels = await page.query_selector_all(
+            labels = await page_or_frame.query_selector_all(
                 '.upload-label, label[class*="upload"], label, .field-label, '
                 '[class*="label"], legend, .attachment-label, '
                 '[class*="upload-label"], [class*="error"]'
@@ -1039,7 +776,7 @@ class GreenhouseHandler(BaseHandler):
 
             # Strategy 3: Find file inputs that are NOT resume and NOT cover letter
             # and check their nearby text for transcript keywords
-            all_file_inputs = await page.query_selector_all('input[type="file"]')
+            all_file_inputs = await page_or_frame.query_selector_all('input[type="file"]')
             for fi in all_file_inputs:
                 nearby_text = await fi.evaluate('''(el) => {
                     let container = el.closest(".field, .upload-field, .form-field, div");
@@ -1065,97 +802,8 @@ class GreenhouseHandler(BaseHandler):
             logger.debug(f"Could not upload transcript: {e}")
             return False
 
-    async def _upload_cover_letter_in_frame(self, frame, cover_letter_path: str) -> bool:
-        """Upload cover letter in iframe context."""
-        try:
-            # Strategy 1: Find by specific cover letter attributes
-            cover_input = await frame.query_selector(
-                'input[type="file"][data-field*="cover"], '
-                'input[type="file"][name*="cover"], '
-                'input[type="file"][id*="cover"]'
-            )
-            if cover_input:
-                await cover_input.set_input_files(cover_letter_path)
-                logger.info("Cover letter uploaded in iframe via attribute match")
-                return True
-
-            # Strategy 2: Find by label text containing "cover letter"
-            labels = await frame.query_selector_all(
-                '.upload-label, label[class*="upload"], label, .field-label, '
-                '[class*="label"], legend, .attachment-label'
-            )
-            for label in labels:
-                label_text = ((await label.text_content()) or "").lower()
-                if "cover letter" in label_text or "cover_letter" in label_text:
-                    parent = await label.evaluate_handle(
-                        'el => el.closest(".field, .upload-field, .form-field, '
-                        '[class*=\\"attachment\\"], [class*=\\"upload\\"], div")'
-                    )
-                    if parent:
-                        file_input = await parent.query_selector('input[type="file"]')
-                        if file_input:
-                            await file_input.set_input_files(cover_letter_path)
-                            logger.info("Cover letter uploaded in iframe via label match")
-                            return True
-
-            # Strategy 3: Second file input is usually cover letter (resume is first)
-            file_inputs = await frame.query_selector_all('input[type="file"]')
-            if len(file_inputs) >= 2:
-                await file_inputs[1].set_input_files(cover_letter_path)
-                logger.info("Cover letter uploaded in iframe to second file input")
-                return True
-
-            logger.debug("No cover letter field found in iframe")
-        except Exception as e:
-            logger.debug(f"Could not upload cover letter in iframe: {e}")
-        return False
-
-    async def _upload_transcript_in_frame(self, frame, transcript_path: str) -> bool:
-        """Upload transcript file in iframe context."""
-        try:
-            # Strategy 1: Find by label text containing "transcript"
-            labels = await frame.query_selector_all(
-                '.upload-label, label[class*="upload"], label, .field-label, '
-                '[class*="label"], legend, .attachment-label'
-            )
-            for label in labels:
-                label_text = ((await label.text_content()) or "").lower()
-                if "transcript" in label_text:
-                    parent = await label.evaluate_handle(
-                        'el => el.closest(".field, .upload-field, .form-field, '
-                        '[class*=\\"attachment\\"], [class*=\\"upload\\"], div")'
-                    )
-                    if parent:
-                        file_input = await parent.query_selector('input[type="file"]')
-                        if file_input:
-                            await file_input.set_input_files(transcript_path)
-                            logger.info("Transcript uploaded in iframe via label match")
-                            return True
-
-            # Strategy 2: Find by data-field or name attributes
-            file_input = await frame.query_selector(
-                'input[type="file"][data-field*="transcript"], '
-                'input[type="file"][name*="transcript"], '
-                'input[type="file"][id*="transcript"]'
-            )
-            if file_input:
-                await file_input.set_input_files(transcript_path)
-                logger.info("Transcript uploaded in iframe via attribute match")
-                return True
-
-            # Strategy 3: Check for third file input (resume=1st, cover letter=2nd, transcript=3rd)
-            all_file_inputs = await frame.query_selector_all('input[type="file"]')
-            if len(all_file_inputs) >= 3:
-                await all_file_inputs[2].set_input_files(transcript_path)
-                logger.info("Transcript uploaded in iframe to third file input")
-                return True
-
-            logger.debug("No transcript field found in iframe")
-            return False
-
-        except Exception as e:
-            logger.debug(f"Could not upload transcript in iframe: {e}")
-        return False
+    # _upload_cover_letter_in_frame and _upload_transcript_in_frame removed:
+    # _upload_cover_letter() and _upload_transcript() now accept page_or_frame directly.
 
     async def _fill_greenhouse_phone_country_code(self, page_or_frame) -> None:
         """Fill the phone country code React-Select dropdown in Greenhouse forms.
@@ -1554,13 +1202,79 @@ class GreenhouseHandler(BaseHandler):
                     is_visible = await inp.is_visible()
                     logger.info(f"Processing question {inp_id}: type={inp_type}, tag={tag_name}, visible={is_visible}")
 
-                    if not is_visible:
-                        logger.debug(f"Skipping {inp_id} - not visible")
+                    # Skip checkbox inputs (handled separately)
+                    if inp_type == "checkbox":
+                        logger.debug(f"Skipping {inp_id} - checkbox handled separately")
                         continue
 
-                    # Skip hidden and checkbox inputs (checkboxes handled separately)
-                    if inp_type in ("hidden", "checkbox"):
-                        logger.debug(f"Skipping {inp_id} - type is {inp_type}")
+                    # Hidden inputs may be React-Select value stores — check for associated dropdown
+                    if inp_type == "hidden":
+                        has_react_select = await inp.evaluate('''(el) => {
+                            let current = el.parentElement;
+                            for (let i = 0; i < 8 && current; i++) {
+                                if (current.querySelector('.select__control, [role="combobox"]')) return true;
+                                current = current.parentElement;
+                            }
+                            return false;
+                        }''')
+                        if has_react_select:
+                            # Check if already has a value
+                            hidden_val = await inp.evaluate('(el) => el.value')
+                            if hidden_val and len(str(hidden_val).strip()) > 0:
+                                logger.debug(f"Skipping {inp_id} - hidden React-Select already has value: {hidden_val}")
+                                continue
+                            logger.info(f"Found hidden React-Select question {inp_id} — will fill dropdown")
+                            # Get question text and fill via React-Select
+                            question_text = await self._get_question_label(page, inp, inp_id)
+                            if not question_text:
+                                question_text = f"Additional information required for {inp_id}"
+                            react_filled = await self._fill_associated_react_select(page, inp, inp_id, question_text)
+                            if react_filled:
+                                logger.info(f"Filled hidden React-Select {inp_id} via dropdown")
+                            else:
+                                # Try click-type-select on the container
+                                answer = await self.ai_answerer.answer_question(question_text, "select", max_length=200)
+                                if answer:
+                                    try:
+                                        select_ctrl = await page.evaluate_handle(f'''(function() {{
+                                            var inp = document.getElementById("{inp_id}");
+                                            if (!inp) return null;
+                                            var current = inp.parentElement;
+                                            for (var i = 0; i < 8 && current; i++) {{
+                                                var ctrl = current.querySelector('.select__control');
+                                                if (ctrl) return ctrl;
+                                                current = current.parentElement;
+                                            }}
+                                            return null;
+                                        }})()''')
+                                        ctrl_elem = select_ctrl.as_element() if select_ctrl else None
+                                        if ctrl_elem and await ctrl_elem.is_visible():
+                                            await ctrl_elem.click()
+                                            await self.browser_manager.human_delay(400, 600)
+                                            # Type answer into search input inside React-Select
+                                            search_input = await page.query_selector(f'.select__input input, [id^="react-select-"]')
+                                            if search_input:
+                                                await search_input.fill(answer)
+                                            else:
+                                                await self._get_keyboard(page).type(answer)
+                                            await self.browser_manager.human_delay(500, 800)
+                                            option = await page.query_selector('.select__option:first-child, [role="option"]:first-child')
+                                            if option and await option.is_visible():
+                                                await option.click()
+                                                logger.info(f"Click-type-select filled hidden React-Select {inp_id}: {answer}")
+                                            else:
+                                                await self._get_keyboard(page).press("Enter")
+                                                logger.info(f"Enter-selected hidden React-Select {inp_id}: {answer}")
+                                    except Exception as e:
+                                        logger.debug(f"Hidden React-Select fill failed for {inp_id}: {e}")
+                            await self.browser_manager.human_delay(200, 400)
+                            continue
+                        else:
+                            logger.debug(f"Skipping {inp_id} - hidden with no React-Select")
+                            continue
+
+                    if not is_visible:
+                        logger.debug(f"Skipping {inp_id} - not visible")
                         continue
 
                     # Handle file inputs - upload transcript/portfolio if label matches
@@ -1597,7 +1311,37 @@ class GreenhouseHandler(BaseHandler):
                     if not question_text:
                         question_text = f"Additional information required for {inp_id}"
 
-                    logger.info(f"Found Greenhouse question input: {question_text[:50]}...")
+                    # Check if field is REQUIRED — skip optional fields (except LinkedIn/GitHub)
+                    is_required = '*' in question_text
+                    if not is_required:
+                        # Check for aria-required or required attribute
+                        is_required = await inp.evaluate('(el) => el.required || el.getAttribute("aria-required") === "true"')
+                    if not is_required:
+                        # Check parent/label for required indicator
+                        is_required = await inp.evaluate('''(el) => {
+                            let p = el.closest('.field, .form-field, [class*="field"]');
+                            if (p) {
+                                let txt = p.textContent || '';
+                                if (txt.includes('*') || p.querySelector('.required, [class*="required"]')) return true;
+                            }
+                            return false;
+                        }''')
+
+                    q_lower = question_text.lower()
+                    # Always fill LinkedIn and GitHub (helpful for app)
+                    is_linkedin_github = any(x in q_lower for x in ['linkedin', 'github', 'portfolio'])
+                    # Never fill social media
+                    is_social_media = any(x in q_lower for x in ['facebook', 'twitter', 'instagram', 'tiktok', 'snapchat', 'x (fka'])
+
+                    if is_social_media:
+                        logger.info(f"Skipping social media field: {question_text[:50]}")
+                        continue
+
+                    if not is_required and not is_linkedin_github:
+                        logger.info(f"Skipping optional field: {question_text[:50]}")
+                        continue
+
+                    logger.info(f"{'[REQ]' if is_required else '[OPT]'} Greenhouse question: {question_text[:50]}...")
 
                     # Get answer based on field type
                     if tag_name == "select":
@@ -1669,33 +1413,71 @@ class GreenhouseHandler(BaseHandler):
 
                     else:
                         # Text input - check if it's actually part of a React-Select
-                        # First try to find associated React-Select dropdown
-                        logger.info(f"Trying React-Select fill for {inp_id}")
-                        react_select_filled = await self._fill_associated_react_select(page, inp, inp_id, question_text)
-                        logger.info(f"React-Select fill result for {inp_id}: {react_select_filled}")
+                        is_in_react_select = await inp.evaluate('''(el) => {
+                            let current = el.parentElement;
+                            for (let i = 0; i < 8 && current; i++) {
+                                if (current.querySelector('.select__control, [role="combobox"], .select__value-container')) return true;
+                                if (current.classList && (current.classList.contains('select__input-container') || current.classList.contains('select'))) return true;
+                                current = current.parentElement;
+                            }
+                            return false;
+                        }''')
 
-                        if not react_select_filled:
-                            # Fall back to direct text input fill
-                            logger.info(f"Falling back to text input fill for {inp_id}")
-                            # Check if this input is inside a React-Select container
-                            # If so, it's really a dropdown, not a text field
-                            is_in_react_select = await inp.evaluate('''(el) => {
-                                let current = el.parentElement;
-                                for (let i = 0; i < 5 && current; i++) {
-                                    if (current.querySelector('.select__control, [role="combobox"]')) return true;
-                                    current = current.parentElement;
-                                }
-                                return false;
-                            }''')
-                            actual_field_type = "select" if is_in_react_select else "text"
+                        if is_in_react_select:
+                            # This is a React-Select dropdown — use the proper dropdown fill
+                            logger.info(f"Detected React-Select for question {inp_id}")
+                            react_select_filled = await self._fill_associated_react_select(page, inp, inp_id, question_text)
+                            if not react_select_filled:
+                                # Try harder: find the .select__control by walking up from the input
+                                logger.info(f"React-Select fill failed for {inp_id}, trying click-type-select approach")
+                                answer = await self.ai_answerer.answer_question(
+                                    question_text, "select", max_length=200
+                                )
+                                if answer:
+                                    try:
+                                        # Find the select__control container
+                                        select_ctrl = await page.evaluate_handle(f'''(function() {{
+                                            var inp = document.getElementById("{inp_id}");
+                                            if (!inp) return null;
+                                            var current = inp.parentElement;
+                                            for (var i = 0; i < 8 && current; i++) {{
+                                                var ctrl = current.querySelector('.select__control');
+                                                if (ctrl) return ctrl;
+                                                current = current.parentElement;
+                                            }}
+                                            return null;
+                                        }})()''')
+                                        ctrl_elem = select_ctrl.as_element() if select_ctrl else None
+                                        if ctrl_elem and await ctrl_elem.is_visible():
+                                            # Click to open, type to filter, select option
+                                            await ctrl_elem.click()
+                                            await self.browser_manager.human_delay(400, 600)
+                                            # Type into the search input
+                                            await inp.fill(answer)
+                                            await self.browser_manager.human_delay(500, 800)
+                                            # Try to click first matching option
+                                            option = await page.query_selector('.select__option:first-child, [role="option"]:first-child')
+                                            if option and await option.is_visible():
+                                                await option.click()
+                                                logger.info(f"Click-type-select filled React-Select {inp_id}: {answer}")
+                                            else:
+                                                # Press Enter to select first match
+                                                await self._get_keyboard(page).press("Enter")
+                                                logger.info(f"Enter-selected React-Select {inp_id}: {answer}")
+                                        else:
+                                            logger.warning(f"Could not find .select__control for {inp_id}")
+                                    except Exception as rs_e:
+                                        logger.debug(f"React-Select click-type-select failed for {inp_id}: {rs_e}")
+                        else:
+                            # Regular text input — fill directly
+                            logger.info(f"Filling text input {inp_id}")
                             answer = await self.ai_answerer.answer_question(
-                                question_text, actual_field_type, max_length=200
+                                question_text, "text", max_length=200
                             )
                             logger.info(f"AI answer for {inp_id}: {answer[:50] if answer else 'None'}...")
                             if answer:
                                 await inp.fill(answer)
                                 logger.info(f"AI filled text input {inp_id}")
-                                # Trigger change event to ensure React picks up the value
                                 await inp.evaluate('(el) => el.dispatchEvent(new Event("change", {bubbles: true}))')
                             else:
                                 logger.warning(f"No answer for {inp_id}: {question_text[:50]}")
@@ -1814,7 +1596,7 @@ class GreenhouseHandler(BaseHandler):
                                 break
 
                     # Close and re-open dropdown since options may have changed
-                    await page.keyboard.press("Escape")
+                    await self._get_keyboard(page).press("Escape")
                     await page.wait_for_timeout(200)
                     await react_select_elem.click()
                     await self.browser_manager.human_delay(400, 600)
@@ -1850,7 +1632,7 @@ class GreenhouseHandler(BaseHandler):
             found = False
             try:
                 # Type the answer text to search/filter
-                await page.keyboard.type(answer[:30], delay=30)
+                await self._get_keyboard(page).type(answer[:30], delay=30)
                 await page.wait_for_timeout(600)
 
                 # Check if there are filtered options
@@ -1878,19 +1660,19 @@ class GreenhouseHandler(BaseHandler):
                             found = True
                             logger.info(f"Selected React-Select option via type-to-search: {matched_text[:50]}")
                         except Exception:
-                            await page.keyboard.press("Enter")
+                            await self._get_keyboard(page).press("Enter")
                             await page.wait_for_timeout(400)
                             found = True
                     else:
                         # No good match with typed text — clear and try alternatives
-                        await page.keyboard.press("Escape")
+                        await self._get_keyboard(page).press("Escape")
                         await page.wait_for_timeout(200)
 
                         # Try semester alternatives (e.g., "Spring 2026" for "May 2026")
                         for alt_answer in answer_alternatives[1:]:
                             await react_select_elem.click()
                             await self.browser_manager.human_delay(300, 500)
-                            await page.keyboard.type(alt_answer[:30], delay=30)
+                            await self._get_keyboard(page).type(alt_answer[:30], delay=30)
                             await page.wait_for_timeout(600)
 
                             alt_options = await page.query_selector_all('.select__option, [role="option"]')
@@ -1913,16 +1695,16 @@ class GreenhouseHandler(BaseHandler):
                                         found = True
                                         logger.info(f"Selected React-Select option via alternative '{alt_answer}': {matched_text[:50]}")
                                     except Exception:
-                                        await page.keyboard.press("Enter")
+                                        await self._get_keyboard(page).press("Enter")
                                         await page.wait_for_timeout(400)
                                         found = True
                                     break
 
-                            await page.keyboard.press("Escape")
+                            await self._get_keyboard(page).press("Escape")
                             await page.wait_for_timeout(200)
                 else:
                     # Clear typed text and try direct option click
-                    await page.keyboard.press("Escape")
+                    await self._get_keyboard(page).press("Escape")
                     await page.wait_for_timeout(200)
             except Exception as type_err:
                 logger.debug(f"Type-to-search failed for {inp_id}: {type_err}")
@@ -2035,41 +1817,61 @@ class GreenhouseHandler(BaseHandler):
                     pass
 
             if not found:
-                await page.keyboard.press("Escape")
+                await self._get_keyboard(page).press("Escape")
                 return False
 
             await self.browser_manager.human_delay(300, 500)
 
-            # Verify the hidden input was updated by React
+            # Verify the value was captured by React
+            # React-Select stores the REAL value in a sibling hidden input, not the search box
             try:
-                inp_value = await inp.input_value()
                 inp_type = await inp.get_attribute("type") or ""
-                if not inp_value or inp_value.strip() == "":
-                    if inp_type == "text":
-                        # type="text" inputs are React-Select search inputs.
-                        # Setting their value via nativeInputValueSetter triggers React re-render
-                        # which CLEARS the dropdown's visible selection. Do NOT set it.
-                        logger.debug(f"Input {inp_id} is type=text (React-Select search), skipping force-sync to avoid clearing dropdown")
-                    else:
-                        # type="hidden" inputs are safe to set directly
+                if inp_type == "text":
+                    # This is the search box — find the SIBLING hidden input that stores the value
+                    hidden_synced = await inp.evaluate(f'''(el) => {{
+                        // Walk up to the React-Select container, find the hidden input
+                        let container = el.closest('[class*="select"]') || el.parentElement?.parentElement?.parentElement;
+                        if (!container) return 'no_container';
+                        let hidden = container.querySelector('input[type="hidden"][id="{inp_id}"], input[type="hidden"]');
+                        if (hidden && (!hidden.value || hidden.value.trim() === '')) {{
+                            // The selected option's value - get from React-Select's internal state
+                            let singleValue = container.querySelector('.select__single-value');
+                            if (singleValue) {{
+                                let displayText = singleValue.textContent.trim();
+                                // Set the hidden input value to the display text
+                                const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                                setter.call(hidden, displayText);
+                                hidden.dispatchEvent(new Event('input', {{bubbles: true}}));
+                                hidden.dispatchEvent(new Event('change', {{bubbles: true}}));
+                                return 'synced:' + displayText;
+                            }}
+                            return 'no_single_value';
+                        }}
+                        return hidden ? ('has_value:' + hidden.value.substring(0, 30)) : 'no_hidden';
+                    }}''')
+                    logger.debug(f"React-Select hidden input sync for {inp_id}: {hidden_synced}")
+                else:
+                    # type="hidden" — sync directly
+                    inp_value = await inp.evaluate('(el) => el.value')
+                    if not inp_value or str(inp_value).strip() == "":
                         await inp.evaluate('''(el, val) => {
-                            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                            const setter = Object.getOwnPropertyDescriptor(
                                 window.HTMLInputElement.prototype, 'value'
                             ).set;
-                            nativeInputValueSetter.call(el, val);
+                            setter.call(el, val);
                             el.dispatchEvent(new Event('input', { bubbles: true }));
                             el.dispatchEvent(new Event('change', { bubbles: true }));
                         }''', answer)
-                        logger.info(f"Force-synced hidden input {inp_id} with React setter: {answer[:30]}")
+                        logger.info(f"Force-synced hidden input {inp_id}: {answer[:30]}")
             except Exception as sync_err:
-                logger.debug(f"Could not force-sync input {inp_id}: {sync_err}")
+                logger.debug(f"Could not sync input {inp_id}: {sync_err}")
 
             return True
 
         except Exception as e:
             logger.debug(f"Error in _fill_associated_react_select for {inp_id}: {e}")
             try:
-                await page.keyboard.press("Escape")
+                await self._get_keyboard(page).press("Escape")
             except Exception:
                 pass
             return False
@@ -2364,11 +2166,6 @@ class GreenhouseHandler(BaseHandler):
         except Exception:
             return ""
 
-    async def _handle_custom_questions_in_frame(self, frame, job_data: Dict[str, Any]) -> None:
-        """Handle custom questions in iframe."""
-        # Similar logic but for frame context
-        await self._handle_custom_questions(frame, job_data)
-
     async def _fill_demographics(self, page: Page) -> None:
         """Fill optional demographic questions."""
         demographics = self.form_filler.config.get("demographics", {})
@@ -2487,13 +2284,13 @@ class GreenhouseHandler(BaseHandler):
                                 return True
 
                     # Close dropdown if no match
-                    await page.keyboard.press("Escape")
+                    await self._get_keyboard(page).press("Escape")
                     return False
 
         except Exception as e:
             logger.debug(f"Error filling React-select for '{label_keyword}': {e}")
             try:
-                await page.keyboard.press("Escape")
+                await self._get_keyboard(page).press("Escape")
             except Exception:
                 pass
 
@@ -2623,23 +2420,23 @@ class GreenhouseHandler(BaseHandler):
                         for search_term in search_terms:
                             await dropdown.click()
                             await self.browser_manager.human_delay(500, 800)
-                            await page.keyboard.type(search_term, delay=50)
+                            await self._get_keyboard(page).type(search_term, delay=50)
                             await self.browser_manager.human_delay(800, 1200)
 
                             found_match = await self.form_filler._select_dropdown_option(page, value)
                             if found_match:
                                 logger.info(f"Selected school via search '{search_term}'")
                                 break
-                            await page.keyboard.press("Escape")
+                            await self._get_keyboard(page).press("Escape")
                             await self.browser_manager.human_delay(200, 300)
 
                         if not found_match:
                             # Last resort: type first term and press Enter for first result
                             await dropdown.click()
                             await self.browser_manager.human_delay(300, 500)
-                            await page.keyboard.type(search_terms[0], delay=50)
+                            await self._get_keyboard(page).type(search_terms[0], delay=50)
                             await self.browser_manager.human_delay(500, 800)
-                            await page.keyboard.press("Enter")
+                            await self._get_keyboard(page).press("Enter")
                             logger.info(f"Selected first search result for {field_name}")
                             found_match = True
 
@@ -2659,7 +2456,7 @@ class GreenhouseHandler(BaseHandler):
                                 break
                             else:
                                 # Close dropdown before trying next alternative
-                                await page.keyboard.press("Escape")
+                                await self._get_keyboard(page).press("Escape")
                                 await self.browser_manager.human_delay(200, 300)
 
                         if not found_match:
@@ -2667,9 +2464,9 @@ class GreenhouseHandler(BaseHandler):
                             await dropdown.click()
                             await self.browser_manager.human_delay(300, 500)
                             search_term = value[:15]
-                            await page.keyboard.type(search_term, delay=50)
+                            await self._get_keyboard(page).type(search_term, delay=50)
                             await self.browser_manager.human_delay(500, 800)
-                            await page.keyboard.press("Enter")
+                            await self._get_keyboard(page).press("Enter")
                             found_match = True
                             logger.info(f"Selected {field_name} via typed search: {value}")
 
@@ -2685,7 +2482,7 @@ class GreenhouseHandler(BaseHandler):
             except Exception as e:
                 logger.debug(f"Error filling education field {field_name}: {e}")
                 try:
-                    await page.keyboard.press("Escape")
+                    await self._get_keyboard(page).press("Escape")
                 except Exception:
                     pass
 
@@ -2696,6 +2493,295 @@ class GreenhouseHandler(BaseHandler):
         for field_name, value, keywords, alternatives in education_fields:
             if value:
                 await self._sync_education_hidden_input_robust(page, field_name, value)
+
+    async def _fill_greenhouse_work_experience_fields(self, page: Page) -> None:
+        """Fill Greenhouse work experience fields (company-name, title, dates).
+
+        Greenhouse employment sections use IDs like:
+        - company-name-0 (text input or hidden + React-Select)
+        - title-0 (text input or hidden + React-Select)
+        - start-date-month-0, start-date-year-0 (React-Select dropdowns)
+        - end-date-month-0, end-date-year-0 (React-Select dropdowns)
+
+        These are NOT question fields — they're standard employment section fields.
+        """
+        import re as _re_work
+
+        experience = self.form_filler.config.get("experience", [])
+        if isinstance(experience, list) and experience:
+            exp = experience[0]  # Use first (most recent) work experience
+        elif isinstance(experience, dict):
+            exp = experience
+        else:
+            logger.debug("No work experience data configured, skipping work experience fields")
+            return
+
+        if not exp:
+            logger.debug("No work experience data configured, skipping work experience fields")
+            return
+
+        company = exp.get("company", "")
+        title = exp.get("title", "")
+        start_date_str = exp.get("start_date", "")
+        end_date_str = exp.get("end_date", "")
+        is_current = exp.get("current", False)
+
+        if not company and not title:
+            logger.debug("Work experience has no company or title, skipping")
+            return
+
+        logger.info(f"Filling Greenhouse work experience: {company} - {title}")
+
+        # Parse dates
+        month_names = ["January", "February", "March", "April", "May", "June",
+                       "July", "August", "September", "October", "November", "December"]
+
+        def parse_date(date_str):
+            if not date_str:
+                return "", ""
+            m = _re_work.search(r'(January|February|March|April|May|June|July|August|September|October|November|December)', date_str, _re_work.IGNORECASE)
+            y = _re_work.search(r'20\d{2}', date_str)
+            return (m.group(1).capitalize() if m else ""), (y.group() if y else "")
+
+        start_month, start_year = parse_date(start_date_str)
+        end_month, end_year = parse_date(end_date_str)
+
+        # If current job and no end date, use "Present" or current date
+        if is_current and not end_month:
+            import datetime
+            now = datetime.datetime.now()
+            end_month = month_names[now.month - 1]
+            end_year = str(now.year)
+
+        # ── TEXT FIELDS: company-name-0, title-0 ──────────────────────
+        text_fields = {
+            "company-name": company,
+            "title": title,
+        }
+
+        for field_key, value in text_fields.items():
+            if not value:
+                continue
+            try:
+                # Try multiple selector patterns for employment text fields
+                selectors = [
+                    f'input#{field_key}-0',
+                    f'input[id="{field_key}-0"]',
+                    f'input[id*="employment"][id*="{field_key}"]',
+                    f'input[name*="{field_key}"]',
+                    f'input[id*="{field_key}"][id*="-0"]',
+                ]
+
+                inp = None
+                for sel in selectors:
+                    try:
+                        inp = await page.query_selector(sel)
+                        if inp:
+                            break
+                    except Exception:
+                        continue
+
+                if not inp:
+                    logger.debug(f"Work experience field '{field_key}' not found on page")
+                    continue
+
+                inp_type = await inp.get_attribute("type") or ""
+
+                if inp_type == "hidden":
+                    # Hidden input — may be React-Select, fill via JS
+                    current_val = await inp.evaluate('(el) => el.value')
+                    if current_val and current_val.strip():
+                        logger.debug(f"Work experience hidden '{field_key}' already has value: {current_val}")
+                        continue
+
+                    # Try to find and fill associated React-Select dropdown
+                    container = await inp.evaluate_handle('''(el) => {
+                        let c = el.closest('.field, .select, [class*="field"]');
+                        if (!c) c = el.parentElement?.parentElement?.parentElement;
+                        return c;
+                    }''')
+                    container_elem = container.as_element() if container else None
+                    if container_elem:
+                        dropdown = await container_elem.query_selector('.select__control, [role="combobox"]')
+                        if dropdown and await dropdown.is_visible():
+                            await dropdown.click()
+                            await self.browser_manager.human_delay(400, 600)
+                            await self._get_keyboard(page).type(value[:20], delay=50)
+                            await self.browser_manager.human_delay(500, 800)
+                            option = await page.query_selector('.select__option:first-child, [role="option"]:first-child')
+                            if option and await option.is_visible():
+                                await option.click()
+                                logger.info(f"Filled work experience React-Select '{field_key}' = {value}")
+                            else:
+                                await self._get_keyboard(page).press("Enter")
+                                logger.info(f"Filled work experience React-Select '{field_key}' via Enter = {value}")
+                            await self.browser_manager.human_delay(300, 500)
+                            continue
+
+                    # Force-set hidden input as last resort
+                    safe_val = value.replace("\\", "\\\\").replace('"', '\\"').replace('\n', ' ')
+                    await inp.evaluate(f'''(el) => {{
+                        const nativeSetter = Object.getOwnPropertyDescriptor(
+                            window.HTMLInputElement.prototype, 'value'
+                        ).set;
+                        nativeSetter.call(el, "{safe_val}");
+                        el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                        el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                    }}''')
+                    logger.info(f"Force-set work experience hidden '{field_key}' = {value}")
+
+                else:
+                    # Visible text input — fill normally
+                    current_val = await inp.input_value()
+                    if current_val and current_val.strip():
+                        logger.debug(f"Work experience text '{field_key}' already has value: {current_val}")
+                        continue
+
+                    await inp.click()
+                    await self.browser_manager.human_delay(100, 200)
+                    await inp.fill(value)
+                    # Trigger React events
+                    await inp.evaluate('''(el) => {
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                        el.dispatchEvent(new Event('blur', { bubbles: true }));
+                    }''')
+                    logger.info(f"Filled work experience text '{field_key}' = {value}")
+                    await self.browser_manager.human_delay(200, 400)
+
+            except Exception as e:
+                logger.debug(f"Error filling work experience field '{field_key}': {e}")
+
+        # ── DATE FIELDS: start-date-month-0, end-date-month-0, etc. ───
+        date_fields = []
+        if start_month:
+            date_fields.append(("start-date-month", start_month))
+        if start_year:
+            date_fields.append(("start-date-year", start_year))
+        if end_month:
+            date_fields.append(("end-date-month", end_month))
+        if end_year:
+            date_fields.append(("end-date-year", end_year))
+
+        for field_id_base, value in date_fields:
+            try:
+                # Try to find the hidden input first
+                selectors = [
+                    f'input#{field_id_base}-0',
+                    f'input[id="{field_id_base}-0"]',
+                    f'input[id*="employment"][id*="{field_id_base}"]',
+                    f'input[id*="{field_id_base}"][id*="-0"]',
+                ]
+
+                inp = None
+                for sel in selectors:
+                    try:
+                        inp = await page.query_selector(sel)
+                        if inp:
+                            break
+                    except Exception:
+                        continue
+
+                if inp:
+                    current_val = await inp.evaluate('(el) => el.value')
+                    if current_val and current_val.strip():
+                        logger.debug(f"Work experience date '{field_id_base}' already has value: {current_val}")
+                        continue
+
+                    # Force-set hidden input value
+                    safe_val = value.replace("\\", "\\\\").replace('"', '\\"')
+                    await inp.evaluate(f'''(el) => {{
+                        const nativeSetter = Object.getOwnPropertyDescriptor(
+                            window.HTMLInputElement.prototype, 'value'
+                        ).set;
+                        nativeSetter.call(el, "{safe_val}");
+                        el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                        el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                    }}''')
+                    logger.info(f"Set work experience date '{field_id_base}' = {value}")
+                    continue
+
+                # If no hidden input, try React-Select dropdowns by label
+                dropdowns = await page.query_selector_all('.select__control, [role="combobox"]')
+                # Determine what label keywords to match
+                # e.g., "start-date-month" → look for "start" + "month" in label
+                parts = field_id_base.split("-")  # ["start", "date", "month"] or ["end", "date", "year"]
+                date_direction = parts[0]  # "start" or "end"
+                date_unit = parts[-1]  # "month" or "year"
+
+                for dropdown in dropdowns:
+                    if not await dropdown.is_visible():
+                        continue
+
+                    label_text = await dropdown.evaluate('''(el) => {
+                        let container = el.closest('.field, .select, [class*="field"]');
+                        if (!container) container = el.parentElement?.parentElement?.parentElement;
+                        if (!container) return "";
+                        let label = container.querySelector("label, .select__label, [class*='label']");
+                        let text = label ? label.textContent.toLowerCase().trim() : "";
+                        // Also check the container's ID for employment context
+                        let cid = container.id || container.getAttribute("data-field") || "";
+                        return text + " " + cid.toLowerCase();
+                    }''')
+
+                    # Must match both direction (start/end) and unit (month/year)
+                    # AND should be in employment context (not education)
+                    is_employment = any(x in label_text for x in ["employ", "company", "work", "job", "experience"])
+                    is_direction = date_direction in label_text
+                    is_unit = date_unit in label_text
+
+                    # Also check by container ID matching employment section
+                    container_id = await dropdown.evaluate('''(el) => {
+                        let c = el.closest('[id*="employment"], [id*="work"], [data-field*="employment"]');
+                        return c ? c.id || "" : "";
+                    }''')
+                    if container_id:
+                        is_employment = True
+
+                    if is_direction and is_unit and is_employment:
+                        # Check if already filled
+                        display_value = await dropdown.evaluate('''(el) => {
+                            const sv = el.querySelector('.select__single-value, [class*="singleValue"]');
+                            if (sv && sv.textContent && sv.textContent.trim() !== "Select..." && sv.textContent.trim().length > 1) {
+                                return sv.textContent.trim();
+                            }
+                            return "";
+                        }''')
+
+                        if display_value:
+                            logger.debug(f"Work experience date dropdown '{field_id_base}' already shows: {display_value}")
+                            break
+
+                        await dropdown.click()
+                        await self.browser_manager.human_delay(400, 600)
+                        found = await self.form_filler._select_dropdown_option(page, value)
+                        if found:
+                            logger.info(f"Selected work experience date '{field_id_base}' = {value}")
+                        else:
+                            await self._get_keyboard(page).type(value[:10], delay=50)
+                            await self.browser_manager.human_delay(300, 500)
+                            await self._get_keyboard(page).press("Enter")
+                            logger.info(f"Typed work experience date '{field_id_base}' = {value}")
+                        await self.browser_manager.human_delay(300, 500)
+                        break
+
+            except Exception as e:
+                logger.debug(f"Error filling work experience date '{field_id_base}': {e}")
+
+        # ── CURRENT EMPLOYMENT CHECKBOX ───────────────────────────────
+        if is_current:
+            try:
+                current_cb = await page.query_selector(
+                    'input[type="checkbox"][id*="current"], '
+                    'input[type="checkbox"][name*="current"], '
+                    'input[type="checkbox"][id*="currently"]'
+                )
+                if current_cb and not await current_cb.is_checked():
+                    await current_cb.click()
+                    logger.info("Checked 'currently work here' checkbox")
+                    await self.browser_manager.human_delay(200, 400)
+            except Exception as e:
+                logger.debug(f"Error checking current employment checkbox: {e}")
 
     async def _sync_education_hidden_input_robust(self, page: Page, field_name: str, value: str) -> None:
         """Robustly sync education hidden input with the selected dropdown value.
@@ -2859,12 +2945,12 @@ class GreenhouseHandler(BaseHandler):
                 await self.browser_manager.human_delay(400, 600)
 
                 # Type to search
-                await page.keyboard.type(country[:15], delay=50)
+                await self._get_keyboard(page).type(country[:15], delay=50)
                 await self.browser_manager.human_delay(600, 900)
 
                 found = await self.form_filler._select_dropdown_option(page, country)
                 if not found:
-                    await page.keyboard.press("Enter")
+                    await self._get_keyboard(page).press("Enter")
                     found = True
                     logger.info("Selected first country search result")
 
@@ -3194,7 +3280,7 @@ class GreenhouseHandler(BaseHandler):
                                                     logger.info(f"React-Select updated hidden input {hidden_id}: {new_val}")
                                                     continue  # Skip manual sync, React handled it
                                             else:
-                                                await page.keyboard.press("Escape")
+                                                await self._get_keyboard(page).press("Escape")
                                 else:
                                     value_found = config_value
 
@@ -3295,14 +3381,14 @@ class GreenhouseHandler(BaseHandler):
 
                     if not found:
                         # Fallback: type the value and press Enter
-                        await page.keyboard.type(value[:10], delay=50)
+                        await self._get_keyboard(page).type(value[:10], delay=50)
                         await page.wait_for_timeout(300)
-                        await page.keyboard.press("Enter")
+                        await self._get_keyboard(page).press("Enter")
                         found = True
                         logger.info(f"Selected {field_name} via typed search: {value}")
 
                     if not found:
-                        await page.keyboard.press("Escape")
+                        await self._get_keyboard(page).press("Escape")
                     else:
                         logger.info(f"Selected {field_name}: {value}")
 
@@ -3312,7 +3398,7 @@ class GreenhouseHandler(BaseHandler):
             except Exception as e:
                 logger.debug(f"Error filling date dropdown: {e}")
                 try:
-                    await page.keyboard.press("Escape")
+                    await self._get_keyboard(page).press("Escape")
                 except Exception:
                     pass
 
@@ -3539,8 +3625,8 @@ class GreenhouseHandler(BaseHandler):
                 # Click and clear
                 await elem.click()
                 await self.browser_manager.human_delay(200, 400)
-                await page.keyboard.press("Control+a")
-                await page.keyboard.press("Backspace")
+                await self._get_keyboard(page).press("Control+a")
+                await self._get_keyboard(page).press("Backspace")
 
                 # Type just the city for better autocomplete matches
                 search_term = city
@@ -3588,9 +3674,9 @@ class GreenhouseHandler(BaseHandler):
 
                 if not found_option:
                     # Try keyboard selection
-                    await page.keyboard.press("ArrowDown")
+                    await self._get_keyboard(page).press("ArrowDown")
                     await self.browser_manager.human_delay(200, 400)
-                    await page.keyboard.press("Enter")
+                    await self._get_keyboard(page).press("Enter")
                     await self.browser_manager.human_delay(300, 500)
 
                 # Verify the field got filled
@@ -3659,7 +3745,7 @@ class GreenhouseHandler(BaseHandler):
 
                 # Type to search - try city first, then state
                 search_term = city
-                await page.keyboard.type(search_term, delay=50)
+                await self._get_keyboard(page).type(search_term, delay=50)
                 await self.browser_manager.human_delay(800, 1200)
 
                 # Use keyboard-based selection to find best match
@@ -3689,28 +3775,28 @@ class GreenhouseHandler(BaseHandler):
 
                     # Navigate via keyboard
                     for _ in range(best_idx):
-                        await page.keyboard.press("ArrowDown")
+                        await self._get_keyboard(page).press("ArrowDown")
                         await page.wait_for_timeout(50)
-                    await page.keyboard.press("Enter")
+                    await self._get_keyboard(page).press("Enter")
                     await self.browser_manager.human_delay(300, 500)
                     logger.info(f"Selected location from dropdown: {visible_options[best_idx][1]}")
                     return True
                 else:
                     # No results with city, try state
                     # Clear and retype
-                    await page.keyboard.press("Control+a")
-                    await page.keyboard.press("Backspace")
+                    await self._get_keyboard(page).press("Control+a")
+                    await self._get_keyboard(page).press("Backspace")
                     await page.wait_for_timeout(200)
 
                     personal = self.form_filler.config.get("personal_info", {})
                     state = personal.get("state", "California")
-                    await page.keyboard.type(state, delay=50)
+                    await self._get_keyboard(page).type(state, delay=50)
                     await self.browser_manager.human_delay(800, 1200)
 
                     # Try first result
-                    await page.keyboard.press("ArrowDown")
+                    await self._get_keyboard(page).press("ArrowDown")
                     await page.wait_for_timeout(100)
-                    await page.keyboard.press("Enter")
+                    await self._get_keyboard(page).press("Enter")
                     await self.browser_manager.human_delay(300, 500)
 
                     # Verify
@@ -3720,7 +3806,7 @@ class GreenhouseHandler(BaseHandler):
                         return True
 
                 # Close dropdown
-                await page.keyboard.press("Escape")
+                await self._get_keyboard(page).press("Escape")
 
         except Exception as e:
             logger.debug(f"React-Select location fill error: {e}")
@@ -4418,6 +4504,12 @@ class GreenhouseHandler(BaseHandler):
                 logger.info("PRE-SUBMIT: Retrying education fields...")
                 await self._fill_greenhouse_education_fields(page)
 
+            # Retry work experience fields if company/title/dates are empty
+            work_fields = ["company-name", "title-0", "start-date", "end-date"]
+            if any(any(wf in f.lower() for wf in work_fields) for f in empty_req):
+                logger.info("PRE-SUBMIT: Retrying work experience fields...")
+                await self._fill_greenhouse_work_experience_fields(page)
+
             # Retry: re-run custom questions to fill empty dropdowns
             job_data = {"company": self.ai_answerer.job_context.get("company", ""),
                         "role": self.ai_answerer.job_context.get("role", "")}
@@ -4488,6 +4580,15 @@ class GreenhouseHandler(BaseHandler):
         captcha_solved = await self.solve_invisible_recaptcha(page)
         if not captcha_solved:
             logger.error("Failed to solve reCAPTCHA - cannot submit")
+            return False
+
+        # ── GOLDEN PATH GUARD: final required-field check before submit ──
+        empty_required = await self._check_required_fields_before_submit(page)
+        if empty_required:
+            logger.warning(
+                f"GOLDEN PATH GUARD: {len(empty_required)} required field(s) still empty — "
+                f"NOT submitting, leaving tab open: {empty_required}"
+            )
             return False
 
         submit_selectors = [
@@ -4567,6 +4668,16 @@ class GreenhouseHandler(BaseHandler):
                     return True
         except Exception as e:
             logger.debug(f"Fallback submit search failed: {e}")
+
+        # Check if Simplify already submitted (page shows "Thank you for applying")
+        try:
+            body_text = await page.text_content("body") or ""
+            if "thank you for applying" in body_text.lower() or "application has been received" in body_text.lower():
+                logger.info("Simplify already submitted the application! (detected 'Thank you for applying')")
+                self._last_status = "success"
+                return True
+        except Exception:
+            pass
 
         logger.warning("Could not find submit button")
         return False
@@ -4712,11 +4823,11 @@ class GreenhouseHandler(BaseHandler):
 
             # Strategy 5: Just type it — the page might have focused the input already
             try:
-                await page.keyboard.type(code, delay=100)
+                await self._get_keyboard(page).type(code, delay=100)
                 logger.info(f"Typed verification code via keyboard: {code}")
                 await self.browser_manager.human_delay(500, 1000)
                 # Press Enter to submit
-                await page.keyboard.press("Enter")
+                await self._get_keyboard(page).press("Enter")
                 await self.browser_manager.human_delay(2000, 3000)
                 return True
             except Exception:
@@ -4791,7 +4902,7 @@ class GreenhouseHandler(BaseHandler):
                         }''')
 
                         # Also click out and back to trigger blur/focus
-                        await page.keyboard.press("Tab")
+                        await self._get_keyboard(page).press("Tab")
                         await self.browser_manager.human_delay(50, 100)
 
                         logger.debug(f"Triggered events on {field_name}")

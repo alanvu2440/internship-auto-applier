@@ -69,7 +69,7 @@ def _get_tenant(url: str) -> str:
 def _make_alias_email(base_email: str, tenant: str) -> str:
     """Create a Gmail alias for a given tenant.
 
-    e.g. alanvu2440@gmail.com + nvidia.wd5 -> alanvu2440+nvidia-wd5@gmail.com
+    e.g. user@example.com + nvidia.wd5 -> user+nvidia-wd5@example.com
     """
     local, domain = base_email.split("@", 1)
     safe_tenant = tenant.replace(".", "-").replace("_", "-")
@@ -81,7 +81,11 @@ class WorkdayHandler(BaseHandler):
 
     name = "workday"
 
-    WORKDAY_PASSWORD = "AutoApply2026!#Xk"
+    _WORKDAY_PASSWORD_FALLBACK = "CHANGE_ME"
+
+    @property
+    def WORKDAY_PASSWORD(self):
+        return self.form_filler.config.get("accounts", {}).get("workday_password", "") or self._WORKDAY_PASSWORD_FALLBACK
 
     # Tenants known to use SSO (Okta, Azure AD, etc.) — skip these
     SSO_TENANTS: set = set()
