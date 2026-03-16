@@ -960,20 +960,10 @@ class InternshipAutoApplier:
                 except Exception:
                     pass
                 await asyncio.sleep(10)  # Wait 10s so user can verify success
-                # Navigate to blank instead of closing — closing kills persistent context
-                try:
-                    if page and not page.is_closed():
-                        await page.goto("about:blank", timeout=5000)
-                except Exception:
-                    pass
+                # Don't navigate or close — handler will navigate to next job URL
             elif _close_tab:
-                # SKIPPED/CLOSED/LOGIN — navigate to blank (don't close — kills context)
-                logger.info(f"[BROWSER] Skipped — blanking tab")
-                try:
-                    if page and not page.is_closed():
-                        await page.goto("about:blank", timeout=5000)
-                except Exception:
-                    pass
+                # SKIPPED/CLOSED/LOGIN — leave page as-is (handler navigates next)
+                logger.info(f"[BROWSER] Skipped — leaving tab for reuse")
                 await asyncio.sleep(1)
             elif page is not None:
                 # FAILURE/TIMEOUT/CAPTCHA — ALWAYS leave tab open for manual help
@@ -2178,22 +2168,11 @@ def discover(max, ats):
 
                     if is_sr:
                         # SR uses nodriver — let handler do its thing, skip JS extraction
-                        try:
-                            await app.browser_manager.start_nodriver()
-                        except Exception:
-                            # Browser died — force cleanup and restart
-                            await app.browser_manager.close()
-                            await asyncio.sleep(1)
-                            await app.browser_manager.start_nodriver()
+                        await app.browser_manager.start_nodriver()
                         page = None
                     else:
-                        try:
-                            await app.browser_manager.start_playwright()
-                        except Exception:
-                            # Persistent context died — force cleanup and restart
-                            await app.browser_manager.close()
-                            await asyncio.sleep(1)
-                            await app.browser_manager.start_playwright()
+                        # start_playwright is a no-op if already running
+                        await app.browser_manager.start_playwright()
                         page = await app.browser_manager.create_stealth_page()
 
                     # ---- STEP 1: Navigate and snapshot BEFORE Simplify ----
@@ -2425,21 +2404,10 @@ def discover(max, ats):
                 except Exception as job_e:
                     logger.error(f"[DISCOVER] Error scanning {company}: {job_e}")
                 finally:
-                    # Close page to free resources (discovery doesn't keep tabs open)
-                    try:
-                        if page and not page.is_closed():
-                            await page.close()
-                    except Exception:
-                        pass
+                    # Don't close page — it will be reused for next job
                     # Reset job to pending so it can be applied to later
                     try:
                         await app.queue.reset_job(job_id)
-                    except Exception:
-                        pass
-                    # Close the tab
-                    try:
-                        if page and not page.is_closed():
-                            await page.close()
                     except Exception:
                         pass
                     await asyncio.sleep(2)
