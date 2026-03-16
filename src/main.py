@@ -482,9 +482,6 @@ class InternshipAutoApplier:
                     logger.info(f"[PRE-CHECK] Job closed — skipping {company}")
                     await self.queue.mark_skipped(job_id, "Job closed (pre-check)")
                     self.stats["skipped"] = self.stats.get("skipped", 0) + 1
-                    _close_tab = True
-                    if page and not page.is_closed():
-                        await page.close()
                     return False
                 elif pre_check == "login":
                     # Only skip if not Workday/iCIMS (they have auth handlers)
@@ -492,9 +489,6 @@ class InternshipAutoApplier:
                         logger.info(f"[PRE-CHECK] Login required — skipping {company}")
                         await self.queue.mark_skipped(job_id, "Login required (no auth handler)")
                         self.stats["skipped"] = self.stats.get("skipped", 0) + 1
-                        _close_tab = True
-                        if page and not page.is_closed():
-                            await page.close()
                         return False
 
             # Apply with timeout — ESC cancels handler and enters manual mode
