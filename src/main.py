@@ -408,6 +408,7 @@ class InternshipAutoApplier:
         error_msg = None
         success = False
         _close_tab = False  # Only True for skipped/closed/login jobs — failures ALWAYS leave tab open
+        page = None  # Initialize before try block to avoid UnboundLocalError
 
         # Create page — SR uses nodriver Chrome, everything else uses Playwright Chrome
         try:
