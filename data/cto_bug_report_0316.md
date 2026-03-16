@@ -48,16 +48,15 @@ The city autocomplete (`spl-autocomplete`) never gets a value, and resume upload
 2. Resume: `_nd_upload_resume()` uses CDP `Runtime.evaluate` + `setFileInputFiles`. If the `spl-dropzone` shadow DOM structure changed or file input isn't found, upload silently fails. Need to verify `input[type="file"]` exists in shadow root.
 **File:** `src/handlers/smartrecruiters.py` — `_nd_fill_city_autocomplete()` (~line 530) and `_nd_upload_resume()` (~line 1400)
 
-## BUG 7: Gamechanger (Greenhouse) — Browser context dies on new job
-**Impact:** HIGH — 5 GH jobs skipped because persistent context died
-**Root cause:** `BrowserType.launch_persistent_context: Target page, context or browser has been closed` — the Playwright persistent context dies between jobs. The page reuse fix (create_stealth_page) tries to reuse the work page but if the CONTEXT itself is dead, it can't create new pages.
-**Evidence:** 5 Gamechanger jobs skipped with same error. Browser restart cooldown prevents spam but jobs are lost.
-**How to reproduce:** Run batch with GH jobs after an SR job — the nodriver Chrome and Playwright Chrome may collide on profile locks.
-**Fix needed:**
-1. Check if this happens when switching between SR (nodriver) and GH (Playwright) — profile lock conflict.
-2. The `_restart_chrome_with_cooldown()` should try harder to recover — remove stale locks, wait, retry.
-3. Consider: if context dies, create a NEW persistent context with a temp profile dir instead of reusing the locked one.
-**File:** `src/browser_manager.py` — `create_stealth_page()` (~line 239) and `_restart_chrome_with_cooldown()`
+## BUG 7: Browser context dies — 146 CRASHES per batch (ROOT CAUSE FOUND + FIXED)
+**Impact:** CRITICAL — 146 crashes in one 100-job batch, 76 jobs skipped
+**Root cause found:** `start_playwright()` calls `_kill_orphaned_chrome(profile_dir)` on EVERY restart. This runs `pkill -9 -f profile_dir` which kills ANY Chrome process using that profile — including nodriver Chrome. Then `_clean_stale_locks()` removes SingletonLock files mid-session, corrupting the profile. The new Chrome launches into a corrupt profile and immediately dies.
+**Evidence:** `<gracefully close start>` + `kill ESRCH` in logs = Chrome PID killed before it can start.
+**Fix deployed:** YES (commit b383132)
+1. Lock cleaning + orphan killing now runs ONCE on first-ever start only (`_ever_started_pw` flag)
+2. Restarts never touch locks or kill processes
+3. Reset restart count instead of crashing batch after 3 restarts
+**File:** `src/browser_manager.py` lines 141-151
 
 ---
 
