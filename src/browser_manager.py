@@ -193,14 +193,8 @@ class BrowserManager:
         self._context = self._persistent_context
         self._browser = None  # Not used with persistent context
 
-        # Set up keeper page
+        # Set up keeper page — NEVER close extra pages, just pick the first one
         pages = self._persistent_context.pages
-        if len(pages) > 1:
-            for extra in pages[1:]:
-                try:
-                    await extra.close()
-                except Exception:
-                    pass
         if pages:
             self._keeper_page = pages[0]
             try:
@@ -389,10 +383,9 @@ class BrowserManager:
             pass
 
     async def close_context(self, context: BrowserContext):
-        """Close a browser context."""
-        if context in self._contexts:
-            self._contexts.remove(context)
-        await context.close()
+        """DISABLED — never close contexts during a session. Browser stays alive."""
+        logger.debug("close_context called but DISABLED — browser stays alive")
+        return  # NEVER close
 
     async def close(self):
         """Close everything — both browsers."""
