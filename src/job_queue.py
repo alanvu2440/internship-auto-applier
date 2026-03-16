@@ -288,15 +288,15 @@ class JobQueue:
         await self._db.commit()
         logger.info(f"Marked job {job_id} as applied")
 
-    async def mark_failed(self, job_id: int, error: str = "", retry: bool = True):
-        """Mark a job as failed."""
+    async def mark_failed(self, job_id: int, error: str = "", retry: bool = True, max_attempts: int = 2):
+        """Mark a job as failed. Permanently fails after max_attempts."""
         # Get current attempts
         cursor = await self._db.execute("SELECT attempts FROM jobs WHERE id = ?", (job_id,))
         row = await cursor.fetchone()
         current_attempts = row[0] if row else 0
 
-        # Don't retry if already tried once (try once, retry once, then give up)
-        if current_attempts >= 1:
+        # Don't retry if we've hit the limit (aligned with get_next_job default)
+        if current_attempts >= max_attempts - 1:
             retry = False
 
         status = "pending" if retry else "failed"

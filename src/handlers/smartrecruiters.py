@@ -703,6 +703,8 @@ class SmartRecruitersHandler(BaseHandler):
             city_val = await self._nd_get_city_value(nd_page)
             logger.info(f"City value after ArrowDown+Enter: '{city_val}'")
             if city_val and len(str(city_val)) > 2:
+                # Fire host events to sync Angular model (same as click path)
+                await self._nd_commit_city_value(nd_page)
                 return True
 
             # Last resort: press Enter to submit typed text as-is
@@ -716,11 +718,41 @@ class SmartRecruitersHandler(BaseHandler):
 
             city_val = await self._nd_get_city_value(nd_page)
             logger.info(f"City value after plain Enter: '{city_val}'")
-            return bool(city_val and len(str(city_val)) > 2)
+            if city_val and len(str(city_val)) > 2:
+                await self._nd_commit_city_value(nd_page)
+                return True
+            return False
 
         except Exception as e:
             logger.warning(f"City autocomplete fill error: {e}")
             return False
+
+    async def _nd_commit_city_value(self, nd_page):
+        """Fire host events to sync city value with Angular model after Enter/selection."""
+        try:
+            await nd_page.evaluate("""
+                (function() {
+                    var host = document.querySelector('spl-autocomplete');
+                    if (!host) return;
+                    // Fire change/blur/input events on host for Angular ControlValueAccessor
+                    host.dispatchEvent(new Event('change', {bubbles: true, composed: true}));
+                    host.dispatchEvent(new Event('input', {bubbles: true, composed: true}));
+                    host.dispatchEvent(new Event('blur', {bubbles: true, composed: true}));
+                    // Update Angular classes
+                    host.classList.remove('ng-pristine', 'ng-untouched');
+                    host.classList.add('ng-dirty', 'ng-touched');
+                    // Also fire on inner input if accessible
+                    if (host.shadowRoot) {
+                        var inp = host.shadowRoot.querySelector('input');
+                        if (inp) {
+                            inp.dispatchEvent(new Event('change', {bubbles: true, composed: true}));
+                            inp.dispatchEvent(new Event('blur', {bubbles: true, composed: true}));
+                        }
+                    }
+                })()
+            """)
+        except Exception:
+            pass
 
     async def _nd_get_city_value(self, nd_page) -> str:
         """Get the current value of the city autocomplete input."""

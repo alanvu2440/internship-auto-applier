@@ -74,6 +74,7 @@ class GenericHandler(BaseHandler):
                 # Check if done
                 if await self.is_application_complete(page):
                     logger.info("Generic application submitted successfully!")
+                    await self.take_screenshot(page, f"PASS_generic_{job_data.get('company', 'unknown')}")
                     self._last_status = "success"
                     return True
 
@@ -99,6 +100,7 @@ class GenericHandler(BaseHandler):
             await self.browser_manager.human_delay(2000, 3000)
             if await self.is_application_complete(page):
                 logger.info("Generic application submitted successfully!")
+                await self.take_screenshot(page, f"PASS_generic_{job_data.get('company', 'unknown')}")
                 self._last_status = "success"
                 return True
 
