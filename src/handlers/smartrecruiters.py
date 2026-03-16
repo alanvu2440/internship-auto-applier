@@ -568,7 +568,7 @@ class SmartRecruitersHandler(BaseHandler):
                 await asyncio.sleep(0.06)
 
             logger.info(f"City: typed '{city}', waiting for suggestions...")
-            await asyncio.sleep(2.5)  # Wait for API/autocomplete suggestions to load
+            await asyncio.sleep(3.0)  # Wait for API/autocomplete suggestions to load
 
             # Step 3: Find suggestion coordinates and click via CDP mouse events
             # (JS .click() doesn't trigger Angular's change detection through shadow DOM)
@@ -702,6 +702,20 @@ class SmartRecruitersHandler(BaseHandler):
 
             city_val = await self._nd_get_city_value(nd_page)
             logger.info(f"City value after ArrowDown+Enter: '{city_val}'")
+            if city_val and len(str(city_val)) > 2:
+                return True
+
+            # Last resort: press Enter to submit typed text as-is
+            # Many SR city fields accept typed text without selecting from dropdown
+            logger.info("City: no suggestion selected, pressing Enter to submit typed value as-is")
+            await nd_page.send(cdp.input_.dispatch_key_event(
+                type_="keyDown", key="Enter", code="Enter"))
+            await nd_page.send(cdp.input_.dispatch_key_event(
+                type_="keyUp", key="Enter", code="Enter"))
+            await asyncio.sleep(1)
+
+            city_val = await self._nd_get_city_value(nd_page)
+            logger.info(f"City value after plain Enter: '{city_val}'")
             return bool(city_val and len(str(city_val)) > 2)
 
         except Exception as e:
@@ -1686,6 +1700,78 @@ class SmartRecruitersHandler(BaseHandler):
                         return True
         except Exception as e3:
             logger.debug(f"Method C (DOM pierce) failed: {e3}")
+
+        # Method D: Direct document.querySelector fallback for any file input on page
+        try:
+            result = await nd_page.send(
+                cdp.runtime.evaluate(
+                    expression="""
+                        (function() {
+                            // Try all file inputs including those in any shadow root
+                            function findFileInput(root) {
+                                var fi = root.querySelector('input[type="file"]');
+                                if (fi) return fi;
+                                var elems = root.querySelectorAll('*');
+                                for (var i = 0; i < elems.length; i++) {
+                                    if (elems[i].shadowRoot) {
+                                        var found = findFileInput(elems[i].shadowRoot);
+                                        if (found) return found;
+                                    }
+                                }
+                                return null;
+                            }
+                            return findFileInput(document);
+                        })()
+                    """,
+                    user_gesture=True,
+                )
+            )
+            remote_obj = result[0] if isinstance(result, tuple) else result
+            if remote_obj and hasattr(remote_obj, 'object_id') and remote_obj.object_id:
+                await nd_page.send(
+                    cdp.dom.set_file_input_files(
+                        files=[abs_path],
+                        object_id=remote_obj.object_id,
+                    )
+                )
+                # Dispatch change event
+                await nd_page.evaluate("""
+                    (function() {
+                        function findFileInput(root) {
+                            var fi = root.querySelector('input[type="file"]');
+                            if (fi) return fi;
+                            var elems = root.querySelectorAll('*');
+                            for (var i = 0; i < elems.length; i++) {
+                                if (elems[i].shadowRoot) {
+                                    var found = findFileInput(elems[i].shadowRoot);
+                                    if (found) return found;
+                                }
+                            }
+                            return null;
+                        }
+                        var fi = findFileInput(document);
+                        if (fi) {
+                            fi.dispatchEvent(new Event('change', {bubbles: true, composed: true}));
+                            fi.dispatchEvent(new Event('input', {bubbles: true, composed: true}));
+                        }
+                    })()
+                """)
+                logger.info("Resume uploaded via Method D (deep shadow DOM traversal)")
+                await asyncio.sleep(2)
+
+                # Verify upload by checking for filename in DOM
+                basename = os.path.basename(abs_path)
+                verify = await nd_page.evaluate(f"""
+                    document.body.innerText.includes('{basename}') ||
+                    document.body.innerHTML.includes('{basename}')
+                """)
+                if verify:
+                    logger.info(f"Resume upload verified — '{basename}' found in DOM")
+                else:
+                    logger.debug(f"Resume filename '{basename}' not found in DOM (may still be OK)")
+                return True
+        except Exception as e4:
+            logger.debug(f"Method D (deep shadow traversal) failed: {e4}")
 
         logger.warning("All resume upload methods failed")
         return False

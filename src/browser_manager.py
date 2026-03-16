@@ -183,14 +183,42 @@ class BrowserManager:
                 args=chrome_args,
                 viewport={"width": 1920, "height": 1080},
             )
-        except Exception:
-            try:
-                await self._playwright.stop()
-            except Exception:
-                pass
-            self._playwright = None
-            self._pw_started = False
-            raise
+        except Exception as e:
+            # Safety net: if profile is corrupted (SIGTRAP/crash), wipe and retry fresh
+            if "SIGTRAP" in str(e) or "gracefully close" in str(e) or "exitCode=null" in str(e):
+                logger.warning(f"Chrome profile corrupted ({str(e)[:80]}) — wiping and retrying with fresh profile")
+                try:
+                    await self._playwright.stop()
+                except Exception:
+                    pass
+                import shutil
+                shutil.rmtree(str(profile), ignore_errors=True)
+                profile.mkdir(parents=True, exist_ok=True)
+                self._playwright = await async_playwright().start()
+                try:
+                    self._persistent_context = await self._playwright.chromium.launch_persistent_context(
+                        user_data_dir=str(profile),
+                        headless=self.headless,
+                        slow_mo=self.slow_mo,
+                        args=chrome_args,
+                        viewport={"width": 1920, "height": 1080},
+                    )
+                except Exception:
+                    try:
+                        await self._playwright.stop()
+                    except Exception:
+                        pass
+                    self._playwright = None
+                    self._pw_started = False
+                    raise
+            else:
+                try:
+                    await self._playwright.stop()
+                except Exception:
+                    pass
+                self._playwright = None
+                self._pw_started = False
+                raise
         self._context = self._persistent_context
         self._browser = None  # Not used with persistent context
 
