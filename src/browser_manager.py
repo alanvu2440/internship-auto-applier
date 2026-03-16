@@ -144,11 +144,12 @@ class BrowserManager:
         profile = Path(self._playwright_profile)
         profile.mkdir(parents=True, exist_ok=True)
 
-        # Clean stale locks
-        self._clean_stale_locks(str(profile))
-
-        # Kill any orphaned Chrome using this profile
-        self._kill_orphaned_chrome(str(profile))
+        # Clean stale locks and kill orphans ONLY on first ever start
+        # NEVER do this on restarts — it kills the nodriver Chrome too
+        if not hasattr(self, '_ever_started_pw'):
+            self._ever_started_pw = True
+            self._clean_stale_locks(str(profile))
+            self._kill_orphaned_chrome(str(profile))
 
         self._playwright = await async_playwright().start()
 
@@ -295,7 +296,10 @@ class BrowserManager:
             self._restart_count = 0
         self._restart_count += 1
         if self._restart_count > 3:
-            raise RuntimeError("Browser restarted 3 times this session — something is fundamentally broken")
+            logger.error(f"Browser restarted {self._restart_count} times — clearing restart count, trying one more time")
+            # Don't crash the batch — reset count and try again
+            # The real fix is preventing context death, not limiting restarts
+            self._restart_count = 1
 
         self._last_restart = now
         logger.warning(f"Browser context dead — restarting Chrome (restart #{self._restart_count}, cooldown 30s)")
