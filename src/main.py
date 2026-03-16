@@ -375,7 +375,7 @@ class InternshipAutoApplier:
                 (company,)
             )
             applied_roles = [r[0] for r in await company_apps.fetchall()]
-            if len(applied_roles) >= 10:
+            if len(applied_roles) >= 25:
                 logger.warning(f"[SKIP] {company} — already applied to {len(applied_roles)} roles. Max 3 per company.")
                 await self.queue.mark_skipped(job_id, f"Max applications per company reached ({len(applied_roles)})")
                 self.stats["skipped"] += 1
@@ -947,17 +947,18 @@ class InternshipAutoApplier:
                 except Exception:
                     pass
                 await asyncio.sleep(10)  # Wait 10s so user can verify success
+                # Navigate to blank instead of closing — closing kills persistent context
                 try:
                     if page and not page.is_closed():
-                        await page.close()
+                        await page.goto("about:blank", timeout=5000)
                 except Exception:
                     pass
             elif _close_tab:
-                # SKIPPED/CLOSED/LOGIN — close tab, nothing to manually fix
-                logger.info(f"[BROWSER] Skipped — closing tab")
+                # SKIPPED/CLOSED/LOGIN — navigate to blank (don't close — kills context)
+                logger.info(f"[BROWSER] Skipped — blanking tab")
                 try:
                     if page and not page.is_closed():
-                        await page.close()
+                        await page.goto("about:blank", timeout=5000)
                 except Exception:
                     pass
                 await asyncio.sleep(1)
@@ -1067,8 +1068,8 @@ class InternshipAutoApplier:
 
         applications = 0
         preferences = self.config.get("preferences", {})
-        max_per_hour = preferences.get("max_applications_per_hour", 10)
-        delay_seconds = preferences.get("delay_between_applications_seconds", 30)
+        max_per_hour = preferences.get("max_applications_per_hour", 999)  # No hourly cap — different websites don't share rate limits
+        delay_seconds = preferences.get("delay_between_applications_seconds", 5)  # Minimal delay between different companies
         import time as _time_loop
         _batch_start = _time_loop.time()
 
@@ -1150,13 +1151,13 @@ class InternshipAutoApplier:
             # SmartRecruiters: DataDome anti-bot per page
             # Workday: login walls, session-based detection
             ats_delays = {
-                "ashby": 180,          # BURNED — max spacing, consider skipping entirely
-                "greenhouse": 90,      # ~40/hour — safe rate, avoid recruiter suspicion
-                "lever": 120,          # ~30/hour — less aggressive
-                "smartrecruiters": 90, # ~40/hour — DataDome watches velocity
-                "workday": 120,        # ~30/hour — login walls, session detection
-                "icims": 90,           # ~40/hour — login walls
-                "unknown": 90,         # ~40/hour — varies, play it safe
+                "ashby": 5,            # Different companies — no shared detection
+                "greenhouse": 5,       # Different employer domains
+                "lever": 5,            # Different employer domains
+                "smartrecruiters": 15, # DataDome tracks velocity — keep minimal
+                "workday": 30,         # Login walls, session detection
+                "icims": 30,           # Login walls
+                "unknown": 5,          # Completely different sites
             }
             job_ats = job.get("ats_type", "unknown")
             ats_delay = max(ats_delays.get(job_ats, delay_seconds), delay_seconds)

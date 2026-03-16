@@ -228,9 +228,13 @@ class JobQueue:
         """
         params = [max_attempts]
 
+        # Skip Workday/iCIMS by default (login walls, low success rate)
+        # unless explicitly filtering for them
         if ats_type:
             query += " AND ats_type = ?"
             params.append(ats_type.value)
+        else:
+            query += " AND ats_type NOT IN ('workday', 'icims')"
 
         if url_patterns:
             or_clauses = " OR ".join(["url LIKE ?" for _ in url_patterns])
