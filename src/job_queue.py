@@ -234,7 +234,7 @@ class JobQueue:
             query += " AND ats_type = ?"
             params.append(ats_type.value)
         else:
-            query += " AND ats_type NOT IN ('workday', 'icims')"
+            query += " AND ats_type NOT IN ('icims')"
 
         if url_patterns:
             or_clauses = " OR ".join(["url LIKE ?" for _ in url_patterns])

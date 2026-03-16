@@ -337,6 +337,59 @@ class InternshipAutoApplier:
 
         logger.info(f"Total new jobs added: {total_added}")
 
+    async def _quick_pre_check(self, page, url: str, job_data: dict) -> str:
+        """Quick < 5-second check before spending time on a job.
+
+        Navigates to the URL and checks for obvious fast-fail conditions.
+        Returns: 'ok', 'closed', 'login', or 'error'
+        """
+        try:
+            # Navigate to the URL with a short timeout
+            try:
+                await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+            except Exception:
+                try:
+                    await page.goto(url, wait_until="commit", timeout=10000)
+                except Exception:
+                    return "ok"  # Navigation failed — let handler deal with it
+
+            # Check if URL redirected far from original
+            current_url = page.url.lower()
+            original_domain = url.split('/')[2].lower() if len(url.split('/')) > 2 else ''
+            current_domain = current_url.split('/')[2].lower() if len(current_url.split('/')) > 2 else ''
+            if original_domain and current_domain and original_domain != current_domain:
+                # Redirected to different domain — log but don't fail (some redirects are legit)
+                known_ats_domains = ['greenhouse', 'lever', 'smartrecruiters', 'ashby', 'workday', 'myworkday']
+                if not any(d in current_domain for d in known_ats_domains):
+                    logger.info(f"[PRE-CHECK] Redirected from {original_domain} to {current_domain}")
+
+            body_text = await page.text_content("body", timeout=5000) or ""
+            body_lower = body_text.lower()[:3000]  # Only check first 3000 chars
+
+            # Check for closed job indicators
+            from detection.job_status import is_job_closed
+            if is_job_closed(body_lower):
+                return "closed"
+
+            # Check for login wall (not an application form)
+            login_indicators = [
+                "sign in", "log in", "create account", "create an account",
+                "register to apply", "login required", "sign in to apply",
+                "create your candidate home account",
+            ]
+            has_login = any(ind in body_lower for ind in login_indicators)
+            has_form = bool(await page.query_selector(
+                'input[type="email"], input[name*="name"], input[type="file"], '
+                'textarea, input[name*="resume"]'
+            ))
+            if has_login and not has_form:
+                return "login"
+
+            return "ok"
+        except Exception as e:
+            logger.debug(f"[PRE-CHECK] Error (proceeding anyway): {e}")
+            return "ok"  # If check fails, proceed anyway
+
     async def apply_to_job(self, job_data: Dict[str, Any], job_index: int = 0, total_jobs: int = 0) -> bool:
         """Apply to a single job."""
         job_id = job_data["id"]
@@ -420,6 +473,29 @@ class InternshipAutoApplier:
                 # Start Playwright browser (if not already running)
                 await self.browser_manager.start_playwright()
                 page = await self.browser_manager.create_stealth_page()
+
+            # FAST-FAIL PRE-CHECK: detect closed jobs, login walls, redirects
+            # before spending 300s on the handler (skip for SmartRecruiters — uses nodriver)
+            if page is not None:
+                pre_check = await self._quick_pre_check(page, url, job_data)
+                if pre_check == "closed":
+                    logger.info(f"[PRE-CHECK] Job closed — skipping {company}")
+                    await self.queue.mark_skipped(job_id, "Job closed (pre-check)")
+                    self.stats["skipped"] = self.stats.get("skipped", 0) + 1
+                    _close_tab = True
+                    if page and not page.is_closed():
+                        await page.close()
+                    return False
+                elif pre_check == "login":
+                    # Only skip if not Workday/iCIMS (they have auth handlers)
+                    if ats_type.value not in ("workday", "icims"):
+                        logger.info(f"[PRE-CHECK] Login required — skipping {company}")
+                        await self.queue.mark_skipped(job_id, "Login required (no auth handler)")
+                        self.stats["skipped"] = self.stats.get("skipped", 0) + 1
+                        _close_tab = True
+                        if page and not page.is_closed():
+                            await page.close()
+                        return False
 
             # Apply with timeout — ESC cancels handler and enters manual mode
             import time as _time
