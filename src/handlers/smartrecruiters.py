@@ -501,16 +501,12 @@ class SmartRecruitersHandler(BaseHandler):
             logger.error(f"SmartRecruiters application failed: {e}")
             return False
         finally:
-            # NEVER close the browser — only close the job TAB
-            # Browser stays alive with keeper tab for next job
-            if nd_page and self._last_status == "success":
-                try:
-                    logger.info("[BROWSER] SUCCESS — closing job tab, browser stays open")
-                    await nd_page.close()
-                except Exception as e:
-                    logger.debug(f"Error closing job tab: {e}")
-            elif nd_page:
-                logger.info("[BROWSER] SmartRecruiters tab left OPEN for manual help — browser stays open")
+            # NEVER close browser or tabs — page will be reused for next job
+            if nd_page:
+                if self._last_status == "success":
+                    logger.info("[BROWSER] SUCCESS — tab stays open for reuse")
+                else:
+                    logger.info("[BROWSER] SmartRecruiters tab left OPEN for manual help — browser stays open")
 
     async def detect_form_type(self, page: Page) -> str:
         """Detect SmartRecruiters form type."""
