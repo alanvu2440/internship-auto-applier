@@ -353,9 +353,9 @@ class InternshipAutoApplier:
 
         # CHECK: Don't apply if we have an active interview at this company
         try:
-            interview_statuses = ("interview_invite", "assessment", "offer", "follow_up")
+            interview_statuses = ("interview_invite", "assessment", "offer")  # Removed follow_up — don't block on email replies
             existing = await self.queue._db.execute(
-                "SELECT response_status FROM jobs WHERE company = ? AND response_status IN (?, ?, ?, ?)",
+                "SELECT response_status FROM jobs WHERE company = ? AND response_status IN (?, ?, ?)",
                 (company, *interview_statuses)
             )
             row = await existing.fetchone() if hasattr(existing, 'fetchone') else None
@@ -375,7 +375,7 @@ class InternshipAutoApplier:
                 (company,)
             )
             applied_roles = [r[0] for r in await company_apps.fetchall()]
-            if len(applied_roles) >= 3:
+            if len(applied_roles) >= 10:
                 logger.warning(f"[SKIP] {company} — already applied to {len(applied_roles)} roles. Max 3 per company.")
                 await self.queue.mark_skipped(job_id, f"Max applications per company reached ({len(applied_roles)})")
                 self.stats["skipped"] += 1
