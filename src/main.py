@@ -468,6 +468,19 @@ class InternshipAutoApplier:
             except asyncio.CancelledError:
                 success = False
                 esc_interrupted = True
+            except Exception as handler_exc:
+                # Catch page/browser crashes gracefully — don't kill the loop
+                exc_str = str(handler_exc)
+                if "has been closed" in exc_str or "Target page" in exc_str:
+                    logger.warning(f"Page crashed during application — skipping job: {exc_str[:80]}")
+                    error_msg = "Page crashed — browser still alive, skipping job"
+                    success = False
+                    # Invalidate the work page so next job gets a fresh tab
+                    self.browser_manager._work_page = None
+                else:
+                    logger.error(f"Unexpected handler error: {handler_exc}")
+                    error_msg = str(handler_exc)[:200]
+                    success = False
 
             # SMART MODE: If handler failed and page is still up, run Gemini scanner
             # (skip for SmartRecruiters — uses nodriver, not Playwright page)

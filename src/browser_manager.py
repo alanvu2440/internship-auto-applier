@@ -239,25 +239,59 @@ class BrowserManager:
     async def create_stealth_page(self, context: Optional[BrowserContext] = None) -> Page:
         """Get a reusable Playwright page with stealth mode enabled.
 
-        Reuses the same page across jobs to avoid killing the persistent context.
-        Only creates a new page if the current one is dead.
+        CRITICAL: Reuses the SAME page across all jobs. NEVER creates new Chrome.
+        The browser starts ONCE and stays alive for the entire session.
         """
-        # Reuse existing work page if alive
-        if hasattr(self, '_work_page') and self._work_page and not self._work_page.is_closed():
+        # Reuse existing work page if alive — this is the NORMAL path
+        if hasattr(self, '_work_page') and self._work_page:
             try:
-                await self._work_page.goto("about:blank", timeout=5000)
-                return self._work_page
+                if not self._work_page.is_closed():
+                    await self._work_page.goto("about:blank", timeout=5000)
+                    return self._work_page
             except Exception:
-                self._work_page = None  # Page died, create new one
+                logger.info("Work page died — creating new tab in same browser")
+                self._work_page = None
 
+        # Work page is dead — try creating a new tab in existing context
         if context is None:
-            context = await self.create_context()
+            try:
+                context = await self.create_context()
+            except Exception:
+                # Context is also dead — this is the ONLY case where we restart
+                if not hasattr(self, '_restart_count'):
+                    self._restart_count = 0
+                self._restart_count += 1
+                if self._restart_count > 3:
+                    logger.error("Browser restarted 3 times — something is fundamentally broken. Stopping.")
+                    raise RuntimeError("Too many browser restarts")
+                logger.warning(f"Browser context dead — restarting Chrome (restart #{self._restart_count})")
+                self._persistent_context = None
+                self._context = None
+                self._contexts.clear()
+                self._keeper_page = None
+                self._pw_started = False
+                self._browser = None
+                self._work_page = None
+                if self._playwright:
+                    try:
+                        await self._playwright.stop()
+                    except Exception:
+                        pass
+                    self._playwright = None
+                await self.start_playwright()
+                context = await self.create_context()
 
         try:
             page = await context.new_page()
         except Exception as e:
             if "has been closed" in str(e):
-                logger.warning("Playwright browser was closed — restarting...")
+                # Context died during new_page — one more restart attempt
+                if not hasattr(self, '_restart_count'):
+                    self._restart_count = 0
+                self._restart_count += 1
+                if self._restart_count > 3:
+                    raise RuntimeError("Too many browser restarts — check browser_manager.py")
+                logger.warning(f"Context died on new_page — restarting Chrome (restart #{self._restart_count})")
                 self._persistent_context = None
                 self._context = None
                 self._contexts.clear()
@@ -277,9 +311,9 @@ class BrowserManager:
             else:
                 raise
 
-        # Apply stealth (reuse cached instance)
+        # Apply stealth
         await self._stealth.apply_stealth_async(page)
-        self._work_page = page  # Cache for reuse
+        self._work_page = page
 
         await page.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
