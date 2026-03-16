@@ -237,7 +237,19 @@ class BrowserManager:
         raise RuntimeError("No Playwright browser context available — call start_playwright() first")
 
     async def create_stealth_page(self, context: Optional[BrowserContext] = None) -> Page:
-        """Create a new Playwright page with stealth mode enabled."""
+        """Get a reusable Playwright page with stealth mode enabled.
+
+        Reuses the same page across jobs to avoid killing the persistent context.
+        Only creates a new page if the current one is dead.
+        """
+        # Reuse existing work page if alive
+        if hasattr(self, '_work_page') and self._work_page and not self._work_page.is_closed():
+            try:
+                await self._work_page.goto("about:blank", timeout=5000)
+                return self._work_page
+            except Exception:
+                self._work_page = None  # Page died, create new one
+
         if context is None:
             context = await self.create_context()
 
@@ -252,6 +264,7 @@ class BrowserManager:
                 self._keeper_page = None
                 self._pw_started = False
                 self._browser = None
+                self._work_page = None
                 if self._playwright:
                     try:
                         await self._playwright.stop()
@@ -266,6 +279,7 @@ class BrowserManager:
 
         # Apply stealth (reuse cached instance)
         await self._stealth.apply_stealth_async(page)
+        self._work_page = page  # Cache for reuse
 
         await page.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
