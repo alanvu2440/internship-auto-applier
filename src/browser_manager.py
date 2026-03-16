@@ -243,69 +243,31 @@ class BrowserManager:
         The browser starts ONCE and stays alive for the entire session.
         """
         # Reuse existing work page if alive — this is the NORMAL path
+        # Do NOT navigate to about:blank — handler will navigate to job URL
         if hasattr(self, '_work_page') and self._work_page:
             try:
                 if not self._work_page.is_closed():
-                    await self._work_page.goto("about:blank", timeout=5000)
                     return self._work_page
             except Exception:
-                logger.info("Work page died — creating new tab in same browser")
-                self._work_page = None
+                pass
+            logger.info("Work page died — creating new tab in same browser")
+            self._work_page = None
 
         # Work page is dead — try creating a new tab in existing context
         if context is None:
             try:
                 context = await self.create_context()
             except Exception:
-                # Context is also dead — this is the ONLY case where we restart
-                if not hasattr(self, '_restart_count'):
-                    self._restart_count = 0
-                self._restart_count += 1
-                if self._restart_count > 3:
-                    logger.error("Browser restarted 3 times — something is fundamentally broken. Stopping.")
-                    raise RuntimeError("Too many browser restarts")
-                logger.warning(f"Browser context dead — restarting Chrome (restart #{self._restart_count})")
-                self._persistent_context = None
-                self._context = None
-                self._contexts.clear()
-                self._keeper_page = None
-                self._pw_started = False
-                self._browser = None
-                self._work_page = None
-                if self._playwright:
-                    try:
-                        await self._playwright.stop()
-                    except Exception:
-                        pass
-                    self._playwright = None
-                await self.start_playwright()
+                # Context is also dead — restart with cooldown
+                await self._restart_chrome_with_cooldown()
                 context = await self.create_context()
 
         try:
             page = await context.new_page()
         except Exception as e:
             if "has been closed" in str(e):
-                # Context died during new_page — one more restart attempt
-                if not hasattr(self, '_restart_count'):
-                    self._restart_count = 0
-                self._restart_count += 1
-                if self._restart_count > 3:
-                    raise RuntimeError("Too many browser restarts — check browser_manager.py")
-                logger.warning(f"Context died on new_page — restarting Chrome (restart #{self._restart_count})")
-                self._persistent_context = None
-                self._context = None
-                self._contexts.clear()
-                self._keeper_page = None
-                self._pw_started = False
-                self._browser = None
-                self._work_page = None
-                if self._playwright:
-                    try:
-                        await self._playwright.stop()
-                    except Exception:
-                        pass
-                    self._playwright = None
-                await self.start_playwright()
+                # Context died during new_page — restart with cooldown
+                await self._restart_chrome_with_cooldown()
                 context = await self.create_context()
                 page = await context.new_page()
             else:
@@ -321,6 +283,43 @@ class BrowserManager:
         """)
 
         return page
+
+    async def _restart_chrome_with_cooldown(self):
+        """Restart Chrome with a 30-second cooldown to prevent restart spam.
+
+        Raises RuntimeError if cooldown is active or restart limit exceeded.
+        """
+        import time
+        now = time.time()
+        last = getattr(self, '_last_restart', 0)
+        if now - last < 30:
+            raise RuntimeError(
+                f"Browser crashed but cooldown active ({30 - int(now - last)}s remaining) — skipping job"
+            )
+
+        if not hasattr(self, '_restart_count'):
+            self._restart_count = 0
+        self._restart_count += 1
+        if self._restart_count > 3:
+            raise RuntimeError("Browser restarted 3 times this session — something is fundamentally broken")
+
+        self._last_restart = now
+        logger.warning(f"Browser context dead — restarting Chrome (restart #{self._restart_count}, cooldown 30s)")
+
+        self._persistent_context = None
+        self._context = None
+        self._contexts.clear()
+        self._keeper_page = None
+        self._pw_started = False
+        self._browser = None
+        self._work_page = None
+        if self._playwright:
+            try:
+                await self._playwright.stop()
+            except Exception:
+                pass
+            self._playwright = None
+        await self.start_playwright()
 
     # ── HUMAN-LIKE INTERACTIONS ───────────────────────────────────────
 
