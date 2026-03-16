@@ -189,7 +189,7 @@ class JobQueue:
         await self._db.commit()
         return cursor.lastrowid
 
-    async def get_next_job(self, ats_type: Optional[ATSType] = None, max_attempts: int = 3, url_patterns: list = None) -> Optional[dict]:
+    async def get_next_job(self, ats_type: Optional[ATSType] = None, max_attempts: int = 2, url_patterns: list = None) -> Optional[dict]:
         """
         Get the next job to process.
 
@@ -295,8 +295,8 @@ class JobQueue:
         row = await cursor.fetchone()
         current_attempts = row[0] if row else 0
 
-        # Don't retry if max attempts reached
-        if current_attempts >= 2:
+        # Don't retry if already tried once (try once, retry once, then give up)
+        if current_attempts >= 1:
             retry = False
 
         status = "pending" if retry else "failed"

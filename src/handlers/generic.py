@@ -5,11 +5,17 @@ Fallback handler for unknown ATS platforms.
 Uses intelligent form detection and filling.
 """
 
+import re
 from typing import Dict, Any
 from playwright.async_api import Page
 from loguru import logger
 
 from .base import BaseHandler
+
+
+def _make_apply_regex():
+    """Create a regex pattern matching common apply button text (case-insensitive)."""
+    return re.compile(r"(?i)\bapply\b")
 
 
 class GenericHandler(BaseHandler):
@@ -143,12 +149,33 @@ class GenericHandler(BaseHandler):
 
     async def _click_apply_button(self, page: Page) -> bool:
         """Try to find and click an apply button."""
+        # Wait for JS-rendered buttons to appear
+        await self.browser_manager.human_delay(2500, 3500)
+
+        # Scroll down to find buttons below the fold
+        try:
+            await page.evaluate("window.scrollBy(0, 500)")
+            await self.browser_manager.human_delay(500, 1000)
+        except Exception:
+            pass
+
         apply_patterns = [
-            'a:has-text("Apply")',
-            'button:has-text("Apply")',
             'a:has-text("Apply Now")',
             'button:has-text("Apply Now")',
-            'a:has-text("Apply for this")',
+            'a:has-text("Apply for this job")',
+            'button:has-text("Apply for this job")',
+            'a:has-text("Apply for this position")',
+            'button:has-text("Apply for this position")',
+            'a:has-text("Submit Application")',
+            'button:has-text("Submit Application")',
+            'a:has-text("Apply Online")',
+            'button:has-text("Apply Online")',
+            'a:has-text("Start Application")',
+            'button:has-text("Start Application")',
+            'a:has-text("I\'m interested")',
+            'button:has-text("I\'m interested")',
+            'a:has-text("Apply")',
+            'button:has-text("Apply")',
             '.apply-button',
             '#apply-button',
             '[class*="apply"]',
@@ -160,9 +187,28 @@ class GenericHandler(BaseHandler):
                 if elem and await elem.is_visible():
                     await elem.click()
                     logger.debug(f"Clicked apply button: {pattern}")
+                    # Wait and check if a form appeared
+                    await self.browser_manager.human_delay(2500, 3500)
+                    if await self._is_on_application_form(page):
+                        return True
+                    # Button clicked but no form yet — keep going, might still work
                     return True
             except Exception:
                 continue
+
+        # Fallback: find any visible <a> or <button> containing "apply" (case-insensitive)
+        try:
+            fallback_elem = page.locator('a, button').filter(has_text=_make_apply_regex())
+            count = await fallback_elem.count()
+            for i in range(count):
+                item = fallback_elem.nth(i)
+                if await item.is_visible():
+                    await item.click()
+                    logger.debug(f"Clicked fallback apply element (index {i})")
+                    await self.browser_manager.human_delay(2500, 3500)
+                    return True
+        except Exception:
+            pass
 
         return False
 
