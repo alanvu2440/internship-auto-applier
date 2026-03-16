@@ -27,6 +27,25 @@ class GenericHandler(BaseHandler):
             await page.goto(job_url, wait_until="networkidle", timeout=30000)
             await self.browser_manager.human_delay(1000, 2000)
 
+            # Dismiss cookie banners, location popups, overlays
+            try:
+                for dismiss_sel in [
+                    'button:has-text("Accept")', 'button:has-text("Accept All")',
+                    'button:has-text("OK")', 'button:has-text("Got it")',
+                    'button:has-text("Close")', 'button:has-text("Dismiss")',
+                    'button:has-text("Continue")', '[class*="cookie"] button',
+                    '[id*="cookie"] button', '[class*="consent"] button',
+                    '[class*="banner"] button:has-text("Accept")',
+                    '[aria-label="Close"]', '[class*="modal"] button:has-text("Close")',
+                ]:
+                    btn = page.locator(dismiss_sel).first
+                    if await btn.count() > 0 and await btn.is_visible():
+                        await btn.click(timeout=2000)
+                        await self.browser_manager.human_delay(500, 1000)
+                        break
+            except Exception:
+                pass
+
             # Check for CAPTCHA
             if not await self.handle_captcha(page):
                 return False
@@ -165,6 +184,33 @@ class GenericHandler(BaseHandler):
 
         # Handle any remaining unfilled required fields
         await self._fill_required_fields(page, job_data)
+
+        # Check ALL checkboxes — terms, consent, privacy, agree
+        # This fixes the "You need to agree to the terms" error (13+ failures)
+        try:
+            await page.evaluate("""() => {
+                const checkboxes = document.querySelectorAll(
+                    'input[type="checkbox"]:not(:checked)'
+                );
+                for (const cb of checkboxes) {
+                    const label = (cb.closest('label') || cb.parentElement || {}).textContent || '';
+                    const name = (cb.name || cb.id || '').toLowerCase();
+                    const ll = label.toLowerCase();
+                    // Check consent/terms/privacy/agree checkboxes
+                    if (ll.includes('agree') || ll.includes('terms') || ll.includes('consent') ||
+                        ll.includes('privacy') || ll.includes('acknowledge') || ll.includes('confirm') ||
+                        ll.includes('accept') || ll.includes('certif') ||
+                        name.includes('agree') || name.includes('terms') || name.includes('consent') ||
+                        name.includes('privacy') || name.includes('accept')) {
+                        cb.click();
+                        cb.checked = true;
+                        cb.dispatchEvent(new Event('change', {bubbles: true}));
+                    }
+                }
+            }""")
+            logger.debug("Checked consent/terms/privacy checkboxes")
+        except Exception:
+            pass
 
     async def _fill_textareas(self, page: Page, job_data: Dict[str, Any]) -> None:
         """Fill textarea fields using AI answerer."""
