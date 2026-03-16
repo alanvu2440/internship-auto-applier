@@ -384,7 +384,10 @@ Role: {role}
         def _write_to_bank_file(filepath):
             safe_answer = templatized.replace("'", "''")
             with open(filepath, "a", encoding="utf-8") as f:
-                if "'" in norm_q:
+                # ALWAYS quote keys that have special YAML chars (colon, apostrophe, quotes)
+                # This prevents malformed YAML from auto-learn
+                needs_quoting = "'" in norm_q or ":" in norm_q or '"' in norm_q
+                if needs_quoting:
                     safe_question = norm_q.replace('"', '\\"')
                     f.write(f'\n  "{safe_question}":\n')
                 else:
