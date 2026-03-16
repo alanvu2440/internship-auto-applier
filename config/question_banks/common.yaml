@@ -869,3 +869,698 @@ questions:
   references:
     answer: 'Available upon request'
     type: textarea
+
+  please enter the name of your current school/university. input-f2:
+    answer: 'San Jose State University'
+    type: text
+
+  what is your current major? input-f5:
+    answer: 'Software Engineering'
+    type: text
+
+  please enter your expected graduation date (mm/yyyy). input-date14:
+    answer: 'May 2026'
+    type: text
+
+  "if yes, please select agency":
+    answer: 'Headquarters (Including BSC)'
+    type: select
+
+  enter faculty/staff members name input-f26:
+    answer: 'As the candidate profile does not specify a faculty or staff member''s name, please use "N'
+    type: text
+
+  bkbbx5ghao8:
+    answer: 'I am eager to apply my software engineering skills and strong foundation in C, Python, and Java'
+    type: text
+
+  password:
+    answer: 'As an AI, I cannot create a password for you. Please choose a strong and unique password for your account security.'
+    type: text
+
+  are you authorized to lawfully work for roku in the country to which you are applying? (required) e8756258 form_submission[fields_attributes][4][job_questions][db434e4c85b2f66c614f95f14c236020][job_question_option_uid]:
+    answer: 'Yes'
+    type: select
+
+  aqyrquz5kyi:
+    answer: 'Alan Vu, graduating May 2026. Eager to apply software engineering and data'
+    type: text
+
+  mihi86rw3tf:
+    answer: 'Yes, I am legally authorized to work in the U.S. and do not require sponsorship for'
+    type: text
+
+  first name:
+    answer: 'Alan'
+    type: text
+
+  last name:
+    answer: 'Vu'
+    type: text
+
+  email:
+    answer: 'alanvu2440@gmail.com'
+    type: text
+
+  phone:
+    answer: '+1 408-921-7836'
+    type: tel
+
+  he/him:
+    answer: 'He/him'
+    type: text
+
+  current location ✱no location found. try entering a different locationloading:
+    answer: 'San Jose, CA'
+    type: text
+
+  current company:
+    answer: 'Kruiz'
+    type: text
+
+  linkedin url:
+    answer: 'https://www.linkedin.com/in/Alan-Duc-Vu'
+    type: text
+
+  twitter url:
+    answer: 'N/A'
+    type: text
+
+  github url:
+    answer: 'https://github.com/alanvu2440'
+    type: text
+
+  current location no location found. try entering a different locationloading:
+    answer: 'San Jose, CA'
+    type: text
+
+  current company:
+    answer: 'Kruiz'
+    type: text
+
+  linkedin url:
+    answer: 'https://www.linkedin.com/in/Alan-Duc-Vu'
+    type: text
+
+  github url:
+    answer: 'https://github.com/alanvu2440'
+    type: text
+
+  what are your hourly salary expectations?:
+    answer: 'Open to discuss'
+    type: textarea
+
+  "choose password:  fbclc_pwd":
+    answer: 'As an AI, I cannot choose a personal password for Alan Vu. Please have Alan complete this field directly with a secure password of his choice.'
+    type: text
+
+  email address email email:
+    answer: 'alan.vu@email.com'
+    type: text
+
+  how did you hear about us?:
+    answer: 'LinkedIn'
+    type: select
+
+  first name (required) 42523a19 form_submission[fields_attributes][0][string_value] first name:
+    answer: 'Alan'
+    type: text
+
+  last name (required) 30808b97 form_submission[fields_attributes][1][string_value] last name:
+    answer: 'Vu'
+    type: text
+
+  email (required) ca4de456 form_submission[fields_attributes][2][email_value] email:
+    answer: 'alan.vu@email.com'
+    type: text
+
+  phone number (required) 24f10d6f form_submission[fields_attributes][3][phone_value] (222)555-0123:
+    answer: '(222)555-0123'
+    type: text
+
+  how did you hear about us? (required) 3a7a005e form_submission[fields_attributes][4][job_questions][403b71ccc61d1187d2f4d84be288a079][job_question_option_uid]:
+    answer: 'LinkedIn Ad (India)'
+    type: select
+
+  are you authorized to lawfully work for roku in the country to which you are applying? (required) 28778f43 form_submission[fields_attributes][4][job_questions][cea71c2edf8ef8edbf6bdddeb0d10d51][job_question_option_uid]:
+    answer: 'Yes'
+    type: select
+
+  first name (required) c4801a76 form_submission[fields_attributes][0][string_value] first name:
+    answer: 'Alan'
+    type: text
+
+  last name (required) a3b2cf35 form_submission[fields_attributes][1][string_value] last name:
+    answer: 'Vu'
+    type: text
+
+  email (required) 13b0e2d7 form_submission[fields_attributes][2][email_value] email:
+    answer: 'alan.vu@gmail.com'
+    type: text
+
+  phone number (required) 1d1fe184 form_submission[fields_attributes][3][phone_value] (222)555-0123:
+    answer: '(222) 555-0123'
+    type: text
+
+  how did you hear about us? (required) dfdca707 form_submission[fields_attributes][4][job_questions][e1c82899ece50a957199df8398e242c6][job_question_option_uid]:
+    answer: 'LinkedIn'
+    type: select
+
+  are you authorized to lawfully work for roku in the country to which you are applying? (required) 03862ba3 form_submission[fields_attributes][4][job_questions][fd89daaaebe88b27bd8a3e9154cbab2c][job_question_option_uid]:
+    answer: 'Yes'
+    type: select
+
+  first name (required) fad60f5b form_submission[fields_attributes][0][string_value] first name:
+    answer: 'Alan'
+    type: text
+
+  last name (required) 96523a90 form_submission[fields_attributes][1][string_value] last name:
+    answer: 'Vu'
+    type: text
+
+  email (required) b93ea665 form_submission[fields_attributes][2][email_value] email:
+    answer: 'alan.vu@email.com'
+    type: text
+
+  phone number (required) 270cdd6b form_submission[fields_attributes][3][phone_value] (222)555-0123:
+    answer: '(222) 555-0123'
+    type: text
+
+  how did you hear about us? (required) 323559cd form_submission[fields_attributes][4][job_questions][b00cd1dfd2643b7eb8f46b01b3d627e5][job_question_option_uid]:
+    answer: 'LinkedIn'
+    type: select
+
+  are you authorized to lawfully work for roku in the country to which you are applying? (required) 8e7750f6 form_submission[fields_attributes][4][job_questions][63125a41fb1f4b86205feca0baa212d3][job_question_option_uid]:
+    answer: 'Yes'
+    type: select
+
+  what are your salary expectations?:
+    answer: 'Open to discuss'
+    type: textarea
+
+  will you now or in the future require assa abloy to commence (sponsor) an immigration case in order to employ you (for example, h-1b or other employment-based immigration cases)?:
+    answer: 'No'
+    type: textarea
+
+  "retype password:  fbclc_pwdconf":
+    answer: 'As an AI, I cannot provide or retype confidential password information. Please enter your chosen password here'
+    type: text
+
+  no selection:
+    answer: 'Highly motivated Software Engineering student with strong Java, JavaScript, and React.js skills,'
+    type: text
+
+  first name (required) 8f0d35e6 form_submission[fields_attributes][0][string_value] first name:
+    answer: 'Alan'
+    type: text
+
+  last name (required) 097d369b form_submission[fields_attributes][1][string_value] last name:
+    answer: 'Vu'
+    type: text
+
+  email (required) 9db19c89 form_submission[fields_attributes][2][email_value] email:
+    answer: 'alan.vu@gmail.com'
+    type: text
+
+  phone number (required) 645f8f9d form_submission[fields_attributes][3][phone_value] (222)555-0123:
+    answer: '(222)555-0123'
+    type: text
+
+  how did you hear about us? (required) cd43b949 form_submission[fields_attributes][4][job_questions][27a94458f107f791a504b5506fde8f69][job_question_option_uid]:
+    answer: 'LinkedIn'
+    type: select
+
+  are you authorized to lawfully work for roku in the country to which you are applying? (required) b73d21b0 form_submission[fields_attributes][4][job_questions][6046aed9a6acb3972809ccb65ac2a27f][job_question_option_uid]:
+    answer: 'Yes'
+    type: select
+
+  first name (required) 9f169055 form_submission[fields_attributes][0][string_value] first name:
+    answer: 'Alan'
+    type: text
+
+  last name (required) dc789c70 form_submission[fields_attributes][1][string_value] last name:
+    answer: 'Vu'
+    type: text
+
+  email (required) 133a901b form_submission[fields_attributes][2][email_value] email:
+    answer: 'alan.vu@email.com'
+    type: text
+
+  phone number (required) e7a03319 form_submission[fields_attributes][3][phone_value] (222)555-0123:
+    answer: '(222)555-0123'
+    type: text
+
+  how did you hear about us? (required) c3dfeb9a form_submission[fields_attributes][4][job_questions][c56e6d28873d2d4870a0b4d4bc698b75][job_question_option_uid]:
+    answer: 'LinkedIn'
+    type: select
+
+  are you authorized to lawfully work for roku in the country to which you are applying? (required) 224ec59c form_submission[fields_attributes][4][job_questions][80f5afbc7e6fe43869c45b984ab48f7e][job_question_option_uid]:
+    answer: 'Yes'
+    type: select
+
+  what are your salary expectations?:
+    answer: 'Open to discuss'
+    type: textarea
+
+  will you now or in the future require assa abloy to commence (sponsor) an immigration case in order to employ you (for example, h-1b or other employment-based immigration cases)?:
+    answer: 'No'
+    type: textarea
+
+  first name firstname:
+    answer: 'Alan'
+    type: text
+
+  last name lastname:
+    answer: 'Vu'
+    type: text
+
+  business email email:
+    answer: 'alan.vu@gmail.com'
+    type: text
+
+  company name company:
+    answer: '[Company]'
+    type: text
+
+  phone number phone:
+    answer: '(555) 123-4567'
+    type: text
+
+  country/region country:
+    answer: 'United States'
+    type: select
+
+  job title jobtitle:
+    answer: 'Data Engineer'
+    type: text
+
+  how did you hear about us?:
+    answer: 'LinkedIn'
+    type: select
+
+  first name (required) 2a2cd8e2 form_submission[fields_attributes][0][string_value] first name:
+    answer: 'Alan'
+    type: text
+
+  last name (required) 824e3835 form_submission[fields_attributes][1][string_value] last name:
+    answer: 'Vu'
+    type: text
+
+  email (required) 98b246f0 form_submission[fields_attributes][2][email_value] email:
+    answer: 'alan.vu@example.com'
+    type: text
+
+  phone number (required) 27b99c08 form_submission[fields_attributes][3][phone_value] (222)555-0123:
+    answer: '(222)555-0123'
+    type: text
+
+  how did you hear about us? (required) 499b8ddb form_submission[fields_attributes][4][job_questions][403b71ccc61d1187d2f4d84be288a079][job_question_option_uid]:
+    answer: 'LinkedIn Ad (India)'
+    type: select
+
+  are you authorized to lawfully work for roku in the country to which you are applying? (required) 1fcb57a7 form_submission[fields_attributes][4][job_questions][cea71c2edf8ef8edbf6bdddeb0d10d51][job_question_option_uid]:
+    answer: 'Yes'
+    type: select
+
+  first name (required) f666088c form_submission[fields_attributes][0][string_value] first name:
+    answer: 'Alan'
+    type: text
+
+  last name (required) 583aad86 form_submission[fields_attributes][1][string_value] last name:
+    answer: 'Vu'
+    type: text
+
+  email (required) b563fec1 form_submission[fields_attributes][2][email_value] email:
+    answer: 'alan.vu@email.com'
+    type: text
+
+  phone number (required) 873a43db form_submission[fields_attributes][3][phone_value] (222)555-0123:
+    answer: '(222)555-0123'
+    type: text
+
+  how did you hear about us? (required) 46786e95 form_submission[fields_attributes][4][job_questions][e1c82899ece50a957199df8398e242c6][job_question_option_uid]:
+    answer: 'LinkedIn'
+    type: select
+
+  are you authorized to lawfully work for roku in the country to which you are applying? (required) 5e7ae14a form_submission[fields_attributes][4][job_questions][fd89daaaebe88b27bd8a3e9154cbab2c][job_question_option_uid]:
+    answer: 'Yes'
+    type: select
+
+  first name (required) a0ca0215 form_submission[fields_attributes][0][string_value] first name:
+    answer: 'Alan'
+    type: text
+
+  last name (required) 9cf18d03 form_submission[fields_attributes][1][string_value] last name:
+    answer: 'Vu'
+    type: text
+
+  email (required) 5940d8b5 form_submission[fields_attributes][2][email_value] email:
+    answer: 'alan.vu@email.com'
+    type: text
+
+  phone number (required) d4c2a9d3 form_submission[fields_attributes][3][phone_value] (222)555-0123:
+    answer: '(222)555-0123'
+    type: text
+
+  how did you hear about us? (required) 33d7d422 form_submission[fields_attributes][4][job_questions][b00cd1dfd2643b7eb8f46b01b3d627e5][job_question_option_uid]:
+    answer: 'LinkedIn'
+    type: select
+
+  are you authorized to lawfully work for roku in the country to which you are applying? (required) 73b2ef41 form_submission[fields_attributes][4][job_questions][63125a41fb1f4b86205feca0baa212d3][job_question_option_uid]:
+    answer: 'Yes'
+    type: select
+
+  what are your salary expectations?:
+    answer: 'Open to discuss'
+    type: textarea
+
+  will you now or in the future require assa abloy to commence (sponsor) an immigration case in order to employ you (for example, h-1b or other employment-based immigration cases)?:
+    answer: 'No'
+    type: textarea
+
+  first name (required) b29594bb form_submission[fields_attributes][0][string_value] first name:
+    answer: 'Alan'
+    type: text
+
+  last name (required) 0286dfd8 form_submission[fields_attributes][1][string_value] last name:
+    answer: 'Vu'
+    type: text
+
+  email (required) 7b525f28 form_submission[fields_attributes][2][email_value] email:
+    answer: 'alan.vu@gmail.com'
+    type: text
+
+  phone number (required) 6ec72c5d form_submission[fields_attributes][3][phone_value] (222)555-0123:
+    answer: '(222) 555-0123'
+    type: text
+
+  how did you hear about us? (required) 4ae6a053 form_submission[fields_attributes][4][job_questions][27a94458f107f791a504b5506fde8f69][job_question_option_uid]:
+    answer: 'LinkedIn'
+    type: select
+
+  are you authorized to lawfully work for roku in the country to which you are applying? (required) 788264a8 form_submission[fields_attributes][4][job_questions][6046aed9a6acb3972809ccb65ac2a27f][job_question_option_uid]:
+    answer: 'Yes'
+    type: select
+
+  first name (required) abf35738 form_submission[fields_attributes][0][string_value] first name:
+    answer: 'Alan'
+    type: text
+
+  last name (required) e38ea5f0 form_submission[fields_attributes][1][string_value] last name:
+    answer: 'Vu'
+    type: text
+
+  email (required) 443421c6 form_submission[fields_attributes][2][email_value] email:
+    answer: 'alan.vu@gmail.com'
+    type: text
+
+  phone number (required) f45f47c8 form_submission[fields_attributes][3][phone_value] (222)555-0123:
+    answer: '(222)555-0123'
+    type: text
+
+  how did you hear about us? (required) 39657f04 form_submission[fields_attributes][4][job_questions][c56e6d28873d2d4870a0b4d4bc698b75][job_question_option_uid]:
+    answer: 'LinkedIn'
+    type: select
+
+  are you authorized to lawfully work for roku in the country to which you are applying? (required) 8f58f5b1 form_submission[fields_attributes][4][job_questions][80f5afbc7e6fe43869c45b984ab48f7e][job_question_option_uid]:
+    answer: 'Yes'
+    type: select
+
+  what are your salary expectations?:
+    answer: 'Open to discuss'
+    type: textarea
+
+  will you now or in the future require assa abloy to commence (sponsor) an immigration case in order to employ you (for example, h-1b or other employment-based immigration cases)?:
+    answer: 'No'
+    type: textarea
+
+  address input-yjva0fw8:
+    answer: 'San Jose, CA'
+    type: text
+
+  country input-ytt00fww:
+    answer: 'United States'
+    type: select
+
+  state input-ylva0fwa:
+    answer: 'California'
+    type: select
+
+  work status input-yatq0fwd:
+    answer: 'US Alien Authorized to Work'
+    type: select
+
+  "today's date input-date8":
+    answer: 'October 26, 2023'
+    type: text
+
+  "today's date input-date21":
+    answer: 'June 10, 2024'
+    type: text
+
+  name input-f35:
+    answer: 'Alan Vu'
+    type: text
+
+  date input-date36:
+    answer: '06/18/2024'
+    type: text
+
+  what is your current major? input-f5:
+    answer: 'Software Engineering'
+    type: text
+
+  please enter your expected graduation date (mm/yyyy). input-date14:
+    answer: 'May 2026'
+    type: text
+
+  what is your current major? input-f5:
+    answer: 'Software Engineering'
+    type: text
+
+  please enter your expected graduation date (mm/yyyy). input-date14:
+    answer: 'May 2026'
+    type: text
+
+  what is your current major? input-f5:
+    answer: 'Software Engineering'
+    type: text
+
+  please enter your expected graduation date (mm/yyyy). input-date14:
+    answer: 'May 2026'
+    type: text
+
+  what is your current major? input-f5:
+    answer: 'Software Engineering'
+    type: text
+
+  please enter your expected graduation date (mm/yyyy). input-date14:
+    answer: 'May 2026'
+    type: text
+
+  what is your current major? input-f5:
+    answer: 'Software Engineering'
+    type: text
+
+  please enter your expected graduation date (mm/yyyy). input-date14:
+    answer: 'May 2026'
+    type: text
+
+  what is your current major? input-f5:
+    answer: 'Software Engineering'
+    type: text
+
+  please enter your expected graduation date (mm/yyyy). input-date14:
+    answer: 'May 2026'
+    type: text
+
+  first name (required) eafb49c3 form_submission[fields_attributes][0][string_value] first name:
+    answer: 'Alan'
+    type: text
+
+  last name (required) f3f3a545 form_submission[fields_attributes][1][string_value] last name:
+    answer: 'Vu'
+    type: text
+
+  email (required) 1a4ebce1 form_submission[fields_attributes][2][email_value] email:
+    answer: 'alan.vu@gmail.com'
+    type: text
+
+  phone number (required) 0b2b270e form_submission[fields_attributes][3][phone_value] (222)555-0123:
+    answer: '(222)555-0123'
+    type: text
+
+  how did you hear about us? (required) b944dab7 form_submission[fields_attributes][4][job_questions][57f4240000f1d31031e835a4115e08cb][job_question_option_uid]:
+    answer: 'LinkedIn Ad (India)'
+    type: select
+
+  are you authorized to lawfully work for roku in the country to which you are applying? (required) 2334dd46 form_submission[fields_attributes][4][job_questions][8d5788dd51345d8378a0805a8752991f][job_question_option_uid]:
+    answer: 'Yes'
+    type: select
+
+  first name (required) fd141222 form_submission[fields_attributes][0][string_value] first name:
+    answer: 'Alan'
+    type: text
+
+  last name (required) 77a742a6 form_submission[fields_attributes][1][string_value] last name:
+    answer: 'Vu'
+    type: text
+
+  email (required) c98e28e1 form_submission[fields_attributes][2][email_value] email:
+    answer: 'alan.vu@gmail.com'
+    type: text
+
+  phone number (required) fb0d0c6a form_submission[fields_attributes][3][phone_value] (222)555-0123:
+    answer: '(222)555-0123'
+    type: text
+
+  how did you hear about us? (required) c8008735 form_submission[fields_attributes][4][job_questions][73f12fdca18ff9089c633b9087925530][job_question_option_uid]:
+    answer: 'LinkedIn Ad (India)'
+    type: select
+
+  are you authorized to lawfully work for roku in the country to which you are applying? (required) 30558a69 form_submission[fields_attributes][4][job_questions][a909e14fcf47ab627c2bfa94ec280270][job_question_option_uid]:
+    answer: 'Yes'
+    type: select
+
+  s search...:
+    answer: 'Yes'
+    type: text
+
+  what are your hourly salary expectations?:
+    answer: 'Open to discuss'
+    type: textarea
+
+  cover_letter:
+    answer: 'I am writing to express my strong interest in this position. As a Software Engineering
+student at San Jose State University with hands-on experience in full-stack development
+and data engineering, I am confident I can make a meaningful contribution to your team.
+My recent work at Kruiz involved building data pipelines processing 831K+ records,
+automated web scraping systems, and AI-powered search infrastructure. I look forward
+to the opportunity to discuss how my skills align with your team''s needs.'
+    type: textarea
+
+  qa_11399409:
+    answer: 'I am highly enthusiastic about the Firmware Engineering Co-Op position at [Company], eager to apply my'
+    type: textarea
+
+  ca_10917:
+    answer: 'Eager to apply my C programming skills and software engineering foundation to firmware development. I''m excited'
+    type: text
+
+  qa_11399410:
+    answer: 'Please provide the actual question text for QA_11399410. Without the'
+    type: text
+
+  qa_11399411:
+    answer: 'Eager to apply my software engineering skills (Java, Python, C) and learn firmware development'
+    type: text
+
+  address line 1  addressline1:
+    answer: '[Candidate''s Street Address Line 1]'
+    type: text
+
+  region1:
+    answer: 'San Francisco Bay Area, CA'
+    type: text
+
+  region2:
+    answer: 'Currently based in the San Francisco Bay Area, I am enthusiastic about contributing to [Company]''s Mobility team.'
+    type: text
+
+  postalcode:
+    answer: '95192'
+    type: text
+
+  can you please share your salary requirements (range)? 300000640256848:
+    answer: 'Open to discuss'
+    type: text
+
+  gender us-standard-ora_gender-standard:
+    answer: 'Prefer not to say.'
+    type: text
+
+  veteran self-identification status us-ddf-veteranselfidentification-per_information14:
+    answer: 'I am not a protected veteran'
+    type: text
+
+  what is your expected year of graduation?:
+    answer: 'Yes'
+    type: textarea
+
+  "if you're currently enrolled in a college or university, kindly indicate your current academic year.":
+    answer: 'Yes'
+    type: textarea
+
+  if currently enrolled in a college or university, please indicate your major.:
+    answer: 'Yes'
+    type: textarea
+
+  postal code  postalcode:
+    answer: '95112'
+    type: text
+
+  veteran self-identification status us-ddf-veteranselfidentification-per_information14:
+    answer: 'I am not a protected veteran'
+    type: text
+
+  zip code  postalcode:
+    answer: '95192'
+    type: text
+
+  city  city:
+    answer: 'San Jose, California'
+    type: text
+
+  attachment-upload:
+    answer: 'My resume is attached for your review. My LinkedIn and GitHub profiles are also provided for further details'
+    type: text
+
+  first name firstname:
+    answer: 'Alan'
+    type: text
+
+  last name lastname:
+    answer: 'Vu'
+    type: text
+
+  county  region1:
+    answer: 'Santa Clara County'
+    type: text
+
+  state  region2:
+    answer: 'California, USA.'
+    type: text
+
+  can you please share your salary requirements (range)? 300000640256848:
+    answer: 'Open to discuss'
+    type: text
+
+  veteran self-identification status us-ddf-veteranselfidentification-per_information14:
+    answer: 'I am not a protected veteran'
+    type: text
+
+  "while we don't require any cover letter as a part of our application, we understand you might want to share more than just your resume. is there anything else you'd like to share with our team at arcline? (optional)":
+    answer: 'I''m a U.S. citizen available to start full-time in May 2026 and flexible on location.
+I have experience building production systems at a startup (Kruiz) and am comfortable
+working independently or on a team. Happy to discuss any aspect of my background further.'
+    type: textarea
+
+  school:
+    answer: 'San Jose State University'
+    type: text
+
+  what is your work location preference?:
+    answer: 'Open to both — I am available for SF hybrid or remote'
+    type: select
+
+  first name (required) 26d5ac5e form_submission[fields_attributes][0][string_value] first name:
+    answer: 'Alan'
+    type: text
+
+  last name (required) f9f92ed3 form_submission[fields_attributes][1][string_value] last name:
+    answer: 'Vu'
+    type: text
+
+  email (required) fb595064 form_submission[fields_attributes][2][email_value] email:
+    answer: 'alan.vu@email.com'
+    type: text

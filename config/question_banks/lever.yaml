@@ -298,3 +298,123 @@ questions:
   zoox careers page:
     answer: Online Job Board
     type: select
+
+  current location no location found. try entering a different locationloading:
+    answer: 'San Jose, CA'
+    type: text
+
+  he/him:
+    answer: 'He/him'
+    type: text
+
+  current location ✱no location found. try entering a different locationloading:
+    answer: 'San Jose, CA'
+    type: text
+
+  twitter url:
+    answer: 'N/A'
+    type: text
+
+  yes, i am 18 years or older:
+    answer: 'Yes'
+    type: select
+
+  less than 2 years:
+    answer: 'Yes'
+    type: select
+
+  30,000 - 40,000:
+    answer: '30,000 - 40,000'
+    type: select
+
+  10-20:
+    answer: '10-20'
+    type: select
+
+  bioagilytix has my consent to contact me about future job opportunities.:
+    answer: 'Yes'
+    type: select
+
+  he/him:
+    answer: 'He/him'
+    type: text
+
+  current location ✱no location found. try entering a different locationloading:
+    answer: 'San Jose, CA'
+    type: text
+
+  linkedin url:
+    answer: 'https://www.linkedin.com/in/Alan-Duc-Vu'
+    type: text
+
+  twitter url:
+    answer: 'N/A'
+    type: text
+
+  github url:
+    answer: 'https://github.com/alanvu2440'
+    type: text
+
+  yes, i am 18 years or older:
+    answer: 'Yes'
+    type: select
+
+  "white / caucasian: hispanic, latino, or spanish origin":
+    answer: 'No'
+    type: select
+
+  current location no location found. try entering a different locationloading:
+    answer: 'San Jose, CA'
+    type: text
+
+  less than 2 years:
+    answer: 'Yes'
+    type: select
+
+  bioagilytix has my consent to contact me about future job opportunities.:
+    answer: 'Yes'
+    type: select
+
+  less than 2 years:
+    answer: 'Yes'
+    type: select
+
+  he/him:
+    answer: 'He/him'
+    type: text
+
+  current location ✱no location found. try entering a different locationloading:
+    answer: 'San Jose, CA'
+    type: text
+
+  current company:
+    answer: 'Kruiz'
+    type: text
+
+  linkedin url:
+    answer: 'https://www.linkedin.com/in/Alan-Duc-Vu'
+    type: text
+
+  twitter url:
+    answer: 'N/A'
+    type: text
+
+  github url:
+    answer: 'https://github.com/alanvu2440'
+    type: text
+
+  current location no location found. try entering a different locationloading:
+    answer: 'San Jose, CA'
+    type: text
+
+  current company:
+    answer: 'Kruiz'
+    type: text
+
+  linkedin url:
+    answer: 'https://www.linkedin.com/in/Alan-Duc-Vu'
+    type: text
+
+  github url:
+    answer: 'https://github.com/alanvu2440'
+    type: text
