@@ -61,9 +61,6 @@ class GreenhouseHandler(BaseHandler):
             # Dismiss any popups
             await self.dismiss_popups(page)
 
-            # Click Simplify autofill button NOW (on listing page — extension is visible here)
-            await self.wait_for_extension_autofill(page)
-
             # Check for CAPTCHA
             if not await self.handle_captcha(page):
                 return False
@@ -76,8 +73,8 @@ class GreenhouseHandler(BaseHandler):
                     return False
                 await self.browser_manager.human_delay(1000, 2000)
 
-                # Re-trigger Simplify on the form page (it was only triggered on the listing page)
-                await self.wait_for_extension_autofill(page)
+            # Trigger Simplify autofill ONLY on the form page (not the listing page)
+            await self.wait_for_extension_autofill(page)
 
             # Detect form type
             form_type = await self.detect_form_type(page)
