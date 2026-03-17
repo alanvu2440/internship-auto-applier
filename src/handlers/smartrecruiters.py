@@ -1816,6 +1816,10 @@ class SmartRecruitersHandler(BaseHandler):
         CSS containers.  Uses config regex patterns first, then AI answerer.
         """
         try:
+            # Scroll to top to ensure all form fields are in viewport
+            await nd_page.evaluate("window.scrollTo(0, 0)")
+            await asyncio.sleep(0.5)
+
             # Pre-scan: log what form elements exist on page for debugging
             try:
                 prescan = await nd_page.evaluate("""
