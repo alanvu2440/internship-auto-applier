@@ -403,9 +403,9 @@ Role: {role}
         # Write to primary bank file
         try:
             _write_to_bank_file(bank_file)
-            logger.debug(f"Auto-learned question to {bank_file.name}: '{norm_q[:50]}' -> '{templatized[:30]}'")
+            logger.info(f"AUTO-LEARN [{source}] -> {bank_file.name}: '{norm_q[:60]}' = '{templatized[:40]}'")
         except Exception as e:
-            logger.debug(f"Failed to auto-learn question to {bank_file}: {e}")
+            logger.warning(f"AUTO-LEARN FAILED ({bank_file}): {e}")
 
         # Cross-bank: also write to common.yaml if we wrote to an ATS-specific bank
         common_path = Path("config/question_banks/common.yaml")

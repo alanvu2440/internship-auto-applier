@@ -866,6 +866,13 @@ class BaseHandler(ABC):
             after_empty = sum(1 for v in after_snapshot.values() if not v)
             logger.info(f"Simplify filled {net_filled} fields ({len(newly_filled)} new, {len(changed)} updated)")
             logger.debug(f"Simplify snapshot: before={len(before_snapshot)} fields ({before_empty} empty), after={len(after_snapshot)} fields ({after_empty} empty)")
+            # Log which fields Simplify filled so we can spot wrong values
+            if newly_filled:
+                for fk, fv in list(newly_filled.items())[:15]:
+                    logger.debug(f"  [SIMPLIFY NEW] {fk} = '{str(fv)[:60]}'")
+            if changed:
+                for fk, fv in list(changed.items())[:10]:
+                    logger.debug(f"  [SIMPLIFY CHG] {fk}: '{before_snapshot.get(fk, '')[:30]}' -> '{str(fv)[:60]}'")
 
             # Secondary verification via Playwright's input_value() on critical fields
             # This catches React-managed values that JS el.value misses
