@@ -3062,3 +3062,55 @@ building scalable systems.'
   in which language(s) are you fluent (spoken) other than english?:
     answer: 'English (fluent), Vietnamese (conversational)'
     type: select
+
+  are you able to be located at dw office location for the summer of 2026?:
+    answer: 'Yes'
+    type: select
+
+  "if you don't currently hold a security clearance, are you open to being considered for security clearance sponsorship?":
+    answer: 'No'
+    type: select
+
+  "voluntary self-identification: for government reporting purposes, we ask candidates to respond to the below self-identification survey. completion of the form is entirely voluntary. whatever your decision, it will not be considered in the hiring process or thereafter. any information that you do provide will be recorded and maintained in a confidential file. as set forth in dark wolf solutions’s equal employment opportunity policy, we do not discriminate on the basis of any protected group status under any applicable law. gender:":
+    answer: 'Prefer not to say'
+    type: select
+
+  voluntary self-identification for government reporting purposes, we ask candidates to respond to the below self-identification survey. completion of the form is entirely voluntary. whatever your decision, it will not be considered in the hiring process or thereafter. any information that you do provide will be recorded and maintained in a confidential file. as set forth in dark wolf solutions’s equal employment opportunity policy, we do not discriminate on the basis of any protected group status under any applicable law. are you hispanic/latino?:
+    answer: 'No'
+    type: select
+
+  "if you believe you belong to any of the categories of protected veterans listed below, please indicate by making the appropriate selection. as a government contractor subject to the vietnam era veterans readjustment assistance act (vevraa), we request this information in order to measure the effectiveness of the outreach and positive recruitment efforts we undertake pursuant to vevraa. classification of protected categories is as follows: a \"disabled veteran\" is one of the following: a veteran of the u.s. military, ground, naval or air service who is entitled to compensation (or who but for the receipt of military retired pay would be entitled to compensation) under laws administered by the secretary of veterans affairs; or a person who was discharged or released from active duty because of a service-connected disability. a \"recently separated veteran\" means any veteran during the three-year period beginning on the date of such veteran's discharge or release from active duty in the u.s. military, ground, naval, or air service. an \"active duty wartime or campaign badge veteran\" means a veteran who served on active duty in the u.s. military, ground, naval or air service during a war, or in a campaign or expedition for which a campaign badge has been authorized under the laws administered by the department of defense. an \"armed forces service medal veteran\" means a veteran who, while serving on active duty in the u.s. military, ground, naval or air service, participated in a united states military operation for which an armed forces service medal was awarded pursuant to executive order 12985. veteran status:":
+    answer: 'I am not a protected veteran'
+    type: select
+
+  "form cc-305 omb control number 1250-0005 expires 05/31/2023 voluntary self-identification of disability why are you being asked to complete this form? we are a federal contractor or subcontractor required by law to provide equal employment opportunity to qualified people with disabilities. we are also required to measure our progress toward having at least 7% of our workforce be individuals with disabilities. to do this, we must ask applicants and employees if they have a disability or have ever had a disability. because a person may become disabled at any time, we ask all of our employees to update their information at least every five years. identifying yourself as an individual with a disability is voluntary, and we hope that you will choose to do so. your answer will be maintained confidentially and not be seen by selecting officials or anyone else involved in making personnel decisions. completing the form will not negatively impact you in any way, regardless of whether you have self-identified in the past. for more information about this form or the equal employment obligations of federal contractors under section 503 of the rehabilitation act, visit the u.s. department of labor’s office of federal contract compliance programs (ofccp) website at www.dol.gov/ofccp. how do you know if you have a disability? you are considered to have a disability if you have a physical or mental impairment or medical condition that substantially limits a major life activity, or if you have a history or record of such an impairment or medical condition. disabilities include, but are not limited to: autism; autoimmune disorder, for example, lupus, fibromyalgia, rheumatoid arthritis, or hiv/aids; blind or low vision; cancer; cardiovascular or heart disease; celiac disease; cerebral palsy; deaf or hard of hearing; depression or anxiety; diabetes; epilepsy; gastrointestinal disorders, for example, crohn's disease, or irritable bowel syndrome; intellectual disability; missing limbs or partially missing limbs; nervous system condition for example, migraine headaches, parkinson’s disease, or multiple sclerosis (ms); psychiatric condition, for example, bipolar disorder, schizophrenia, ptsd, or major depression. disability status:":
+    answer: 'I don''t wish to answer'
+    type: select
+
+  are you authorized to work in canada?:
+    answer: 'No'
+    type: select
+
+  are at least 18 years or older?:
+    answer: 'Yes'
+    type: select
+
+  do you have a high school diploma, or have you successfully passed a high school equivalency exam such as the ged?:
+    answer: 'Evergreen Valley High School'
+    type: select
+
+  do you have a high school diploma, or have you successfully passed a high school equivalency exam such as the ged?:
+    answer: 'Evergreen Valley High School'
+    type: select
+
+  as part of our hiring process, 2k will conduct a pre-employment background check. we may also require written verification from your current employer that you have ended your employment.:
+    answer: 'Kruiz'
+    type: select
+
+  as part of our hiring process, 2k will conduct a pre-employment background check. we may also require written verification from your current employer that you have ended your employment.:
+    answer: 'Kruiz'
+    type: select
+
+  are you local to the burnaby area (or open to relocation) and are willing to come into the office 2 days a week?:
+    answer: 'Yes'
+    type: select
