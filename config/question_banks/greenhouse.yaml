@@ -55,6 +55,30 @@ questions:
   applicant privacy acknowledgement:
     answer: 'Yes'
     type: select
+  applicant privacy notice:
+    answer: Acknowledge / Confirm
+    type: select
+  "applicant privacy notice*":
+    answer: Acknowledge / Confirm
+    type: select
+  "applicant & employee privacy policy*":
+    answer: Acknowledge / Confirm
+    type: select
+  "applicant & employee privacy policy":
+    answer: Acknowledge / Confirm
+    type: select
+  ? "this is an internship role that will require about 3 days/week be spent onsite at our headquarters located in south austin (near dripping springs). are you willing to work onsite 3 days/week and do you have transportation to get to work?"
+  : answer: 'Yes'
+    type: select
+  "are you willing to work onsite 3 days/week":
+    answer: 'Yes'
+    type: select
+  desired salary or hourly rate:
+    answer: '20'
+    type: text
+  "desired salary or hourly rate*":
+    answer: '20'
+    type: text
   are any of your immediate family members practicing health care professionals that may use or purchase heartflow products?:
     answer: 'No'
     type: select
@@ -765,8 +789,8 @@ questions:
     answer: Bachelor of Science
     type: select
   desired salary or hourly rate:
-    answer: Hourly
-    type: select
+    answer: '20'
+    type: text
   did a comstock/parkx employee refer you to this position?:
     answer: 'No'
     type: select

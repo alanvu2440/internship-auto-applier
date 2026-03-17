@@ -1564,3 +1564,49 @@ working independently or on a team. Happy to discuss any aspect of my background
   email (required) fb595064 form_submission[fields_attributes][2][email_value] email:
     answer: 'alan.vu@email.com'
     type: text
+
+  city city:
+    answer: 'San Jose'
+    type: text
+
+  province  region3:
+    answer: 'Not applicable; based in California, USA.'
+    type: text
+
+  "please select your annual base salary expectations: 300000021318269":
+    answer: 'Open to discuss'
+    type: text
+
+  how did you hear about this position and/or about definity? 300000021318288:
+    answer: 'Online Job Board'
+    type: text
+
+  what is your desired salary? 300000037459106:
+    answer: 'As an aspiring software engineer seeking a summer internship, I am open to discussing the compensation range for'
+    type: textarea
+
+  candidate source list candidatesourcelist:
+    answer: 'LinkedIn'
+    type: text
+
+  full name fullname:
+    answer: 'Alan Vu'
+    type: text
+
+  why are you interested in an internship at seaspan and what are you hoping to gain from this internship?:
+    answer: 'I''m drawn to the innovative work being done at this company and see a strong
+alignment with my skills in full-stack development, data engineering, and
+building scalable systems.'
+    type: textarea
+
+  describe a recent work experience/project that has equipped you with the necessary skills to be successful in this role?:
+    answer: 'I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy
+using Monte Carlo simulation and Random Forest models trained on 1,700+ fights. It has
+a FastAPI backend, React frontend, and PostgreSQL database deployed on GCP Cloud Run.
+I''m proud of it because it combines my interests in data engineering and full-stack
+development into one end-to-end system.'
+    type: textarea
+
+  "if you have applied to more than one internship at seaspan, please select your top two preferences below: 300000033431506":
+    answer: '300000033431506 (Intern Waterfront Change'
+    type: text

@@ -2556,6 +2556,29 @@ class GreenhouseHandler(BaseHandler):
             end_month = month_names[now.month - 1]
             end_year = str(now.year)
 
+        # Ensure work experience section is expanded — click "Add Work Experience" if needed
+        company_field = await page.query_selector('input#company-name-0, input[id*="company-name"]')
+        if not company_field:
+            for add_sel in [
+                'button:has-text("Add Work Experience")',
+                'button:has-text("Add Employment")',
+                'a:has-text("Add Work Experience")',
+                'button:has-text("Add Another Employment")',
+                '[data-qa="add-employment"]',
+                'button[aria-label*="employment" i]',
+                'button[aria-label*="work experience" i]',
+            ]:
+                try:
+                    btn = await page.query_selector(add_sel)
+                    if btn and await btn.is_visible():
+                        await btn.click()
+                        await asyncio.sleep(0.8)
+                        logger.info(f"Clicked '{add_sel}' to expand work experience section")
+                        break
+                except Exception as e:
+                    logger.debug(f"Work experience expand: '{add_sel}' failed: {e}")
+                    continue
+
         # ── TEXT FIELDS: company-name-0, title-0 ──────────────────────
         text_fields = {
             "company-name": company,
@@ -4184,7 +4207,9 @@ class GreenhouseHandler(BaseHandler):
         try:
             # PHASE 1: Force-fill education fields by ID (school--0, degree--0, etc.)
             # Also handles non-standard IDs like education-7--school, education-9--degree
-            edu = self.form_filler.config.get("education", {})
+            # education is a list in config — grab first entry
+            edu_raw = self.form_filler.config.get("education", {})
+            edu = edu_raw[0] if isinstance(edu_raw, list) and edu_raw else (edu_raw if isinstance(edu_raw, dict) else {})
             edu_fields = {
                 "school": edu.get("school", "San Jose State University"),
                 "degree": edu.get("degree", "Bachelor's Degree"),
@@ -4294,8 +4319,9 @@ class GreenhouseHandler(BaseHandler):
                     }
                     const displayValue = sv.textContent.trim();
 
-                    // Find the container and look for empty type="text" or type="hidden" inputs
-                    let container = ctrl.closest('.field, .select, [class*="field"], [class*="question"]');
+                    // Find the container — try wide first (application-question) then narrow
+                    let container = ctrl.closest('.application-question, [class*="question"], .field, .select, [class*="field"]');
+                    if (!container) container = ctrl.parentElement?.parentElement?.parentElement?.parentElement;
                     if (!container) container = ctrl.parentElement?.parentElement?.parentElement;
                     if (!container) continue;
 
@@ -4333,6 +4359,41 @@ class GreenhouseHandler(BaseHandler):
                 logger.info(f"PRE-SUBMIT INJECT: Injected {len(injected)} empty inputs from React-Select display values")
             else:
                 logger.debug("PRE-SUBMIT INJECT: No empty inputs found needing injection")
+
+            # PHASE 3: Direct scan for question_* empty text inputs — find nearest React-Select display value
+            # Catches inputs Phase 2 missed (different DOM structure / no .select__control ancestor)
+            phase3_injected = await page.evaluate('''() => {
+                const results = [];
+                const desc = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value");
+                if (!desc || !desc.set) return results;
+                const nativeSetter = desc.set;
+                const questionInputs = document.querySelectorAll('input[id^="question_"]');
+                for (const inp of questionInputs) {
+                    if (inp.type === "hidden") continue;
+                    if (inp.getAttribute("role") === "combobox") continue;
+                    if (inp.id.includes("react-select")) continue;
+                    const val = inp.value ? inp.value.trim() : "";
+                    if (val !== "") continue; // already filled (possibly by Phase 2)
+                    let el = inp.parentElement;
+                    for (let k = 0; k < 6 && el; k++) {
+                        const sv = el.querySelector(".select__single-value, [class*=singleValue]");
+                        if (sv) {
+                            const trimmed = sv.textContent.trim();
+                            if (trimmed && trimmed !== "Select...") {
+                                nativeSetter.call(inp, trimmed);
+                                inp.dispatchEvent(new Event("input", { bubbles: true }));
+                                inp.dispatchEvent(new Event("change", { bubbles: true }));
+                                results.push({ inputId: inp.id, value: trimmed });
+                                break;
+                            }
+                        }
+                        el = el.parentElement;
+                    }
+                }
+                return results;
+            }''')
+            for item in (phase3_injected or []):
+                logger.info(f"PRE-SUBMIT INJECT P3: Set {item['inputId']} = {item['value']}")
 
         except Exception as e:
             logger.debug(f"Error in pre-submit inject: {e}")
@@ -4636,7 +4697,18 @@ class GreenhouseHandler(BaseHandler):
                     # Check for email verification code field (appears AFTER first submit)
                     verified = await self._handle_email_verification(page)
                     if verified:
-                        logger.info("Verification code entered — re-submitting")
+                        logger.info("Verification code entered — checking reCAPTCHA before re-submitting")
+                        await self.browser_manager.human_delay(500, 1000)
+                        # Re-solve reCAPTCHA only if page still has one (token consumed by first submit)
+                        try:
+                            has_captcha = await page.evaluate('() => !!document.querySelector(".g-recaptcha, [data-sitekey], iframe[src*=recaptcha]")')
+                            if has_captcha:
+                                await self.solve_invisible_recaptcha(page)
+                                logger.info("Re-solved reCAPTCHA after verification code")
+                            else:
+                                logger.debug("No reCAPTCHA detected after verification — skipping re-solve")
+                        except Exception as e:
+                            logger.debug(f"reCAPTCHA re-solve check failed: {e}")
                         await self.browser_manager.human_delay(500, 1000)
                         # Re-click submit after entering verification code
                         btn2 = await page.query_selector(selector)

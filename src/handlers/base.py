@@ -340,6 +340,22 @@ class BaseHandler(ABC):
                             if (rsContainer.classList && rsContainer.classList.contains('select')) break;
                             rsContainer = rsContainer.parentElement;
                         }
+                        // Also check globally: if this input is a question_* field,
+                        // see if the surrounding section has a selected React-Select value
+                        if (!isReactSelectFilled && (inp.id || '').startsWith('question_')) {
+                            const section = inp.closest('.field, .application-question, [class*="question"], [class*="field"]');
+                            if (section) {
+                                const sv = section.querySelector('.select__single-value, [class*="singleValue"]');
+                                if (sv && sv.textContent.trim()) isReactSelectFilled = true;
+                                // Also check if placeholder is absent (means a value was selected)
+                                const ctrl = section.querySelector('.select__control, [class*="select__control"]');
+                                if (ctrl) {
+                                    const ph = ctrl.querySelector('.select__placeholder, [class*="placeholder"]');
+                                    const vc = ctrl.querySelector('.select__value-container, [class*="ValueContainer"]');
+                                    if (!ph && vc && vc.textContent.trim()) isReactSelectFilled = true;
+                                }
+                            }
+                        }
                         if (!isReactSelectFilled) {
                             empty.push(labelText || inp.name || inp.id || "unknown_field");
                         }
