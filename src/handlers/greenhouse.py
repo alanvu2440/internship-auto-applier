@@ -2706,11 +2706,18 @@ class GreenhouseHandler(BaseHandler):
                     except Exception:
                         continue
 
+                if not inp:
+                    logger.debug(f"Work experience date '{field_id_base}' input not found by selector — trying React-Select dropdown")
+
                 if inp:
                     current_val = await inp.evaluate('(el) => el.value')
                     if current_val and current_val.strip():
-                        logger.debug(f"Work experience date '{field_id_base}' already has value: {current_val}")
-                        continue
+                        # Override if our config value differs (Simplify may have filled wrong year)
+                        if current_val.strip() == value:
+                            logger.debug(f"Work experience date '{field_id_base}' already correct: {current_val}")
+                            continue
+                        else:
+                            logger.info(f"Work experience date '{field_id_base}' has wrong value '{current_val}' — overriding with '{value}'")
 
                     # Force-set hidden input value
                     safe_val = value.replace("\\", "\\\\").replace('"', '\\"')
