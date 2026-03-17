@@ -94,6 +94,9 @@ questions:
   "do you currently live within a 60-mile radius of houston, tx?*":
     answer: 'No'
     type: select
+  do you have a high school diploma, or have you successfully passed a high school equivalency exam such as the ged?:
+    answer: 'Yes'
+    type: select
   which practice area of dark wolf solutions do you feel you most align with?:
     answer: 'Software Engineering'
     type: checkbox
