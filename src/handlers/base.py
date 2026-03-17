@@ -862,7 +862,10 @@ class BaseHandler(ABC):
                       if v and before_snapshot.get(k) and before_snapshot[k] != v}
 
             net_filled = len(newly_filled) + len(changed)
+            before_empty = sum(1 for v in before_snapshot.values() if not v)
+            after_empty = sum(1 for v in after_snapshot.values() if not v)
             logger.info(f"Simplify filled {net_filled} fields ({len(newly_filled)} new, {len(changed)} updated)")
+            logger.debug(f"Simplify snapshot: before={len(before_snapshot)} fields ({before_empty} empty), after={len(after_snapshot)} fields ({after_empty} empty)")
 
             # Secondary verification via Playwright's input_value() on critical fields
             # This catches React-managed values that JS el.value misses

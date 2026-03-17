@@ -289,23 +289,28 @@ Role: {role}
         # 1. Try common bank FIRST (cross-ATS answers available immediately)
         if self._common_bank:
             if norm in self._common_bank:
+                logger.debug(f"Bank lookup: COMMON exact match for '{norm[:50]}'")
                 return self._common_bank[norm]
             norm_clean = norm.rstrip('?. ')
             for key, val in self._common_bank.items():
                 if key.startswith(norm_clean[:40]) or norm_clean.startswith(key[:40]):
+                    logger.debug(f"Bank lookup: COMMON prefix match '{key[:50]}' for '{norm[:50]}'")
                     return val
 
         # 2. Try template-specific bank
         if ats_type and ats_type in self._template_banks:
             bank = self._template_banks[ats_type]
             if norm in bank:
+                logger.debug(f"Bank lookup: {ats_type} exact match for '{norm[:50]}'")
                 return bank[norm]
             # Try fuzzy: strip trailing punctuation and try prefix match
             norm_clean = norm.rstrip('?. ')
             for key, val in bank.items():
                 if key.startswith(norm_clean[:40]) or norm_clean.startswith(key[:40]):
+                    logger.debug(f"Bank lookup: {ats_type} prefix match '{key[:50]}' for '{norm[:50]}'")
                     return val
 
+        logger.debug(f"Bank lookup: MISS for '{norm[:50]}' (ats={ats_type})")
         return None
 
     def _normalize_for_bank(self, question: str) -> str:

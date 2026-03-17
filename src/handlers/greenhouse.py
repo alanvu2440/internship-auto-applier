@@ -1817,6 +1817,7 @@ class GreenhouseHandler(BaseHandler):
                     pass
 
             if not found:
+                logger.warning(f"React-Select fill FAILED for {inp_id}: answer={answer[:30]!r}, question={question_text[:50]!r} — all strategies exhausted")
                 await self._get_keyboard(page).press("Escape")
                 return False
 
@@ -4297,8 +4298,7 @@ class GreenhouseHandler(BaseHandler):
                 except Exception as e:
                     logger.debug(f"PRE-SUBMIT INJECT: Failed to force-fill date {field_id}: {e}")
 
-            if edu_injected:
-                logger.info(f"PRE-SUBMIT INJECT: Force-filled {edu_injected} education/date fields")
+            logger.info(f"PRE-SUBMIT INJECT P1: Scanned {len(edu_fields)} edu fields + dates, injected {edu_injected}")
 
             # PHASE 2: Generic React-Select injection for other dropdowns
             injected = await page.evaluate('''() => {
@@ -4389,8 +4389,10 @@ class GreenhouseHandler(BaseHandler):
                 }
                 return results;
             }''')
+            p3_count = len(phase3_injected or [])
             for item in (phase3_injected or []):
                 logger.info(f"PRE-SUBMIT INJECT P3: Set {item['inputId']} = {item['value']}")
+            logger.info(f"PRE-SUBMIT INJECT P3: Scanned question_* inputs, injected {p3_count}")
 
         except Exception as e:
             logger.debug(f"Error in pre-submit inject: {e}")
@@ -4543,6 +4545,8 @@ class GreenhouseHandler(BaseHandler):
 
         # ── PRE-SUBMIT VALIDATION: Check all fields are filled ──────────
         validation = await self._pre_submit_validation(page)
+        logger.info(f"PRE-SUBMIT V1: passed={validation['passed']}, fill_rate={validation.get('dropdown_fill_pct', '?')}%, "
+                     f"empty_dropdowns={validation.get('empty_dropdowns', [])}, empty_required={validation.get('empty_required', [])}")
         if not validation["passed"]:
             logger.warning("PRE-SUBMIT: Empty fields detected — attempting retry fill...")
 
@@ -4604,6 +4608,8 @@ class GreenhouseHandler(BaseHandler):
 
             # Re-validate after retry
             validation2 = await self._pre_submit_validation(page)
+            logger.info(f"PRE-SUBMIT V2: passed={validation2['passed']}, fill_rate={validation2.get('dropdown_fill_pct', '?')}%, "
+                         f"empty_dropdowns={validation2.get('empty_dropdowns', [])}, empty_required={validation2.get('empty_required', [])}")
             if not validation2["passed"]:
                 empty_count = len(validation2["empty_dropdowns"]) + len(validation2["empty_required"])
                 if len(validation2["empty_required"]) > 0:
