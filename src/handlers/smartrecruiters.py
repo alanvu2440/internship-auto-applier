@@ -2174,9 +2174,10 @@ class SmartRecruitersHandler(BaseHandler):
                         )
 
                     if not answer:
-                        logger.warning(f"No answer for screening Q: '{question_text[:40]}'")
+                        logger.warning(f"SR FILL: No answer for '{question_text[:50]}' (type={field_type}, options={options[:3] if options else 'none'})")
                         continue
 
+                    logger.info(f"SR FILL: '{question_text[:50]}' -> '{answer[:40]}' (type={field_type})")
                     # Fill the answer based on field type
                     escaped_answer = answer.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n")
 
