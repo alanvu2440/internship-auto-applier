@@ -908,3 +908,68 @@ questions:
   did someone refer you to this company? if so, please provide the referrers name.:
     answer: 'No'
     type: text
+
+  # === EXPERIAN + SILFAB SOLAR COMMON SR QUESTIONS ===
+  are you currently an employee at experian?:
+    answer: 'No'
+    type: select
+  what is your desired salary?:
+    answer: 'Open to discuss'
+    type: text
+  are you currently subject to a non-compete and/or non-solicit agreement with a current or former employer?:
+    answer: 'No'
+    type: select
+  how did you first hear about the position you applied for?:
+    answer: 'Online Job Board'
+    type: select
+  have you ever been employed by experian, either as an experian employee or worked with experian, as a contractor or consultant?:
+    answer: 'No'
+    type: select
+  are you currently enrolled in a phd degree program in computer science, physics, or a related field?:
+    answer: 'No'
+    type: select
+  will you be returning to school in the fall of 2026 to complete your degree?:
+    answer: 'Yes'
+    type: select
+  do you have 0-3 years' experience in analytics, data mining, or predictive modeling?:
+    answer: 'Yes'
+    type: select
+  do you have experience with regression, neural network or ensemble methods?:
+    answer: 'Yes'
+    type: select
+  do you have knowledge in chatgpt, gemini, copilot or other genai tools?:
+    answer: 'Yes'
+    type: select
+  are you at least 18 years of age?:
+    answer: 'Yes'
+    type: select
+  do you currently work for silfab solar or have you previously been employed by us?:
+    answer: 'No'
+    type: select
+  have you ever been terminated from or asked to leave any previous position?:
+    answer: 'No'
+    type: select
+  are you willing to undergo a post offer drug screen and background check, in accordance with local laws and regulations?:
+    answer: 'Yes'
+    type: select
+  do you consent to this?:
+    answer: 'Yes'
+    type: select
+  have you been convicted, pleaded guilty or no contest to a crime, or are criminal charges pending against you?:
+    answer: 'No'
+    type: select
+  what are your salary requirements?:
+    answer: 'Open to discuss'
+    type: text
+  if offered this position, how soon would you like to start?:
+    answer: 'Within 2 weeks'
+    type: text
+  i certify that i have read and understood the job description for the position i am applying for.:
+    answer: 'Yes'
+    type: checkbox
+  are you hispanic or latino?:
+    answer: 'No'
+    type: select
+  you declare that you have read and understand the privacy notice:
+    answer: 'Yes'
+    type: checkbox
