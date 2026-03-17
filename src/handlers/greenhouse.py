@@ -511,17 +511,9 @@ class GreenhouseHandler(BaseHandler):
             if uploaded:
                 await self._verify_resume_upload(target)
 
-        # Upload cover letter ONLY if there's a clearly labeled cover letter field
-        cover_letter_path = self._resolve_file_path(self.form_filler.config.get("files", {}).get("cover_letter"))
-        if cover_letter_path:
-            has_cl_field = await target.query_selector(
-                'input[type="file"][data-field*="cover"], input[type="file"][name*="cover"], '
-                'input[type="file"]#cover_letter, input[type="file"][id*="cover"]'
-            )
-            if has_cl_field:
-                await self._upload_cover_letter(target, cover_letter_path)
-            else:
-                logger.debug("No cover letter field found — skipping upload")
+        # Cover letter DISABLED — skip unless field is explicitly required
+        # Generic AI cover letters hurt more than help (obvious AI slop)
+        logger.debug("Cover letter upload skipped (disabled — not submitting AI-generated cover letters)")
 
         # Upload transcript if available
         transcript_path = self._resolve_file_path(self.form_filler.config.get("files", {}).get("transcript"))

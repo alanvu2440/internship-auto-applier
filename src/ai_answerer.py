@@ -1196,9 +1196,9 @@ Role: {role}
             (r"how many years.*(experience|work).*(with|in|using)\s+(\w+)",
              None),  # Handled by _get_language_years below
 
-            # Cover letter text (if no file)
+            # Cover letter — skip (don't submit AI-generated cover letters)
             (r"cover.?letter",
-             common.get("cover_letter_text", "Please see my attached resume for details on my experience and qualifications.")),
+             "__SKIP__"),
         ]
 
         # Check text patterns
