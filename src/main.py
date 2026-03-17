@@ -1286,6 +1286,133 @@ class InternshipAutoApplier:
             report_path = self.tracker.save_session_report()
             logger.info(f"Session report saved: {report_path}")
 
+        # Generate failure digest for debugging
+        await self._generate_failure_digest()
+
+    async def _generate_failure_digest(self):
+        """Generate a failure digest after each batch for debugging."""
+        try:
+            import json, glob
+            from datetime import datetime
+            from pathlib import Path
+
+            # Get all failed jobs from this session's log
+            log_path = Path("logs/applier.log")
+            if not log_path.exists():
+                return
+
+            # Read recent failures from the application logs
+            failed_dir = Path("data/applications/failed")
+            if not failed_dir.exists():
+                return
+
+            # Get failures from the last hour
+            now = datetime.now()
+            recent_failures = []
+            for fail_dir in sorted(failed_dir.iterdir(), reverse=True):
+                if not fail_dir.is_dir():
+                    continue
+                # Parse timestamp from dir name (Company_Role_YYYYMMDD_HHMMSS)
+                try:
+                    parts = fail_dir.name.rsplit("_", 2)
+                    if len(parts) >= 3:
+                        ts = datetime.strptime(f"{parts[-2]}_{parts[-1]}", "%Y%m%d_%H%M%S")
+                        if (now - ts).total_seconds() > 7200:  # Last 2 hours
+                            break
+                        # Read the log file
+                        log_file = fail_dir / "application.json"
+                        if log_file.exists():
+                            with open(log_file) as f:
+                                data = json.load(f)
+                            recent_failures.append({
+                                "company": data.get("company", "?"),
+                                "role": data.get("role", "?"),
+                                "ats": data.get("ats_type", "?"),
+                                "error": data.get("error_message", "?"),
+                                "url": data.get("url", ""),
+                                "timestamp": str(ts),
+                            })
+                except (ValueError, json.JSONDecodeError):
+                    continue
+
+            if not recent_failures:
+                return
+
+            # Also extract POST-SUBMIT errors from the log
+            error_map = {}
+            try:
+                with open(log_path) as f:
+                    lines = f.readlines()
+                for i, line in enumerate(lines):
+                    if "Error element:" in line and "text='" in line:
+                        text = line.split("text='", 1)[1].rsplit("'", 1)[0].strip()
+                        if text and len(text) > 3:
+                            # Find which company this belongs to (look back for "Applying to")
+                            for j in range(max(0, i - 100), i):
+                                if "Applying to:" in lines[j]:
+                                    company = lines[j].split("Applying to:")[-1].split("—")[0].strip()
+                                    error_map.setdefault(company, []).append(text)
+                                    break
+            except Exception:
+                pass
+
+            # Write digest
+            digest_path = Path("data/batch_failure_digest.md")
+            with open(digest_path, "w") as f:
+                f.write(f"# Batch Failure Digest\n")
+                f.write(f"Generated: {now.strftime('%Y-%m-%d %H:%M')}\n")
+                f.write(f"Failures: {len(recent_failures)}\n\n")
+
+                # Group by fix type
+                missing_bank = []
+                checkbox_issues = []
+                form_bugs = []
+                other = []
+
+                for fail in recent_failures:
+                    company = fail["company"]
+                    errors = error_map.get(company, [])
+                    error_text = "; ".join(errors[:3]) if errors else fail.get("error", "unknown")
+
+                    if "checkbox" in error_text.lower():
+                        checkbox_issues.append((fail, error_text))
+                    elif "required" in error_text.lower() or "empty" in error_text.lower():
+                        missing_bank.append((fail, error_text))
+                    elif "resume" in error_text.lower() or "date" in error_text.lower():
+                        form_bugs.append((fail, error_text))
+                    else:
+                        other.append((fail, error_text))
+
+                if missing_bank:
+                    f.write("## Missing Bank Entries (retryable)\n")
+                    for fail, err in missing_bank:
+                        f.write(f"- **{fail['company']}** — {fail['role']}\n")
+                        f.write(f"  Error: `{err[:100]}`\n")
+                        f.write(f"  URL: {fail['url']}\n\n")
+
+                if checkbox_issues:
+                    f.write("## Checkbox Issues (needs handler fix)\n")
+                    for fail, err in checkbox_issues:
+                        f.write(f"- **{fail['company']}** — {fail['role']}\n")
+                        f.write(f"  Error: `{err[:100]}`\n\n")
+
+                if form_bugs:
+                    f.write("## Form-Specific Bugs (skip)\n")
+                    for fail, err in form_bugs:
+                        f.write(f"- **{fail['company']}** — {fail['role']}\n")
+                        f.write(f"  Error: `{err[:100]}`\n\n")
+
+                if other:
+                    f.write("## Other Failures\n")
+                    for fail, err in other:
+                        f.write(f"- **{fail['company']}** — {fail['role']}\n")
+                        f.write(f"  Error: `{err[:100]}`\n\n")
+
+            logger.info(f"Failure digest saved: {digest_path} ({len(recent_failures)} failures)")
+
+        except Exception as e:
+            logger.debug(f"Failed to generate failure digest: {e}")
+
     async def _skip_all_ats_jobs(self, ats_type: str, reason: str) -> int:
         """Skip ALL pending jobs for a given ATS type. Used when spam is detected."""
         try:
