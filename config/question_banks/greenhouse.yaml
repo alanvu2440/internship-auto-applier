@@ -88,6 +88,15 @@ questions:
   "are you a veteran or active member of the united states armed forces?*":
     answer: 'I am not a protected veteran'
     type: select
+  do you currently live within a 60-mile radius of houston, tx?:
+    answer: 'No'
+    type: select
+  "do you currently live within a 60-mile radius of houston, tx?*":
+    answer: 'No'
+    type: select
+  which practice area of dark wolf solutions do you feel you most align with?:
+    answer: 'Software Engineering'
+    type: checkbox
   are any of your immediate family members practicing health care professionals that may use or purchase heartflow products?:
     answer: 'No'
     type: select
@@ -3113,4 +3122,12 @@ building scalable systems.'
 
   are you local to the burnaby area (or open to relocation) and are willing to come into the office 2 days a week?:
     answer: 'Yes'
+    type: select
+
+  are you related to, or in a shared housing situation with, anyone who currently works for sie or any sie-affiliated studios?:
+    answer: 'No'
+    type: select
+
+  do you currently live within a 60-mile radius of houston, tx?:
+    answer: 'San Jose, CA'
     type: select
