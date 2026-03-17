@@ -345,7 +345,7 @@ class BaseHandler(ABC):
                         if (!isReactSelectFilled && (inp.id || '').startsWith('question_')) {
                             const section = inp.closest('.application-question, .field');
                             if (section) {
-                                const sv = section.querySelector('.select__single-value, [class*="singleValue"]');
+                                const sv = section.querySelector('.select__single-value, [class*="singleValue"], [class*="single-value"]');
                                 if (sv && sv.textContent.trim()) isReactSelectFilled = true;
                                 // Also check if placeholder is absent (means a value was selected)
                                 const ctrl = section.querySelector('.select__control, [class*="select__control"]');

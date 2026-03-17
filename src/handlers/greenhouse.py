@@ -4319,8 +4319,8 @@ class GreenhouseHandler(BaseHandler):
                     }
                     const displayValue = sv.textContent.trim();
 
-                    // Find the container — try wide first (application-question) then narrow
-                    let container = ctrl.closest('.application-question, [class*="question"], .field, .select, [class*="field"]');
+                    // Find the container — narrow scope to avoid cross-question injection
+                    let container = ctrl.closest('.application-question, .field');
                     if (!container) container = ctrl.parentElement?.parentElement?.parentElement?.parentElement;
                     if (!container) container = ctrl.parentElement?.parentElement?.parentElement;
                     if (!container) continue;
