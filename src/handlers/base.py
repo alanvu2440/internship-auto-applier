@@ -351,7 +351,7 @@ class BaseHandler(ABC):
                                 const ctrl = section.querySelector('.select__control, [class*="select__control"]');
                                 if (ctrl) {
                                     const ph = ctrl.querySelector('.select__placeholder, [class*="placeholder"]');
-                                    const vc = ctrl.querySelector('.select__value-container, [class*="ValueContainer"]');
+                                    const vc = ctrl.querySelector('.select__value-container, [class*="ValueContainer"], [class*="value-container"]');
                                     if (!ph && vc && vc.textContent.trim()) isReactSelectFilled = true;
                                 }
                             }
@@ -694,8 +694,7 @@ class BaseHandler(ABC):
                     '.simplify-jobs-shadow-root >> button:has-text("Autofill this page")',
                     '.simplify-jobs-shadow-root >> [role="button"]:has-text("Autofill this page")',
                     '.simplify-jobs-shadow-root >> a:has-text("Autofill this page")',
-                    '.simplify-jobs-shadow-root >> button:has-text("Autofill")',
-                    '.simplify-jobs-shadow-root >> [role="button"]:has-text("Autofill")',
+                    '.simplify-jobs-shadow-root >> button:has-text("Autofill this page again")',
                 ]:
                     try:
                         btn = page.locator(sel).first
@@ -783,9 +782,9 @@ class BaseHandler(ABC):
                     else:
                         # Step 3: Playwright shadow-piercing selectors as fallback
                         for autofill_sel in [
-                            '.simplify-jobs-shadow-root >> button:has-text("Autofill")',
-                            '.simplify-jobs-shadow-root >> [role="button"]:has-text("Autofill")',
-                            'button:has-text("Autofill")',
+                            '.simplify-jobs-shadow-root >> button:has-text("Autofill this page")',
+                            '.simplify-jobs-shadow-root >> [role="button"]:has-text("Autofill this page")',
+                            '.simplify-jobs-shadow-root >> button:has-text("Autofill this page again")',
                         ]:
                             try:
                                 btn = page.locator(autofill_sel).first

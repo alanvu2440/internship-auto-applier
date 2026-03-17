@@ -83,10 +83,10 @@ questions:
     answer: 'New York'
     type: select
   are you a veteran or active member of the united states armed forces?:
-    answer: 'No'
+    answer: 'I am not a protected veteran'
     type: select
   "are you a veteran or active member of the united states armed forces?*":
-    answer: 'No'
+    answer: 'I am not a protected veteran'
     type: select
   are any of your immediate family members practicing health care professionals that may use or purchase heartflow products?:
     answer: 'No'
