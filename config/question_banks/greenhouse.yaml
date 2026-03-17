@@ -73,6 +73,21 @@ questions:
   "are you willing to work onsite 3 days/week":
     answer: 'Yes'
     type: select
+  privacy:
+    answer: 'I agree'
+    type: select
+  "privacy *":
+    answer: 'I agree'
+    type: select
+  what is your preferred work location?:
+    answer: 'New York'
+    type: select
+  are you a veteran or active member of the united states armed forces?:
+    answer: 'No'
+    type: select
+  "are you a veteran or active member of the united states armed forces?*":
+    answer: 'No'
+    type: select
   are any of your immediate family members practicing health care professionals that may use or purchase heartflow products?:
     answer: 'No'
     type: select
@@ -862,7 +877,7 @@ questions:
     answer: San Jose, CA
     type: select
   do you currently reside in the greater seattle area?:
-    answer: San Jose, CA
+    answer: 'No'
     type: select
   do you currently reside in the state of kansas or missouri?:
     answer: San Jose, CA
@@ -3027,3 +3042,23 @@ building scalable systems.'
   hours per week:
     answer: '40'
     type: text
+
+  years of work experience:
+    answer: '1'
+    type: select
+
+  what is your preferred work location?:
+    answer: 'New York'
+    type: select
+
+  in which language(s) are you fluent (written) other than english?:
+    answer: 'English (fluent), Vietnamese (conversational)'
+    type: select
+
+  privacy:
+    answer: 'I agree'
+    type: select
+
+  in which language(s) are you fluent (spoken) other than english?:
+    answer: 'English (fluent), Vietnamese (conversational)'
+    type: select

@@ -1610,3 +1610,23 @@ development into one end-to-end system.'
   "if you have applied to more than one internship at seaspan, please select your top two preferences below: 300000033431506":
     answer: 'Software Engineering'
     type: text
+
+  years of work experience:
+    answer: '1'
+    type: select
+
+  what is your preferred work location?:
+    answer: 'New York'
+    type: select
+
+  in which language(s) are you fluent (written) other than english?:
+    answer: 'English (fluent), Vietnamese (conversational)'
+    type: select
+
+  privacy:
+    answer: 'I agree'
+    type: select
+
+  in which language(s) are you fluent (spoken) other than english?:
+    answer: 'English (fluent), Vietnamese (conversational)'
+    type: select
