@@ -343,7 +343,7 @@ class BaseHandler(ABC):
                         // Also check globally: if this input is a question_* field,
                         // see if the surrounding section has a selected React-Select value
                         if (!isReactSelectFilled && (inp.id || '').startsWith('question_')) {
-                            const section = inp.closest('.field, .application-question, [class*="question"], [class*="field"]');
+                            const section = inp.closest('.application-question, .field');
                             if (section) {
                                 const sv = section.querySelector('.select__single-value, [class*="singleValue"]');
                                 if (sv && sv.textContent.trim()) isReactSelectFilled = true;

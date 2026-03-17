@@ -2558,7 +2558,7 @@ class GreenhouseHandler(BaseHandler):
 
         # Ensure work experience section is expanded — click "Add Work Experience" if needed
         company_field = await page.query_selector('input#company-name-0, input[id*="company-name"]')
-        if not company_field:
+        if not company_field or not await company_field.is_visible():
             for add_sel in [
                 'button:has-text("Add Work Experience")',
                 'button:has-text("Add Employment")',
@@ -4697,18 +4697,15 @@ class GreenhouseHandler(BaseHandler):
                     # Check for email verification code field (appears AFTER first submit)
                     verified = await self._handle_email_verification(page)
                     if verified:
-                        logger.info("Verification code entered — checking reCAPTCHA before re-submitting")
+                        logger.info("Verification code entered — re-solving reCAPTCHA before re-submitting")
                         await self.browser_manager.human_delay(500, 1000)
-                        # Re-solve reCAPTCHA only if page still has one (token consumed by first submit)
-                        try:
-                            has_captcha = await page.evaluate('() => !!document.querySelector(".g-recaptcha, [data-sitekey], iframe[src*=recaptcha]")')
-                            if has_captcha:
-                                await self.solve_invisible_recaptcha(page)
-                                logger.info("Re-solved reCAPTCHA after verification code")
-                            else:
-                                logger.debug("No reCAPTCHA detected after verification — skipping re-solve")
-                        except Exception as e:
-                            logger.debug(f"reCAPTCHA re-solve check failed: {e}")
+                        # Re-solve reCAPTCHA (token consumed by first submit)
+                        # solve_invisible_recaptcha already no-ops when no CAPTCHA is present
+                        captcha_ok = await self.solve_invisible_recaptcha(page)
+                        if captcha_ok:
+                            logger.info("Re-solved reCAPTCHA after verification code")
+                        else:
+                            logger.debug("reCAPTCHA re-solve returned False (may not be needed)")
                         await self.browser_manager.human_delay(500, 1000)
                         # Re-click submit after entering verification code
                         btn2 = await page.query_selector(selector)

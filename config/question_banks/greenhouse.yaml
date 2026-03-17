@@ -73,12 +73,6 @@ questions:
   "are you willing to work onsite 3 days/week":
     answer: 'Yes'
     type: select
-  desired salary or hourly rate:
-    answer: '20'
-    type: text
-  "desired salary or hourly rate*":
-    answer: '20'
-    type: text
   are any of your immediate family members practicing health care professionals that may use or purchase heartflow products?:
     answer: 'No'
     type: select

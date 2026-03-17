@@ -1582,7 +1582,7 @@ working independently or on a team. Happy to discuss any aspect of my background
     type: text
 
   what is your desired salary? 300000037459106:
-    answer: 'As an aspiring software engineer seeking a summer internship, I am open to discussing the compensation range for'
+    answer: 'Open to discuss'
     type: textarea
 
   candidate source list candidatesourcelist:
@@ -1590,7 +1590,7 @@ working independently or on a team. Happy to discuss any aspect of my background
     type: text
 
   full name fullname:
-    answer: 'Alan Vu'
+    answer: FULL_NAME_FROM_CONFIG
     type: text
 
   why are you interested in an internship at seaspan and what are you hoping to gain from this internship?:
