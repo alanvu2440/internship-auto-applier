@@ -2022,14 +2022,66 @@ class SmartRecruitersHandler(BaseHandler):
                             }
                         }
 
-                        // Strategy 3: walk up parents (up to 4 levels), look for child <p>/<label>/<legend>
+                        // Strategy 2c: SR-specific — check sr-question-field-* host element text
+                        // SR forms wrap each question in <sr-question-field-text> or <sr-question-field-select>
+                        // These hold the label text as their overall textContent (minus the input value)
                         if (!lbl) {
-                            var parent = el.parentElement;
-                            for (var up = 0; up < 4 && parent && !lbl; up++) {
-                                var kids = parent.children;
+                            var sqfEl = el;
+                            var sqfDepth = 0;
+                            while (sqfEl && sqfDepth < 8 && !lbl) {
+                                sqfDepth++;
+                                var sqfTag = (sqfEl.tagName || '').toLowerCase();
+                                if (sqfTag.indexOf('sr-question-field') === 0 ||
+                                    sqfTag.indexOf('oc-question-field') === 0 ||
+                                    sqfTag.indexOf('sr-question') === 0) {
+                                    // The textContent of this element IS the label (extract without child input text)
+                                    // Use the label attribute if present, else try innerHTML text nodes
+                                    var sqfLbl = sqfEl.getAttribute('label') || sqfEl.getAttribute('aria-label') || '';
+                                    if (!sqfLbl) {
+                                        // Walk light DOM children looking for label/p/div before inputs
+                                        var sqfKids = sqfEl.children;
+                                        for (var sq = 0; sq < sqfKids.length; sq++) {
+                                            var sqt = sqfKids[sq].tagName.toLowerCase();
+                                            if (sqt === 'label' || sqt === 'p' || sqt === 'div' || sqt === 'span') {
+                                                var sqtxt = sqfKids[sq].textContent.trim();
+                                                if (sqtxt.length > 2 && sqtxt.length < 300) { sqfLbl = sqtxt; break; }
+                                            }
+                                            if (sqt.indexOf('spl-') === 0 || sqt.indexOf('sr-') === 0) break;
+                                        }
+                                    }
+                                    // Also try the shadowRoot label element
+                                    if (!sqfLbl && sqfEl.shadowRoot) {
+                                        var sqfShadowLbl = sqfEl.shadowRoot.querySelector('label, .label, legend, [class*="label"]');
+                                        if (sqfShadowLbl) sqfLbl = sqfShadowLbl.textContent.trim();
+                                    }
+                                    if (sqfLbl && sqfLbl.length > 2) lbl = sqfLbl;
+                                }
+                                // Walk up through shadow DOM boundaries too
+                                var nextP = sqfEl.parentElement;
+                                if (!nextP && sqfEl.getRootNode) {
+                                    var rn3 = sqfEl.getRootNode();
+                                    nextP = (rn3 && rn3.host) ? rn3.host : null;
+                                }
+                                sqfEl = nextP;
+                            }
+                        }
+
+                        // Strategy 3: walk up parents (up to 6 levels), look for child label-like elements
+                        if (!lbl) {
+                            var parentW = el;
+                            for (var up = 0; up < 6 && parentW && !lbl; up++) {
+                                // Cross shadow DOM boundary if needed
+                                var parentEl = parentW.parentElement;
+                                if (!parentEl && parentW.getRootNode) {
+                                    var rn3b = parentW.getRootNode();
+                                    parentEl = (rn3b && rn3b.host) ? rn3b.host : null;
+                                }
+                                parentW = parentEl;
+                                if (!parentW) break;
+                                var kids = parentW.children;
                                 for (var k = 0; k < kids.length; k++) {
                                     var ktag = kids[k].tagName.toLowerCase();
-                                    if ((ktag === 'p' || ktag === 'label' || ktag === 'legend' || ktag === 'span')
+                                    if ((ktag === 'p' || ktag === 'label' || ktag === 'legend' || ktag === 'span' || ktag === 'div' || ktag === 'h3' || ktag === 'h4')
                                         && kids[k] !== el) {
                                         var txt = kids[k].textContent.trim();
                                         if (txt.length > 2 && txt.length < 300) {
@@ -2038,13 +2090,12 @@ class SmartRecruitersHandler(BaseHandler):
                                         }
                                     }
                                 }
-                                parent = parent.parentElement;
                             }
                         }
 
                         // Strategy 4: closest question/field container
                         if (!lbl) {
-                            var container = el.closest('.field, .form-group, [class*="field"], [class*="question"], [class*="screening"], oc-question, fieldset, .spl-mb-1, .spl-flex-col');
+                            var container = el.closest('.field, .form-group, [class*="field"], [class*="question"], [class*="screening"], oc-question, fieldset, .spl-mb-1, .spl-flex-col, sr-question-field-text, sr-question-field-select');
                             if (container) {
                                 var l2 = container.querySelector('label, legend, .label, p, span.question-text, [class*="question"], [class*="label"]');
                                 if (l2 && l2 !== el) lbl = l2.textContent.trim();
