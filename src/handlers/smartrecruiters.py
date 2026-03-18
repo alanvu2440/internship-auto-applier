@@ -1852,7 +1852,7 @@ class SmartRecruitersHandler(BaseHandler):
                 prescan = await nd_page.evaluate(_DEEP_QUERY_JS + """
                     (function() {
                         var s = deepQueryAll(document, 'spl-select').length;
-                        var i = deepQueryAll(document, 'spl-input').length;
+                        var i = deepQueryAll(document, 'spl-input').length + deepQueryAll(document, 'spl-number-field').length;
                         var t = deepQueryAll(document, 'spl-textarea').length;
                         var cb = deepQueryAll(document, 'spl-checkbox').length;
                         var r = deepQueryAll(document, 'fieldset, [role="radiogroup"], spl-radio').length;
@@ -1936,6 +1936,9 @@ class SmartRecruitersHandler(BaseHandler):
                     //   sr-screening-questions-form > shadow root > {form content}
                     // Working INSIDE that shadow root lets sibling/parent label walking work.
                     function findFormRoot() {
+                        // Return the shadow root of the OUTERMOST screening form container.
+                        // Do NOT drill deeper — form fields are nested inside oc-question
+                        // shadow roots within the form; deepQueryAll handles that in the scan.
                         var candidates = [
                             'sr-screening-questions-form',
                             'oc-screening-questions-form',
@@ -1944,20 +1947,8 @@ class SmartRecruitersHandler(BaseHandler):
                         for (var ci = 0; ci < candidates.length; ci++) {
                             var containers = deepQueryAll(document, candidates[ci]);
                             for (var ki = 0; ki < containers.length; ki++) {
-                                var sr = containers[ki].shadowRoot;
-                                if (!sr) continue;
-                                // Check if this shadow root has form fields
-                                if (sr.querySelectorAll('spl-input, spl-select, fieldset, input[type="radio"], input[type="text"]').length > 0) {
-                                    return sr;
-                                }
-                                // Check one level deeper (e.g. oc-question inside sr-screening-questions-form)
-                                var inner = sr.querySelectorAll('*');
-                                for (var ii = 0; ii < inner.length; ii++) {
-                                    if (inner[ii].shadowRoot && inner[ii].shadowRoot.querySelectorAll(
-                                        'spl-input, spl-select, fieldset, input[type="radio"], input[type="text"]'
-                                    ).length > 0) {
-                                        return inner[ii].shadowRoot;
-                                    }
+                                if (containers[ki].shadowRoot) {
+                                    return containers[ki].shadowRoot;
                                 }
                             }
                         }
@@ -2065,8 +2056,8 @@ class SmartRecruitersHandler(BaseHandler):
                     }
 
                     // === spl-select dropdowns (screening questions like work auth, education) ===
-                    // searchRoot is the shadow root containing the form — siblings/parents work correctly here
-                    var selects = searchRoot.querySelectorAll('spl-select');
+                    // deepQueryAll from searchRoot pierces oc-question shadow roots within the form
+                    var selects = deepQueryAll(searchRoot, 'spl-select');
                     for (var i = 0; i < selects.length; i++) {
                         var id = selects[i].id || 'spl-select-' + i;
                         var label = getLabel(selects[i]);
@@ -2095,8 +2086,9 @@ class SmartRecruitersHandler(BaseHandler):
                                         required: req, tagName: 'spl-select', idx: i, deep_idx: i});
                     }
 
-                    // === spl-input text fields (screening questions) ===
-                    var inputs = searchRoot.querySelectorAll('spl-input');
+                    // === spl-input / spl-number-field text fields (screening questions) ===
+                    // spl-number-field is used for numeric inputs (e.g. salary)
+                    var inputs = deepQueryAll(searchRoot, 'spl-input, spl-number-field');
                     for (var j = 0; j < inputs.length; j++) {
                         var jid = inputs[j].id || 'spl-input-' + j;
                         var jlabel = getLabel(inputs[j]);
@@ -2110,12 +2102,14 @@ class SmartRecruitersHandler(BaseHandler):
                         }
                         if (jval && jval.trim().length > 1) continue;
                         var jreq = inputs[j].hasAttribute('required');
+                        // Use actual tag name so fill knows whether it's spl-input or spl-number-field
+                        var jTagName = inputs[j].tagName.toLowerCase();
                         questions.push({id: jid, label: jlabel, type: 'text', options: [],
-                                        required: jreq, tagName: 'spl-input', idx: j, deep_idx: j});
+                                        required: jreq, tagName: jTagName, idx: j, deep_idx: j});
                     }
 
                     // === spl-textarea (longer answers) ===
-                    var textareas = searchRoot.querySelectorAll('spl-textarea');
+                    var textareas = deepQueryAll(searchRoot, 'spl-textarea');
                     for (var t = 0; t < textareas.length; t++) {
                         var tid = textareas[t].id || 'spl-textarea-' + t;
                         var tlabel = getLabel(textareas[t]);
@@ -2134,7 +2128,7 @@ class SmartRecruitersHandler(BaseHandler):
 
                     // === Radio groups (Yes/No screening, EEO) ===
                     // Look for fieldsets, spl-radio, or [role="radiogroup"] with labels
-                    var radioGroups = searchRoot.querySelectorAll(
+                    var radioGroups = deepQueryAll(searchRoot,
                         'fieldset, [role="radiogroup"], spl-radio'
                     );
                     for (var r = 0; r < radioGroups.length; r++) {
@@ -2173,7 +2167,7 @@ class SmartRecruitersHandler(BaseHandler):
                     }
 
                     // === Standard HTML selects not inside spl-* ===
-                    var htmlSelects = searchRoot.querySelectorAll('select');
+                    var htmlSelects = deepQueryAll(searchRoot, 'select');
                     for (var h = 0; h < htmlSelects.length; h++) {
                         // Skip if inside an spl-select (already handled)
                         if (htmlSelects[h].closest('spl-select')) continue;
@@ -2447,14 +2441,16 @@ class SmartRecruitersHandler(BaseHandler):
                         )
                         logger.info(f"Textarea fill: '{question_text[:30]}' -> {filled}")
 
-                    else:  # text input
-                        # deepQueryAll js_finder for spl-input inside nested shadow DOM
+                    else:  # text input (spl-input or spl-number-field)
+                        # deepQueryAll js_finder for spl-input/spl-number-field inside nested shadow DOM
                         txt_deep_idx = q.get('deep_idx', q_idx)
                         txt_actual_id = q.get('id', '')
+                        txt_tag_name = q.get('tagName', 'spl-input')  # may be spl-number-field
+                        txt_selector = f'{txt_tag_name}, spl-input, spl-number-field'
                         txt_js_finder = (
                             _DEEP_QUERY_JS + f"""
                             (function() {{
-                                var allInp = deepQueryAll(document, 'spl-input');
+                                var allInp = deepQueryAll(document, '{txt_selector}');
                                 var host = null;
                                 var qId = '{txt_actual_id}';
                                 if (qId && qId.indexOf('spl-input-') !== 0) {{
