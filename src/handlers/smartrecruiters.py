@@ -1970,13 +1970,16 @@ class SmartRecruitersHandler(BaseHandler):
                             if (l) lbl = l.textContent.trim();
                         }
 
-                        // Strategy 2: walk previous siblings looking for <p>, <label>, <legend>, <span>
+                        // Strategy 2: walk previous siblings looking for label-like elements
                         // SR renders screening questions as <p>Question?</p> <spl-input>...
+                        // OR as <div class="...">Question?</div> <spl-input>...
                         if (!lbl) {
                             var prev = el.previousElementSibling;
-                            while (prev && !lbl) {
+                            var prevDepth = 0;
+                            while (prev && !lbl && prevDepth < 5) {
+                                prevDepth++;
                                 var tag = prev.tagName.toLowerCase();
-                                if (tag === 'p' || tag === 'label' || tag === 'legend' || tag === 'span') {
+                                if (tag === 'p' || tag === 'label' || tag === 'legend' || tag === 'span' || tag === 'div' || tag === 'h3' || tag === 'h4') {
                                     var ptxt = prev.textContent.trim();
                                     if (ptxt.length > 2 && ptxt.length < 300) {
                                         lbl = ptxt;
@@ -1988,6 +1991,34 @@ class SmartRecruitersHandler(BaseHandler):
                                     break;
                                 }
                                 prev = prev.previousElementSibling;
+                            }
+                        }
+
+                        // Strategy 2b: if inside oc-question shadow root, look at the host's light DOM siblings
+                        if (!lbl) {
+                            var root = el.getRootNode();
+                            if (root && root.host && root.host.tagName) {
+                                var hostTag = root.host.tagName.toLowerCase();
+                                if (hostTag === 'oc-question' || hostTag === 'sr-screening-questions-form') {
+                                    // Look at siblings of the oc-question host element
+                                    var hostPrev = root.host.previousElementSibling;
+                                    var hDepth = 0;
+                                    while (hostPrev && !lbl && hDepth < 3) {
+                                        hDepth++;
+                                        var htag = hostPrev.tagName.toLowerCase();
+                                        if (htag === 'p' || htag === 'label' || htag === 'div' || htag === 'span') {
+                                            var htxt = hostPrev.textContent.trim();
+                                            if (htxt.length > 2 && htxt.length < 300) lbl = htxt;
+                                        }
+                                        if (htag === 'oc-question' || htag === 'spl-input' || htag === 'spl-select') break;
+                                        hostPrev = hostPrev.previousElementSibling;
+                                    }
+                                    // Also check inside oc-question's OWN shadow root for label text
+                                    if (!lbl && root.host.shadowRoot) {
+                                        var labelEl = root.host.shadowRoot.querySelector('label, .label, [class*="label"], p, legend');
+                                        if (labelEl && labelEl.textContent.trim().length > 2) lbl = labelEl.textContent.trim();
+                                    }
+                                }
                             }
                         }
 
