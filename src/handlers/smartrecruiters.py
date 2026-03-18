@@ -2633,18 +2633,24 @@ class SmartRecruitersHandler(BaseHandler):
 
             if any(x in page_text_lower for x in [
                 "thank you for your application",
+                "thank you for applying",
+                "thanks for applying",
+                "thank you for your interest",
+                "application has been submitted",
                 "application received",
                 "application submitted",
                 "successfully applied",
                 "application complete",
                 "we have received your application",
+                "we've received your application",
+                "your application has been received",
             ]):
                 logger.info(f"Multi-step form submitted successfully at step {step + 1}!")
                 return True
 
             # Check URL for success
             curr_url = str(nd_page.url) if hasattr(nd_page, 'url') else ""
-            if any(x in curr_url.lower() for x in ["confirmation", "success", "thank"]):
+            if any(x in curr_url.lower() for x in ["confirmation", "success", "thank", "complete", "submitted"]):
                 logger.info(f"Multi-step success via URL: {curr_url}")
                 return True
 
