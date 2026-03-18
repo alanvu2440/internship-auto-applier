@@ -53,6 +53,28 @@ def _get_nodriver():
     return _nodriver
 
 
+# JS helper: recursively search all shadow roots for elements matching a CSS selector.
+# Use this instead of document.querySelectorAll() when elements may be inside nested
+# custom-element shadow roots (e.g. SR screening questions inside oc-screening-questions).
+_DEEP_QUERY_JS = """
+function deepQueryAll(root, selector) {
+    var results = [];
+    try {
+        var d = root.querySelectorAll(selector);
+        for (var _ii = 0; _ii < d.length; _ii++) results.push(d[_ii]);
+        var _allNodes = root.querySelectorAll('*');
+        for (var _jj = 0; _jj < _allNodes.length; _jj++) {
+            if (_allNodes[_jj].shadowRoot) {
+                var _sub = deepQueryAll(_allNodes[_jj].shadowRoot, selector);
+                for (var _kk = 0; _kk < _sub.length; _kk++) results.push(_sub[_kk]);
+            }
+        }
+    } catch(_e) {}
+    return results;
+}
+"""
+
+
 def _normalize_nd_result(val):
     """Normalize nodriver evaluate() results.
 
@@ -1399,41 +1421,46 @@ class SmartRecruitersHandler(BaseHandler):
             # Step 2: Get coordinates, focus inner input via JS, then use CDP to type
             escaped = text.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n")
 
-            # Find inner input, scroll into view, focus it, and get coordinates
-            setup_result = await nd_page.evaluate(f"""
-                (function() {{
-                    function findInput(root) {{
-                        if (!root) return null;
-                        var inp = root.querySelector('{input_selector}');
-                        if (inp) return inp;
-                        var all = root.querySelectorAll('*');
-                        for (var i = 0; i < all.length; i++) {{
-                            if (all[i].shadowRoot) {{ var f = findInput(all[i].shadowRoot); if (f) return f; }}
+            # Find inner input, scroll into view, focus it, and get coordinates.
+            # If js_finder is provided (e.g. for deep shadow DOM elements), use it as the
+            # complete setup evaluation — it must return {x, y, w, h, ...} or {error: '...'}.
+            if js_finder:
+                setup_result = await nd_page.evaluate(js_finder)
+            else:
+                setup_result = await nd_page.evaluate(f"""
+                    (function() {{
+                        function findInput(root) {{
+                            if (!root) return null;
+                            var inp = root.querySelector('{input_selector}');
+                            if (inp) return inp;
+                            var all = root.querySelectorAll('*');
+                            for (var i = 0; i < all.length; i++) {{
+                                if (all[i].shadowRoot) {{ var f = findInput(all[i].shadowRoot); if (f) return f; }}
+                            }}
+                            return null;
                         }}
-                        return null;
-                    }}
-                    var host = document.querySelector('{host_selector}');
-                    if (!host) return {{error: 'NO_HOST'}};
-                    var inp = host.shadowRoot ? findInput(host.shadowRoot) : null;
-                    if (!inp) return {{error: 'NO_INPUT'}};
-                    inp.scrollIntoView({{behavior: 'instant', block: 'center'}});
-                    // Focus the INNER input directly — critical for CDP events to target it
-                    inp.focus();
-                    var rect = inp.getBoundingClientRect();
-                    var focused = document.activeElement;
-                    var shadowFocused = focused && focused.shadowRoot ? focused.shadowRoot.activeElement : null;
-                    return {{
-                        x: rect.x + rect.width/2,
-                        y: rect.y + rect.height/2,
-                        w: rect.width,
-                        h: rect.height,
-                        activeTag: focused ? focused.tagName : 'none',
-                        activeId: focused ? focused.id : '',
-                        shadowActiveTag: shadowFocused ? shadowFocused.tagName : 'none',
-                        inputTag: inp.tagName
-                    }};
-                }})()
-            """)
+                        var host = document.querySelector('{host_selector}');
+                        if (!host) return {{error: 'NO_HOST'}};
+                        var inp = host.shadowRoot ? findInput(host.shadowRoot) : null;
+                        if (!inp) return {{error: 'NO_INPUT'}};
+                        inp.scrollIntoView({{behavior: 'instant', block: 'center'}});
+                        // Focus the INNER input directly — critical for CDP events to target it
+                        inp.focus();
+                        var rect = inp.getBoundingClientRect();
+                        var focused = document.activeElement;
+                        var shadowFocused = focused && focused.shadowRoot ? focused.shadowRoot.activeElement : null;
+                        return {{
+                            x: rect.x + rect.width/2,
+                            y: rect.y + rect.height/2,
+                            w: rect.width,
+                            h: rect.height,
+                            activeTag: focused ? focused.tagName : 'none',
+                            activeId: focused ? focused.id : '',
+                            shadowActiveTag: shadowFocused ? shadowFocused.tagName : 'none',
+                            inputTag: inp.tagName
+                        }};
+                    }})()
+                """)
             info = _normalize_nd_result(setup_result)
 
             if isinstance(info, dict) and info.get('error'):
@@ -1822,15 +1849,15 @@ class SmartRecruitersHandler(BaseHandler):
 
             # Pre-scan: log what form elements exist on page for debugging
             try:
-                prescan = await nd_page.evaluate("""
+                prescan = await nd_page.evaluate(_DEEP_QUERY_JS + """
                     (function() {
-                        var s = document.querySelectorAll('spl-select').length;
-                        var i = document.querySelectorAll('spl-input').length;
-                        var t = document.querySelectorAll('spl-textarea').length;
-                        var cb = document.querySelectorAll('spl-checkbox').length;
-                        var r = document.querySelectorAll('fieldset, [role="radiogroup"], spl-radio').length;
-                        var hs = document.querySelectorAll('select').length;
-                        var ac = document.querySelectorAll('spl-autocomplete').length;
+                        var s = deepQueryAll(document, 'spl-select').length;
+                        var i = deepQueryAll(document, 'spl-input').length;
+                        var t = deepQueryAll(document, 'spl-textarea').length;
+                        var cb = deepQueryAll(document, 'spl-checkbox').length;
+                        var r = deepQueryAll(document, 'fieldset, [role="radiogroup"], spl-radio').length;
+                        var hs = deepQueryAll(document, 'select').length;
+                        var ac = deepQueryAll(document, 'spl-autocomplete').length;
                         // Sample labels using sibling-walking approach
                         function findLabel(el) {
                             var lbl = el.getAttribute('label') || el.getAttribute('aria-label') || '';
@@ -1863,7 +1890,7 @@ class SmartRecruitersHandler(BaseHandler):
                             return lbl;
                         }
                         var labels = [];
-                        var sels = document.querySelectorAll('spl-select');
+                        var sels = deepQueryAll(document, 'spl-select');
                         for (var j = 0; j < Math.min(sels.length, 5); j++) {
                             var lbl = findLabel(sels[j]);
                             var sr = sels[j].shadowRoot;
@@ -1871,7 +1898,7 @@ class SmartRecruitersHandler(BaseHandler):
                             labels.push(lbl.substring(0, 40) + '(idx=' + selIdx + ')');
                         }
                         var inputLabels = [];
-                        var inps = document.querySelectorAll('spl-input');
+                        var inps = deepQueryAll(document, 'spl-input');
                         for (var j2 = 0; j2 < Math.min(inps.length, 5); j2++) {
                             inputLabels.push(findLabel(inps[j2]).substring(0, 40));
                         }
@@ -1886,8 +1913,10 @@ class SmartRecruitersHandler(BaseHandler):
                 logger.debug(f"Pre-scan failed: {ps_e}")
 
             # Detect ALL question fields on the page (spl-select, spl-input, spl-textarea, spl-radio)
-            # excluding standard personal info fields
-            questions_data = await nd_page.evaluate("""
+            # excluding standard personal info fields.
+            # deepQueryAll pierces nested shadow roots (SR screening Qs are inside
+            # oc-screening-questions → sr-screening-questions-form shadow DOM).
+            questions_data = await nd_page.evaluate(_DEEP_QUERY_JS + """
                 (function() {
                     var questions = [];
                     var knownIds = [
@@ -1999,7 +2028,8 @@ class SmartRecruitersHandler(BaseHandler):
                     }
 
                     // === spl-select dropdowns (screening questions like work auth, education) ===
-                    var selects = document.querySelectorAll('spl-select');
+                    // deepQueryAll pierces nested shadow roots
+                    var selects = deepQueryAll(document, 'spl-select');
                     for (var i = 0; i < selects.length; i++) {
                         var id = selects[i].id || 'spl-select-' + i;
                         var label = getLabel(selects[i]);
@@ -2025,11 +2055,11 @@ class SmartRecruitersHandler(BaseHandler):
                         if (inner && inner.selectedIndex > 0) continue;
                         var req = selects[i].hasAttribute('required');
                         questions.push({id: id, label: label, type: 'select', options: opts,
-                                        required: req, tagName: 'spl-select', idx: i});
+                                        required: req, tagName: 'spl-select', idx: i, deep_idx: i});
                     }
 
                     // === spl-input text fields (screening questions) ===
-                    var inputs = document.querySelectorAll('spl-input');
+                    var inputs = deepQueryAll(document, 'spl-input');
                     for (var j = 0; j < inputs.length; j++) {
                         var jid = inputs[j].id || 'spl-input-' + j;
                         var jlabel = getLabel(inputs[j]);
@@ -2044,11 +2074,11 @@ class SmartRecruitersHandler(BaseHandler):
                         if (jval && jval.trim().length > 1) continue;
                         var jreq = inputs[j].hasAttribute('required');
                         questions.push({id: jid, label: jlabel, type: 'text', options: [],
-                                        required: jreq, tagName: 'spl-input', idx: j});
+                                        required: jreq, tagName: 'spl-input', idx: j, deep_idx: j});
                     }
 
                     // === spl-textarea (longer answers) ===
-                    var textareas = document.querySelectorAll('spl-textarea');
+                    var textareas = deepQueryAll(document, 'spl-textarea');
                     for (var t = 0; t < textareas.length; t++) {
                         var tid = textareas[t].id || 'spl-textarea-' + t;
                         var tlabel = getLabel(textareas[t]);
@@ -2062,12 +2092,12 @@ class SmartRecruitersHandler(BaseHandler):
                         if (tval && tval.trim().length > 1) continue;
                         var treq = textareas[t].hasAttribute('required');
                         questions.push({id: tid, label: tlabel, type: 'textarea', options: [],
-                                        required: treq, tagName: 'spl-textarea', idx: t});
+                                        required: treq, tagName: 'spl-textarea', idx: t, deep_idx: t});
                     }
 
                     // === Radio groups (Yes/No screening, EEO) ===
                     // Look for fieldsets, spl-radio, or [role="radiogroup"] with labels
-                    var radioGroups = document.querySelectorAll(
+                    var radioGroups = deepQueryAll(document,
                         'fieldset, [role="radiogroup"], spl-radio'
                     );
                     for (var r = 0; r < radioGroups.length; r++) {
@@ -2102,7 +2132,7 @@ class SmartRecruitersHandler(BaseHandler):
 
                         questions.push({id: rEl.id || 'radio-' + r, label: rlabel, type: 'radio',
                                         options: rOpts, required: rEl.hasAttribute('required'),
-                                        tagName: 'fieldset', idx: r});
+                                        tagName: 'fieldset', idx: r, deep_idx: r});
                     }
 
                     // === Standard HTML selects not inside spl-* ===
@@ -2186,12 +2216,27 @@ class SmartRecruitersHandler(BaseHandler):
                     escaped_answer = answer.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n")
 
                     if field_type == "select":
-                        # Fill spl-select or standard select
-                        fill_result = await nd_page.evaluate(f"""
+                        # Fill spl-select or standard select.
+                        # deepQueryAll pierces nested shadow roots for SR screening page.
+                        q_actual_id = q.get('id', '')
+                        q_deep_idx = q.get('deep_idx', q_idx)
+                        fill_result = await nd_page.evaluate(_DEEP_QUERY_JS + f"""
                             (function() {{
                                 var answer = '{escaped_answer}'.toLowerCase();
-                                var selects = document.querySelectorAll('{tag_name}');
-                                var el = selects[{q_idx}];
+                                var tagName = '{tag_name}';
+                                // Use deepQueryAll for spl-select; plain querySelectorAll for HTML select
+                                var allEls = (tagName === 'select')
+                                    ? Array.from(document.querySelectorAll('select'))
+                                    : deepQueryAll(document, tagName);
+                                // Find by actual ID first, then by deep index
+                                var qId = '{q_actual_id}';
+                                var el = null;
+                                if (qId && qId.indexOf('spl-') !== 0 && qId.indexOf('select-') !== 0) {{
+                                    for (var fi = 0; fi < allEls.length; fi++) {{
+                                        if (allEls[fi].id === qId) {{ el = allEls[fi]; break; }}
+                                    }}
+                                }}
+                                if (!el) el = allEls[{q_deep_idx}];
                                 if (!el) return 'NOT_FOUND';
 
                                 var select = (el.tagName === 'SELECT') ? el :
@@ -2268,11 +2313,12 @@ class SmartRecruitersHandler(BaseHandler):
 
                     elif field_type == "radio":
                         # Click the correct radio button
-                        fill_result = await nd_page.evaluate(f"""
+                        q_deep_idx_radio = q.get('deep_idx', q_idx)
+                        fill_result = await nd_page.evaluate(_DEEP_QUERY_JS + f"""
                             (function() {{
                                 var answer = '{escaped_answer}'.toLowerCase();
-                                var groups = document.querySelectorAll('fieldset, [role="radiogroup"], spl-radio');
-                                var group = groups[{q_idx}];
+                                var groups = deepQueryAll(document, 'fieldset, [role="radiogroup"], spl-radio');
+                                var group = groups[{q_deep_idx_radio}];
                                 if (!group) return 'NOT_FOUND';
 
                                 var radios = group.querySelectorAll('input[type="radio"]');
@@ -2322,26 +2368,78 @@ class SmartRecruitersHandler(BaseHandler):
                         logger.info(f"Radio fill: '{question_text[:30]}' -> {fill_result}")
 
                     elif field_type == "textarea":
-                        # Use CDP typing for textarea (same Angular-compatible approach)
-                        selector = f"spl-textarea:nth-of-type({q_idx + 1})"
-                        if q.get("id") and q["id"].startswith("spl-textarea"):
-                            # Use index-based selector
-                            filled = await self._nd_cdp_type_into_shadow(
-                                nd_page, f"spl-textarea", answer,
-                                input_selector='textarea'
-                            )
-                        else:
-                            filled = await self._nd_cdp_type_into_shadow(
-                                nd_page, f"#{q['id']}" if q.get('id') else 'spl-textarea',
-                                answer, input_selector='textarea'
-                            )
+                        # deepQueryAll js_finder for spl-textarea inside nested shadow DOM
+                        ta_deep_idx = q.get('deep_idx', q_idx)
+                        ta_actual_id = q.get('id', '')
+                        ta_js_finder = (
+                            _DEEP_QUERY_JS + f"""
+                            (function() {{
+                                var allTA = deepQueryAll(document, 'spl-textarea');
+                                var host = null;
+                                var qId = '{ta_actual_id}';
+                                if (qId && qId.indexOf('spl-textarea-') !== 0) {{
+                                    for (var fi = 0; fi < allTA.length; fi++) {{
+                                        if (allTA[fi].id === qId) {{ host = allTA[fi]; break; }}
+                                    }}
+                                }}
+                                if (!host) host = allTA[{ta_deep_idx}];
+                                if (!host || !host.shadowRoot) return {{error: 'NO_HOST'}};
+                                var inp = host.shadowRoot.querySelector('textarea');
+                                if (!inp) return {{error: 'NO_INPUT'}};
+                                inp.scrollIntoView({{behavior: 'instant', block: 'center'}});
+                                inp.focus();
+                                var rect = inp.getBoundingClientRect();
+                                var focused = document.activeElement;
+                                var sf = focused && focused.shadowRoot ? focused.shadowRoot.activeElement : null;
+                                return {{x: rect.x + rect.width/2, y: rect.y + rect.height/2,
+                                         w: rect.width, h: rect.height,
+                                         activeTag: focused ? focused.tagName : 'none',
+                                         activeId: focused ? focused.id : '',
+                                         shadowActiveTag: sf ? sf.tagName : 'none',
+                                         inputTag: 'TEXTAREA'}};
+                            }})()"""
+                        )
+                        filled = await self._nd_cdp_type_into_shadow(
+                            nd_page, 'spl-textarea', answer,
+                            input_selector='textarea', js_finder=ta_js_finder
+                        )
                         logger.info(f"Textarea fill: '{question_text[:30]}' -> {filled}")
 
                     else:  # text input
-                        # Use CDP typing for spl-input (Angular-compatible)
-                        host_sel = f"#{q['id']}" if q.get('id') and not q['id'].startswith('spl-input-') else 'spl-input'
+                        # deepQueryAll js_finder for spl-input inside nested shadow DOM
+                        txt_deep_idx = q.get('deep_idx', q_idx)
+                        txt_actual_id = q.get('id', '')
+                        txt_js_finder = (
+                            _DEEP_QUERY_JS + f"""
+                            (function() {{
+                                var allInp = deepQueryAll(document, 'spl-input');
+                                var host = null;
+                                var qId = '{txt_actual_id}';
+                                if (qId && qId.indexOf('spl-input-') !== 0) {{
+                                    for (var fi = 0; fi < allInp.length; fi++) {{
+                                        if (allInp[fi].id === qId) {{ host = allInp[fi]; break; }}
+                                    }}
+                                }}
+                                if (!host) host = allInp[{txt_deep_idx}];
+                                if (!host || !host.shadowRoot) return {{error: 'NO_HOST'}};
+                                var inp = host.shadowRoot.querySelector('input');
+                                if (!inp) return {{error: 'NO_INPUT'}};
+                                inp.scrollIntoView({{behavior: 'instant', block: 'center'}});
+                                inp.focus();
+                                var rect = inp.getBoundingClientRect();
+                                var focused = document.activeElement;
+                                var sf = focused && focused.shadowRoot ? focused.shadowRoot.activeElement : null;
+                                return {{x: rect.x + rect.width/2, y: rect.y + rect.height/2,
+                                         w: rect.width, h: rect.height,
+                                         activeTag: focused ? focused.tagName : 'none',
+                                         activeId: focused ? focused.id : '',
+                                         shadowActiveTag: sf ? sf.tagName : 'none',
+                                         inputTag: 'INPUT'}};
+                            }})()"""
+                        )
                         filled = await self._nd_cdp_type_into_shadow(
-                            nd_page, host_sel, answer, input_selector='input'
+                            nd_page, 'spl-input', answer,
+                            input_selector='input', js_finder=txt_js_finder
                         )
                         logger.info(f"Text fill: '{question_text[:30]}' -> {filled}")
 
