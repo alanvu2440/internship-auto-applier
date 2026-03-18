@@ -2541,36 +2541,70 @@ class SmartRecruitersHandler(BaseHandler):
                         txt_actual_id = q.get('id', '')
                         txt_tag_name = q.get('tagName', 'spl-input')  # may be spl-number-field
                         txt_selector = f'{txt_tag_name}, spl-input, spl-number-field'
+                        # Escape label for JS string (strip * and lowercase)
+                        txt_q_label = question_text.rstrip('*').strip()[:60].lower().replace("'", "\\'").replace('"', '\\"')
                         txt_js_finder = (
                             _DEEP_QUERY_JS + f"""
                             (function() {{
-                                // Search within the screening form shadow root to avoid
-                                // accidentally targeting profile-page spl-inputs at doc scope
-                                function findFormRoot() {{
+                                // Search document scope (not formRoot) so spl-number-field
+                                // inside closed shadow DOMs are still reachable via deepQueryAll
+                                var allInp = deepQueryAll(document, '{txt_selector}');
+                                var host = null;
+                                var qId = '{txt_actual_id}';
+                                var qLabel = '{txt_q_label}';
+
+                                // 1. ID match (skip auto-generated spl-input-XXXX ids)
+                                if (qId && qId.indexOf('spl-input-') !== 0) {{
+                                    for (var fi = 0; fi < allInp.length; fi++) {{
+                                        if (allInp[fi].id === qId) {{ host = allInp[fi]; break; }}
+                                    }}
+                                }}
+
+                                // 2. Label attribute match (works for spl-number-field which has label attr)
+                                if (!host && qLabel.length > 2) {{
+                                    var qLabelShort = qLabel.substring(0, 20);
+                                    for (var fi = 0; fi < allInp.length; fi++) {{
+                                        var lbl = (allInp[fi].getAttribute('label') ||
+                                                   allInp[fi].getAttribute('aria-label') ||
+                                                   allInp[fi].getAttribute('placeholder') || '').toLowerCase();
+                                        if (lbl && (lbl.indexOf(qLabelShort) >= 0 ||
+                                                    qLabel.indexOf(lbl.substring(0, 20)) >= 0)) {{
+                                            host = allInp[fi]; break;
+                                        }}
+                                    }}
+                                }}
+
+                                // 3. Fallback: index within screening form, else document index
+                                if (!host) {{
+                                    var formInp = null;
                                     var _cands = ['sr-screening-questions-form',
                                                   'oc-screening-questions-form',
                                                   'oc-screening-questions'];
                                     for (var _ci = 0; _ci < _cands.length; _ci++) {{
                                         var _els = deepQueryAll(document, _cands[_ci]);
                                         for (var _ki = 0; _ki < _els.length; _ki++) {{
-                                            if (_els[_ki].shadowRoot) return _els[_ki].shadowRoot;
+                                            if (_els[_ki].shadowRoot) {{
+                                                formInp = deepQueryAll(_els[_ki].shadowRoot, '{txt_selector}');
+                                                break;
+                                            }}
                                         }}
+                                        if (formInp) break;
                                     }}
-                                    return document;
+                                    host = (formInp && formInp[{txt_deep_idx}]) || allInp[{txt_deep_idx}] || null;
                                 }}
-                                var _formRoot = findFormRoot();
-                                var allInp = deepQueryAll(_formRoot, '{txt_selector}');
-                                var host = null;
-                                var qId = '{txt_actual_id}';
-                                if (qId && qId.indexOf('spl-input-') !== 0) {{
-                                    for (var fi = 0; fi < allInp.length; fi++) {{
-                                        if (allInp[fi].id === qId) {{ host = allInp[fi]; break; }}
-                                    }}
+
+                                if (!host) return {{error: 'NO_HOST'}};
+
+                                // Get inner input: try shadowRoot first, then light DOM (for closed/null shadow)
+                                var inp = null;
+                                if (host.shadowRoot) {{
+                                    inp = host.shadowRoot.querySelector('input');
+                                }} else {{
+                                    // spl-number-field may use closed shadow DOM — try light DOM
+                                    inp = host.querySelector('input') || host.querySelector('input[type="number"]');
                                 }}
-                                if (!host) host = allInp[{txt_deep_idx}];
-                                if (!host || !host.shadowRoot) return {{error: 'NO_HOST'}};
-                                var inp = host.shadowRoot.querySelector('input');
-                                if (!inp) return {{error: 'NO_INPUT'}};
+                                if (!inp) return {{error: 'NO_INPUT', hostTag: host.tagName, hasShadow: !!host.shadowRoot}};
+
                                 inp.scrollIntoView({{behavior: 'instant', block: 'center'}});
                                 inp.focus();
                                 var rect = inp.getBoundingClientRect();
