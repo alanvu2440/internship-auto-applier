@@ -1665,11 +1665,7 @@ development into one end-to-end system.'
     type: select
 
   do you have a high school diploma, or have you successfully passed a high school equivalency exam such as the ged?:
-    answer: 'Evergreen Valley High School'
-    type: select
-
-  do you have a high school diploma, or have you successfully passed a high school equivalency exam such as the ged?:
-    answer: 'Evergreen Valley High School'
+    answer: 'Yes'
     type: select
 
   as part of our hiring process, 2k will conduct a pre-employment background check. we may also require written verification from your current employer that you have ended your employment.:
@@ -1686,4 +1682,92 @@ development into one end-to-end system.'
 
   do you currently live within a 60-mile radius of houston, tx?:
     answer: 'No'
+    type: select
+
+  website/portfolio url:
+    answer: 'https://github.com/alanvu2440'
+    type: text
+
+  vevo therapeutics inc.:
+    answer: 'I believe there might be a typo in the question, as I''m applying for the Machine'
+    type: text
+
+  current location ✱san jose, ca, usasan josé, campeche, mexsan josé, calakmul, campeche, mexno location found. try entering a different locationloading:
+    answer: 'San Jose, CA'
+    type: text
+
+  how did you learn about this job?:
+    answer: 'Online Job Board'
+    type: select
+
+  do you require a work permit, visa or additional right to work support for the country where you are applying to work?:
+    answer: 'No'
+    type: select
+
+  do you currently work for, or have you previously worked for zscaler?:
+    answer: 'No'
+    type: select
+
+  have you been involved in procurement or contract award activities involving zscaler as a government employee or official?:
+    answer: 'No'
+    type: select
+
+  "if yes, please advise what support is needed:":
+    answer: 'As a U.S. student graduating in May 2026, I'
+    type: textarea
+
+  what branch of the us department of defense are you currently with?:
+    answer: 'Given the information in the candidate profile,...'
+    type: select
+
+  when are you eligible for the skillbridge program?:
+    answer: 'As per the provided candidate profile, there is no information regarding military service or separation dates, which are'
+    type: select
+
+  when is your estimated separation date?:
+    answer: 'N/A - Not a transitioning service member.'
+    type: select
+
+  will you now, or in the future require defense unicorns to sponsor an immigration case in order to employee you?:
+    answer: 'No'
+    type: select
+
+  what is your us citizenship status?:
+    answer: 'Yes'
+    type: select
+
+  do you have a common access card (cac)?:
+    answer: 'No'
+    type: select
+
+  do you have a security clearance? if so, which clearance level?:
+    answer: 'No'
+    type: select
+
+  what is the status of your security clearance?:
+    answer: 'Yes'
+    type: select
+
+  if you do not have a security clearance, are you able to obtain one if necessary?:
+    answer: 'Yes'
+    type: select
+
+  in this question description we have provided a link to our california consumer privacy act (ccpa) disclosure. please acknowledge that you have been provided with this disclosure - link included in question description.:
+    answer: 'Yes'
+    type: select
+
+  salary in usd:
+    answer: 'Seeking competitive intern compensation, ideally $30-40/hour.'
+    type: text
+
+  can you work onsite in our nyc office?:
+    answer: 'Yes'
+    type: select
+
+  are you able to work up to 20 hours per week? (all authentic internships are part-time):
+    answer: 'Yes'
+    type: select
+
+  are you available to start your internship on june 15, 2026?:
+    answer: 'Yes'
     type: select
