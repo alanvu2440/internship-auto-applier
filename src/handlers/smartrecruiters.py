@@ -2721,6 +2721,107 @@ class SmartRecruitersHandler(BaseHandler):
             logger.error(f"Validation error: {e}")
             return False
 
+    async def _nd_fill_plain_form_inputs(self, nd_page, job_data: Dict[str, Any]) -> None:
+        """Fill plain HTML <input>/<select> fields on Preliminary questions pages.
+
+        SR multi-step forms sometimes have address fields (Street Address, City, State,
+        Zip Code, Country) and 'How did you hear?' using plain HTML elements — NOT spl-*
+        components — that _nd_handle_screening_questions misses entirely.
+        """
+        try:
+            config = self.form_filler.config
+            personal = config.get("personal_info", {})
+            address   = personal.get("address", "")
+            city      = personal.get("city", "")
+            state     = personal.get("state", "")
+            zip_code  = personal.get("zip_code", "")
+            country   = personal.get("country", "United States")
+
+            # Map label patterns → fill value
+            label_map = {
+                "street address": address,
+                "address line 1": address,
+                "address": address,
+                "city": city,
+                "state": state,
+                "zip": zip_code,
+                "postal": zip_code,
+                "country": country,
+                "how did you hear": "LinkedIn",
+                "hear about us": "LinkedIn",
+                "referred by": "",  # leave blank
+            }
+
+            result = await nd_page.evaluate("""
+                (function() {
+                    var filled = [];
+                    var labelMap = %s;
+                    // Find all visible text inputs / selects
+                    var inputs = Array.from(document.querySelectorAll('input[type="text"],input[type=""],input:not([type]),select'));
+                    inputs = inputs.filter(function(el) {
+                        var s = window.getComputedStyle(el);
+                        return s.display !== 'none' && s.visibility !== 'hidden' && el.offsetParent !== null;
+                    });
+                    inputs.forEach(function(inp) {
+                        // Get label text
+                        var labelText = '';
+                        if (inp.id) {
+                            var lbl = document.querySelector('label[for="' + inp.id + '"]');
+                            if (lbl) labelText = lbl.textContent.trim().toLowerCase();
+                        }
+                        if (!labelText) {
+                            var parent = inp.parentElement;
+                            for (var i = 0; i < 4 && parent; i++) {
+                                var lbl2 = parent.querySelector('label');
+                                if (lbl2) { labelText = lbl2.textContent.trim().toLowerCase(); break; }
+                                parent = parent.parentElement;
+                            }
+                        }
+                        if (!labelText && inp.placeholder) labelText = inp.placeholder.toLowerCase();
+                        if (!labelText) return;
+
+                        // Find matching value
+                        var fillVal = null;
+                        for (var key in labelMap) {
+                            if (labelText.indexOf(key) >= 0) {
+                                fillVal = labelMap[key];
+                                break;
+                            }
+                        }
+                        if (fillVal === null || fillVal === undefined) return;
+                        if (inp.value && inp.value.trim().length > 0) return;  // already filled
+
+                        if (inp.tagName === 'SELECT') {
+                            // Try to select matching option
+                            var opts = inp.options;
+                            for (var j = 0; j < opts.length; j++) {
+                                if (opts[j].text.toLowerCase().indexOf(fillVal.toLowerCase()) >= 0 ||
+                                    fillVal.toLowerCase().indexOf(opts[j].text.toLowerCase()) >= 0) {
+                                    inp.selectedIndex = j;
+                                    inp.dispatchEvent(new Event('change', {bubbles: true}));
+                                    filled.push(labelText + '=' + opts[j].text);
+                                    break;
+                                }
+                            }
+                        } else {
+                            inp.value = fillVal;
+                            inp.dispatchEvent(new Event('input', {bubbles: true}));
+                            inp.dispatchEvent(new Event('change', {bubbles: true}));
+                            filled.push(labelText + '=' + fillVal);
+                        }
+                    });
+                    return filled;
+                })()
+            """ % str(label_map).replace("'", '"').replace("True", "true").replace("False", "false").replace("None", "null"))
+
+            if result and isinstance(result, list) and len(result) > 0:
+                logger.info(f"Filled {len(result)} plain form inputs: {result}")
+            else:
+                logger.debug("No plain form inputs filled (none matched or all pre-filled)")
+
+        except Exception as e:
+            logger.debug(f"_nd_fill_plain_form_inputs failed: {e}")
+
     async def _nd_detect_multistep(self, nd_page) -> bool:
         """Detect if SmartRecruiters is showing a multi-step form (resume parsed)."""
         try:
@@ -2833,6 +2934,11 @@ class SmartRecruitersHandler(BaseHandler):
                             await self._nd_handle_screening_questions(nd_page, job_data)
                         except Exception as sq_e:
                             logger.debug(f"Screening question fill on step {step + 1} failed: {sq_e}")
+                        # Also fill plain HTML inputs (address fields on "Preliminary questions" pages)
+                        try:
+                            await self._nd_fill_plain_form_inputs(nd_page, job_data)
+                        except Exception as pq_e:
+                            logger.debug(f"Plain form input fill on step {step + 1} failed: {pq_e}")
                     prev_sections = sections
 
                     # If stuck on privacy/consent checkbox error, re-click checkboxes
@@ -3612,6 +3718,11 @@ class SmartRecruitersHandler(BaseHandler):
                 await self._nd_handle_screening_questions(nd_page, job_data)
             except Exception as sq_e:
                 logger.warning(f"Screening questions on step {step + 1} FAILED: {sq_e}")
+            # Fill plain HTML inputs (address, etc.) which spl-* scanner misses
+            try:
+                await self._nd_fill_plain_form_inputs(nd_page, job_data)
+            except Exception as pq_e:
+                logger.debug(f"Plain form input fill (every-step) failed: {pq_e}")
 
             # Handle spl-autocomplete fields on page 2+ (e.g., disability self-ID)
             # On page 1, spl-autocomplete is the city field. On page 2+, it's screening questions.
