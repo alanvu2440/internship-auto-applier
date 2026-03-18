@@ -2288,6 +2288,53 @@ class SmartRecruitersHandler(BaseHandler):
 
             if not questions:
                 logger.debug("No screening questions found on this page")
+                # Debug: dump DOM structure around spl-inputs to diagnose label extraction failure
+                if raw and isinstance(raw, dict) and raw.get('root') == 'sr-screening-questions-form':
+                    try:
+                        dom_dump = await nd_page.evaluate(_DEEP_QUERY_JS + """
+                            (function() {
+                                var sr = deepQueryAll(document, 'sr-screening-questions-form')[0];
+                                if (!sr || !sr.shadowRoot) return 'NO_SR_FORM';
+                                var inputs = deepQueryAll(sr.shadowRoot, 'spl-input, spl-number-field');
+                                if (inputs.length === 0) return 'NO_INPUTS';
+                                var result = [];
+                                for (var i = 0; i < Math.min(inputs.length, 3); i++) {
+                                    var el = inputs[i];
+                                    var info = {id: el.id, tag: el.tagName, attrs: {}};
+                                    // Collect all attributes
+                                    for (var a = 0; a < el.attributes.length; a++) {
+                                        info.attrs[el.attributes[a].name] = el.attributes[a].value;
+                                    }
+                                    // Parent chain
+                                    var parents = [];
+                                    var p = el.parentElement;
+                                    for (var d = 0; d < 6 && p; d++) {
+                                        var ptxt = p.textContent ? p.textContent.trim().substring(0, 80) : '';
+                                        parents.push({tag: p.tagName, id: p.id || '', cls: (p.className || '').substring(0, 40), txt: ptxt});
+                                        var nextP = p.parentElement;
+                                        if (!nextP && p.getRootNode) {
+                                            var rn = p.getRootNode();
+                                            nextP = (rn && rn.host) ? rn.host : null;
+                                        }
+                                        p = nextP;
+                                    }
+                                    info.parents = parents;
+                                    // Previous siblings
+                                    var sibs = [];
+                                    var prev = el.previousElementSibling;
+                                    for (var s = 0; s < 3 && prev; s++) {
+                                        sibs.push({tag: prev.tagName, id: prev.id || '', txt: (prev.textContent||'').trim().substring(0,80)});
+                                        prev = prev.previousElementSibling;
+                                    }
+                                    info.prevSibs = sibs;
+                                    result.push(info);
+                                }
+                                return JSON.stringify(result);
+                            })()
+                        """)
+                        logger.info(f"SR DOM structure debug (for label fix): {dom_dump}")
+                    except Exception as dbg_e:
+                        logger.debug(f"DOM debug failed: {dbg_e}")
                 return
 
             logger.info(f"Found {len(questions)} screening questions: {[q['label'][:40] for q in questions]}")
