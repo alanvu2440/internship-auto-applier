@@ -2166,6 +2166,61 @@ class SmartRecruitersHandler(BaseHandler):
                                         tagName: 'fieldset', idx: r, deep_idx: r});
                     }
 
+                    // === Fallback: radio inputs NOT in fieldset/radiogroup (e.g. SR oc-question shadow roots) ===
+                    // Collect names already handled by the fieldset loop above
+                    var _seenRadioNames = {};
+                    for (var _rg = 0; _rg < radioGroups.length; _rg++) {
+                        var _rInputs = radioGroups[_rg].querySelectorAll('input[type="radio"]');
+                        if (_rInputs.length === 0 && radioGroups[_rg].shadowRoot)
+                            _rInputs = radioGroups[_rg].shadowRoot.querySelectorAll('input[type="radio"]');
+                        for (var _ri = 0; _ri < _rInputs.length; _ri++) {
+                            if (_rInputs[_ri].name) _seenRadioNames[_rInputs[_ri].name] = true;
+                        }
+                    }
+                    var _allRadios = deepQueryAll(searchRoot, 'input[type="radio"]');
+                    var _radioByName = {};
+                    for (var _rri = 0; _rri < _allRadios.length; _rri++) {
+                        var _rInp = _allRadios[_rri];
+                        var _rn = _rInp.name || ('radio-anon-' + _rri);
+                        if (_seenRadioNames[_rn]) continue;
+                        if (!_radioByName[_rn]) _radioByName[_rn] = {inputs: [], label: '', anyChecked: false};
+                        _radioByName[_rn].inputs.push(_rInp);
+                        if (_rInp.checked) _radioByName[_rn].anyChecked = true;
+                    }
+                    var _rnKeys = Object.keys(_radioByName);
+                    for (var _rnk = 0; _rnk < _rnKeys.length; _rnk++) {
+                        var _rgrp = _radioByName[_rnKeys[_rnk]];
+                        if (_rgrp.anyChecked) continue;
+                        // Walk up DOM from first radio to find question label text
+                        var _walkEl = _rgrp.inputs[0].parentElement;
+                        var _rlabel2 = '';
+                        for (var _d = 0; _d < 8 && _walkEl && !_rlabel2; _d++) {
+                            var _children = _walkEl.childNodes;
+                            for (var _ci = 0; _ci < _children.length; _ci++) {
+                                var _cn = _children[_ci];
+                                var _ct = (_cn.textContent || '').trim();
+                                if (_cn.nodeType === 3 && _ct.length > 5) { _rlabel2 = _ct; break; }
+                                if (_cn.nodeType === 1 && !['INPUT','LABEL','BUTTON'].includes(_cn.tagName)
+                                    && _ct.length > 5 && _ct.length < 250) { _rlabel2 = _ct; break; }
+                            }
+                            var _parentEl = _walkEl.parentElement;
+                            if (!_parentEl && _walkEl.getRootNode) {
+                                var _rn2 = _walkEl.getRootNode();
+                                _parentEl = (_rn2 && _rn2.host) ? _rn2.host.parentElement : null;
+                            }
+                            _walkEl = _parentEl;
+                        }
+                        if (!_rlabel2 || _rlabel2.length < 3) continue;
+                        if (isKnown(_rnKeys[_rnk], _rlabel2)) continue;
+                        var _rOpts2 = _rgrp.inputs.map(function(inp) {
+                            var lbl = inp.closest('label');
+                            return lbl ? lbl.textContent.trim() : (inp.value || 'Option');
+                        });
+                        questions.push({id: _rnKeys[_rnk], label: _rlabel2, type: 'radio',
+                                        options: _rOpts2, required: true,
+                                        tagName: 'input-radio', idx: _rnk, deep_idx: _rnk});
+                    }
+
                     // === Standard HTML selects not inside spl-* ===
                     var htmlSelects = deepQueryAll(searchRoot, 'select');
                     for (var h = 0; h < htmlSelects.length; h++) {
@@ -2350,9 +2405,48 @@ class SmartRecruitersHandler(BaseHandler):
                     elif field_type == "radio":
                         # Click the correct radio button
                         q_deep_idx_radio = q.get('deep_idx', q_idx)
+                        q_radio_tag = q.get('tagName', 'fieldset')
+                        q_radio_name = q.get('id', '')  # for input-radio, id = name attribute
                         fill_result = await nd_page.evaluate(_DEEP_QUERY_JS + f"""
                             (function() {{
                                 var answer = '{escaped_answer}'.toLowerCase();
+
+                                // For radio inputs found by name (not wrapped in fieldset/radiogroup)
+                                if ('{q_radio_tag}' === 'input-radio') {{
+                                    var radioName = '{q_radio_name}';
+                                    var allRadios = deepQueryAll(document, 'input[type="radio"]');
+                                    var namedRadios = allRadios.filter(function(r) {{
+                                        return r.name === radioName;
+                                    }});
+                                    if (namedRadios.length === 0) return 'NOT_FOUND_BY_NAME';
+                                    for (var ni = 0; ni < namedRadios.length; ni++) {{
+                                        var lbl = namedRadios[ni].closest('label');
+                                        var lt = lbl ? lbl.textContent.trim().toLowerCase() : '';
+                                        var val = (namedRadios[ni].value || '').toLowerCase();
+                                        if (lt === answer || val === answer ||
+                                            lt.indexOf(answer) >= 0 || answer.indexOf(lt) >= 0 ||
+                                            (answer === 'no' && (val === 'false' || lt === 'no')) ||
+                                            (answer === 'yes' && (val === 'true' || lt === 'yes'))) {{
+                                            namedRadios[ni].click();
+                                            namedRadios[ni].dispatchEvent(new Event('change', {{bubbles:true, composed:true}}));
+                                            return 'OK_NAME:' + (lbl ? lbl.textContent.trim() : val);
+                                        }}
+                                    }}
+                                    // Fallback: pick yes/no by position (first=yes for yes/no questions)
+                                    if ((answer === 'no' || answer === 'false') && namedRadios.length >= 2) {{
+                                        namedRadios[1].click();
+                                        namedRadios[1].dispatchEvent(new Event('change', {{bubbles:true, composed:true}}));
+                                        return 'OK_NAME_POS1';
+                                    }}
+                                    if ((answer === 'yes' || answer === 'true') && namedRadios.length >= 1) {{
+                                        namedRadios[0].click();
+                                        namedRadios[0].dispatchEvent(new Event('change', {{bubbles:true, composed:true}}));
+                                        return 'OK_NAME_POS0';
+                                    }}
+                                    return 'NO_MATCH_NAME';
+                                }}
+
+                                // Original path: find by fieldset/radiogroup index
                                 var groups = deepQueryAll(document, 'fieldset, [role="radiogroup"], spl-radio');
                                 var group = groups[{q_deep_idx_radio}];
                                 if (!group) return 'NOT_FOUND';
@@ -2450,7 +2544,22 @@ class SmartRecruitersHandler(BaseHandler):
                         txt_js_finder = (
                             _DEEP_QUERY_JS + f"""
                             (function() {{
-                                var allInp = deepQueryAll(document, '{txt_selector}');
+                                // Search within the screening form shadow root to avoid
+                                // accidentally targeting profile-page spl-inputs at doc scope
+                                function findFormRoot() {{
+                                    var _cands = ['sr-screening-questions-form',
+                                                  'oc-screening-questions-form',
+                                                  'oc-screening-questions'];
+                                    for (var _ci = 0; _ci < _cands.length; _ci++) {{
+                                        var _els = deepQueryAll(document, _cands[_ci]);
+                                        for (var _ki = 0; _ki < _els.length; _ki++) {{
+                                            if (_els[_ki].shadowRoot) return _els[_ki].shadowRoot;
+                                        }}
+                                    }}
+                                    return document;
+                                }}
+                                var _formRoot = findFormRoot();
+                                var allInp = deepQueryAll(_formRoot, '{txt_selector}');
                                 var host = null;
                                 var qId = '{txt_actual_id}';
                                 if (qId && qId.indexOf('spl-input-') !== 0) {{
@@ -3473,9 +3582,9 @@ class SmartRecruitersHandler(BaseHandler):
             # Handle spl-autocomplete fields on page 2+ (e.g., disability self-ID)
             # On page 1, spl-autocomplete is the city field. On page 2+, it's screening questions.
             try:
-                ac_count = await nd_page.evaluate("""
+                ac_count = await nd_page.evaluate(_DEEP_QUERY_JS + """
                     (function() {
-                        var acs = document.querySelectorAll('spl-autocomplete');
+                        var acs = deepQueryAll(document, 'spl-autocomplete');
                         var total = acs.length;
                         var unfilled = [];
                         for (var i = 0; i < acs.length; i++) {

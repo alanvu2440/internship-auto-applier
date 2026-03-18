@@ -973,3 +973,7 @@ questions:
   you declare that you have read and understand the privacy notice:
     answer: 'Yes'
     type: checkbox
+
+  salary in usd:
+    answer: '70000'
+    type: text

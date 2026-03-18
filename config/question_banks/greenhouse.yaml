@@ -82,6 +82,15 @@ questions:
   what is your preferred work location?:
     answer: 'New York'
     type: select
+  sex:
+    answer: 'Male'
+    type: select
+  sex*:
+    answer: 'Male'
+    type: select
+  gender*:
+    answer: 'Male'
+    type: select
   are you a veteran or active member of the united states armed forces?:
     answer: 'I am not a protected veteran'
     type: select
@@ -859,7 +868,7 @@ questions:
   : answer: N/A
     type: textarea
   do you currently live or are you willing to relocate to the job’s location?:
-    answer: 'Yes'
+    answer: ‘I am willing to relocate to this job’’s location.’
     type: select
   do you currently or have you ever worked for lasko products or any of its associated companies?:
     answer: 'No'
@@ -2024,7 +2033,7 @@ questions:
     answer: Online Job Board
     type: text
   'please specify how many hours per week you are available:':
-    answer: 40
+    answer: '40 hours'
     type: select
   please specify your expected graduation year (example, 2027):
     answer: May 2026
@@ -2440,7 +2449,7 @@ questions:
     answer: Python
     type: select
   what length of internship are you available for?:
-    answer: 10-12 weeks
+    answer: '3 month'
     type: select
   what location do you intend to work out of?:
     answer: San Jose, CA
@@ -3037,23 +3046,23 @@ building scalable systems.'
 
   # Missing from Tenstorrent (3 failed attempts)
   what length of internship are you available for?:
-    answer: '4 months'
+    answer: '3 month'
     type: select
   please specify how many hours per week you are available:
-    answer: '40'
-    type: text
+    answer: '40 hours'
+    type: select
   how many hours per week are you available?:
-    answer: '40'
-    type: text
+    answer: '40 hours'
+    type: select
   what is the length of your internship?:
-    answer: '4 months'
+    answer: '3 month'
     type: select
   internship duration:
-    answer: '4 months'
+    answer: '3 month'
     type: select
   hours per week:
-    answer: '40'
-    type: text
+    answer: '40 hours'
+    type: select
 
   years of work experience:
     answer: '1'
@@ -3064,15 +3073,27 @@ building scalable systems.'
     type: select
 
   in which language(s) are you fluent (written) other than english?:
-    answer: 'English (fluent), Vietnamese (conversational)'
+    answer: 'None'
+    type: select
+
+  "in which language(s) are you fluent (written) other than english?*":
+    answer: 'None'
     type: select
 
   privacy:
-    answer: 'I agree'
+    answer: 'I accept'
+    type: select
+
+  "privacy *":
+    answer: 'I accept'
     type: select
 
   in which language(s) are you fluent (spoken) other than english?:
-    answer: 'English (fluent), Vietnamese (conversational)'
+    answer: 'None'
+    type: select
+
+  "in which language(s) are you fluent (spoken) other than english?*":
+    answer: 'None'
     type: select
 
   are you able to be located at dw office location for the summer of 2026?:
@@ -3108,19 +3129,11 @@ building scalable systems.'
     type: select
 
   do you have a high school diploma, or have you successfully passed a high school equivalency exam such as the ged?:
-    answer: 'Evergreen Valley High School'
-    type: select
-
-  do you have a high school diploma, or have you successfully passed a high school equivalency exam such as the ged?:
-    answer: 'Evergreen Valley High School'
+    answer: 'Yes'
     type: select
 
   as part of our hiring process, 2k will conduct a pre-employment background check. we may also require written verification from your current employer that you have ended your employment.:
-    answer: 'Kruiz'
-    type: select
-
-  as part of our hiring process, 2k will conduct a pre-employment background check. we may also require written verification from your current employer that you have ended your employment.:
-    answer: 'Kruiz'
+    answer: 'Yes'
     type: select
 
   are you local to the burnaby area (or open to relocation) and are willing to come into the office 2 days a week?:
@@ -3133,4 +3146,68 @@ building scalable systems.'
 
   do you currently live within a 60-mile radius of houston, tx?:
     answer: 'San Jose, CA'
+    type: select
+
+  how did you learn about this job?:
+    answer: 'Online Job Board'
+    type: select
+
+  do you require a work permit, visa or additional right to work support for the country where you are applying to work?:
+    answer: 'No'
+    type: select
+
+  do you currently work for, or have you previously worked for zscaler?:
+    answer: 'No'
+    type: select
+
+  have you been involved in procurement or contract award activities involving zscaler as a government employee or official?:
+    answer: 'No'
+    type: select
+
+  "if yes, please advise what support is needed:":
+    answer: 'As a U.S. student graduating in May 2026, I'
+    type: textarea
+
+  what branch of the us department of defense are you currently with?:
+    answer: 'Given the information in the candidate profile,...'
+    type: select
+
+  when are you eligible for the skillbridge program?:
+    answer: 'As per the provided candidate profile, there is no information regarding military service or separation dates, which are'
+    type: select
+
+  when is your estimated separation date?:
+    answer: 'N/A - Not a transitioning service member.'
+    type: select
+
+  will you now, or in the future require defense unicorns to sponsor an immigration case in order to employee you?:
+    answer: 'No'
+    type: select
+
+  what is your us citizenship status?:
+    answer: 'Yes'
+    type: select
+
+  do you have a common access card (cac)?:
+    answer: 'No'
+    type: select
+
+  do you have a security clearance? if so, which clearance level?:
+    answer: 'No'
+    type: select
+
+  what is the status of your security clearance?:
+    answer: 'No Clearance'
+    type: select
+
+  "what is the status of your security clearance? *":
+    answer: 'No Clearance'
+    type: select
+
+  if you do not have a security clearance, are you able to obtain one if necessary?:
+    answer: 'Yes'
+    type: select
+
+  in this question description we have provided a link to our california consumer privacy act (ccpa) disclosure. please acknowledge that you have been provided with this disclosure - link included in question description.:
+    answer: 'Yes'
     type: select
