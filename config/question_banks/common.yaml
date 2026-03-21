@@ -1574,7 +1574,7 @@ working independently or on a team. Happy to discuss any aspect of my background
     type: text
 
   "please select your annual base salary expectations: 300000021318269":
-    answer: 'Open to discuss'
+    answer: 'Negotiable'
     type: text
 
   how did you hear about this position and/or about definity? 300000021318288:
@@ -1582,7 +1582,7 @@ working independently or on a team. Happy to discuss any aspect of my background
     type: text
 
   what is your desired salary? 300000037459106:
-    answer: 'Open to discuss'
+    answer: 'Negotiable'
     type: textarea
 
   candidate source list candidatesourcelist:
@@ -1594,17 +1594,19 @@ working independently or on a team. Happy to discuss any aspect of my background
     type: text
 
   why are you interested in an internship at seaspan and what are you hoping to gain from this internship?:
-    answer: 'I''m drawn to the innovative work being done at this company and see a strong
-alignment with my skills in full-stack development, data engineering, and
-building scalable systems.'
+    answer: >-
+      I'm drawn to the innovative work being done at this company and see a strong
+      alignment with my skills in full-stack development, data engineering, and
+      building scalable systems.
     type: textarea
 
   describe a recent work experience/project that has equipped you with the necessary skills to be successful in this role?:
-    answer: 'I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy
-using Monte Carlo simulation and Random Forest models trained on 1,700+ fights. It has
-a FastAPI backend, React frontend, and PostgreSQL database deployed on GCP Cloud Run.
-I''m proud of it because it combines my interests in data engineering and full-stack
-development into one end-to-end system.'
+    answer: >-
+      I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy
+      using Monte Carlo simulation and Random Forest models trained on 1,700+ fights. It has
+      a FastAPI backend, React frontend, and PostgreSQL database deployed on GCP Cloud Run.
+      I'm proud of it because it combines my interests in data engineering and full-stack
+      development into one end-to-end system.
     type: textarea
 
   "if you have applied to more than one internship at seaspan, please select your top two preferences below: 300000033431506":
