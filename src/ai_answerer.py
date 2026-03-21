@@ -1624,6 +1624,17 @@ Role: {role}
         # Pre-compute generic fallback (used only if AI fails or is unavailable)
         generic_answer, generic_confidence = self._generate_generic_answer_with_confidence(question, field_type, max_length)
 
+        # If generic fallback has high confidence (exact config match), skip AI entirely — saves time and quota
+        if generic_confidence >= 85:
+            source = "config_fallback"
+            logger.info(f"Config fallback (skip AI, confidence={generic_confidence}): '{question[:50]}...' -> '{generic_answer[:50]}...'")
+            self.session_answers.append({"question": question, "answer": generic_answer, "source": source, "confidence": generic_confidence})
+            self._log_to_kb(question, generic_answer, source, field_type=field_type)
+            self._answer_cache[cache_key] = self._to_template(generic_answer)
+            self._save_answer_cache()
+            self._auto_learn_to_template_bank(question, generic_answer, field_type, source)
+            return generic_answer
+
         # Try AI for a better answer
         if not GENAI_AVAILABLE or not self._ai_available or not self.api_key or not isinstance(self.api_key, str):
             logger.warning(f"AI unavailable — trying generic fallback: '{question[:50]}...'")
@@ -1806,7 +1817,8 @@ Role: {role}
 
     def _generate_generic_answer(self, question: str, field_type: str, max_length: Optional[int] = None, _return_confidence: bool = False):
         """Generate a generic answer when AI and config both fail."""
-        q = question.lower().strip()
+        import re as _re_generic
+        q = _re_generic.sub(r'\s+', ' ', question.lower().strip())
 
         education = self.config.get("education", [{}])[0] if self.config.get("education") else {}
         skills = self.config.get("skills", {})
@@ -2017,44 +2029,50 @@ Role: {role}
             logger.info(f"Generic fallback (unknown url): '{question[:40]}...' -> empty")
             return ""
 
-        # Full name
-        if q in ["full name*", "full name", "name*", "name"]:
+        # Full name — also matches "full name (required) <uuid>..."
+        _q_stripped = q.rstrip("*").rstrip(":").strip()
+        if _q_stripped in ["full name", "name"] or _q_stripped.startswith("full name ") or _q_stripped.startswith("name "):
             answer = personal.get("full_name", f"{personal.get('first_name', '')} {personal.get('last_name', '')}").strip()
             if answer:
                 logger.info(f"Generic fallback (full_name): '{question[:40]}...' -> '{answer}'")
                 return answer
 
-        # First name
-        if q in ["first name*", "first name", "first name:*"]:
+        # First name — also matches "first name (required) <uuid>..."
+        if _q_stripped in ["first name", "first name:"] or _q_stripped.startswith("first name "):
             answer = personal.get("first_name", "")
             if answer:
                 logger.info(f"Generic fallback (first_name): '{question[:40]}...' -> '{answer}'")
                 return answer
 
-        # Last name
-        if q in ["last name*", "last name", "last name:*"]:
+        # Last name — also matches "last name (required) <uuid>..."
+        if _q_stripped in ["last name", "last name:"] or _q_stripped.startswith("last name "):
             answer = personal.get("last_name", "")
             if answer:
                 logger.info(f"Generic fallback (last_name): '{question[:40]}...' -> '{answer}'")
                 return answer
 
-        # Email
-        if q in ["email*", "email", "email address*", "email address"]:
+        # Email — also matches "email (required) <uuid>..."
+        if _q_stripped in ["email", "email address"] or _q_stripped.startswith("email ") or _q_stripped.startswith("email address "):
             answer = personal.get("email", "")
             if answer:
                 logger.info(f"Generic fallback (email): '{question[:40]}...' -> '{answer}'")
                 return answer
 
-        # Phone
-        if q in ["phone*", "phone", "phone number*", "phone number"]:
+        # Phone — also matches "phone number (required) <uuid>..."
+        if _q_stripped in ["phone", "phone number"] or _q_stripped.startswith("phone ") or _q_stripped.startswith("phone number "):
             answer = personal.get("phone", "")
             if answer:
                 logger.info(f"Generic fallback (phone): '{question[:40]}...' -> '{answer}'")
                 return answer
 
-        # Address
-        if q in ["address*", "address", "street address*", "street address"]:
-            answer = personal.get("address", "")
+        # Address — also matches "provide your permanent address", "mailing address", etc.
+        if q in ["address*", "address", "street address*", "street address"] or \
+           any(x in q for x in ["permanent address", "mailing address", "home address", "provide your address", "provide your permanent"]):
+            addr = personal.get("address", "")
+            city = personal.get("city", "")
+            state = personal.get("state", "")
+            zip_code = personal.get("zip_code", "")
+            answer = addr or f"{city}, {state} {zip_code}".strip()
             if answer:
                 logger.info(f"Generic fallback (address): '{question[:40]}...' -> '{answer}'")
                 return answer
@@ -2293,6 +2311,12 @@ Role: {role}
         # Graduation date
         elif any(x in q for x in ["graduat", "slated", "complet"]) and any(x in q for x in ["date", "when", "year"]):
             answer = education.get("graduation_date", self._get_grad_date())
+        # Degree name (text typeahead) — must come BEFORE "start" check to avoid "start typing" match
+        elif "start typing your degree" in q or (_q_stripped.startswith("degree ") and "start typing" in q):
+            answer = education.get("degree", "Bachelor of Science in Computer Science")
+        # School name (text typeahead) — similar pattern
+        elif "start typing your school" in q or (_q_stripped.startswith("school ") and "start typing" in q):
+            answer = education.get("school", "San Jose State University")
         # Start date / availability
         elif any(x in q for x in ["start", "begin", "available", "availability"]):
             avail = self.config.get("availability", {})

@@ -751,7 +751,7 @@ class AshbyHandler(BaseHandler):
                 fields = await page.evaluate('''() => {
                     const results = [];
                     const inputs = document.querySelectorAll(
-                        'input:not([type="file"]):not([type="hidden"]):not([type="radio"]):not([type="checkbox"]):not([type="submit"]), textarea'
+                        'input:not([type="file"]):not([type="hidden"]):not([type="radio"]):not([type="checkbox"]):not([type="submit"]), textarea, select'
                     );
                     for (const inp of inputs) {
                         const rect = inp.getBoundingClientRect();
@@ -815,9 +815,10 @@ class AshbyHandler(BaseHandler):
 
                     # Get the actual element by index
                     idx = field_info["index"]
+                    tag_name = field_info.get("tagName", "input")
                     elem = await page.evaluate_handle(f'''() => {{
                         const inputs = document.querySelectorAll(
-                            'input:not([type="file"]):not([type="hidden"]):not([type="radio"]):not([type="checkbox"]):not([type="submit"]), textarea'
+                            'input:not([type="file"]):not([type="hidden"]):not([type="radio"]):not([type="checkbox"]):not([type="submit"]), textarea, select'
                         );
                         let visibleIdx = 0;
                         for (const inp of inputs) {{
@@ -832,16 +833,37 @@ class AshbyHandler(BaseHandler):
                     try:
                         elem_as_element = elem.as_element()
                         if elem_as_element:
-                            await elem_as_element.click()
-                            await self.browser_manager.human_delay(100, 300)
-                            # Triple-clear to handle React state + autofill
-                            await elem_as_element.fill("")
-                            await page.keyboard.press("Control+a")
-                            await page.keyboard.press("Backspace")
-                            await self.browser_manager.human_delay(50, 100)
-                            await elem_as_element.type(value, delay=50)
-                            await self.browser_manager.human_delay(300, 700)
-                            logger.debug(f"Filled Ashby field by label '{label_text[:30]}' = '{value[:30]}'")
+                            if tag_name == "select":
+                                # Handle <select> dropdown — try label match then value match
+                                try:
+                                    await elem_as_element.select_option(label=value)
+                                except Exception:
+                                    try:
+                                        await elem_as_element.select_option(value=value)
+                                    except Exception:
+                                        # Fuzzy match: find option containing the value text
+                                        options = await elem_as_element.evaluate('''el => {
+                                            return Array.from(el.options).map(o => ({
+                                                value: o.value, text: o.textContent.trim()
+                                            }));
+                                        }''')
+                                        val_lower = value.lower()
+                                        for opt in options:
+                                            if val_lower in opt["text"].lower() or opt["text"].lower() in val_lower:
+                                                await elem_as_element.select_option(value=opt["value"])
+                                                break
+                                logger.debug(f"Filled Ashby SELECT by label '{label_text[:30]}' = '{value[:30]}'")
+                            else:
+                                await elem_as_element.click()
+                                await self.browser_manager.human_delay(100, 300)
+                                # Triple-clear to handle React state + autofill
+                                await elem_as_element.fill("")
+                                await page.keyboard.press("Control+a")
+                                await page.keyboard.press("Backspace")
+                                await self.browser_manager.human_delay(50, 100)
+                                await elem_as_element.type(value, delay=50)
+                                await self.browser_manager.human_delay(300, 700)
+                                logger.debug(f"Filled Ashby field by label '{label_text[:30]}' = '{value[:30]}'")
                             return True
                     except Exception as e:
                         logger.debug(f"fill_by_label error for '{label_text[:30]}': {e}")

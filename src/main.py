@@ -493,7 +493,7 @@ class InternshipAutoApplier:
 
             # Apply with timeout — ESC cancels handler and enters manual mode
             import time as _time
-            HANDLER_TIMEOUT_SECONDS = 300
+            HANDLER_TIMEOUT_SECONDS = 600
             start_time = _time.time()
             esc_interrupted = False
             handler._simplify_status = "not_checked"  # Reset per job — handlers are reused
