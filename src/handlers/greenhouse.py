@@ -61,9 +61,6 @@ class GreenhouseHandler(BaseHandler):
             # Dismiss any popups
             await self.dismiss_popups(page)
 
-            # Click Simplify autofill button NOW (on listing page — extension is visible here)
-            await self.wait_for_extension_autofill(page)
-
             # Check for CAPTCHA
             if not await self.handle_captcha(page):
                 return False
@@ -76,8 +73,8 @@ class GreenhouseHandler(BaseHandler):
                     return False
                 await self.browser_manager.human_delay(1000, 2000)
 
-                # Re-trigger Simplify on the form page (it was only triggered on the listing page)
-                await self.wait_for_extension_autofill(page)
+            # Trigger Simplify autofill ONLY on the form page (not the listing page)
+            await self.wait_for_extension_autofill(page)
 
             # Detect form type
             form_type = await self.detect_form_type(page)
@@ -514,17 +511,9 @@ class GreenhouseHandler(BaseHandler):
             if uploaded:
                 await self._verify_resume_upload(target)
 
-        # Upload cover letter ONLY if there's a clearly labeled cover letter field
-        cover_letter_path = self._resolve_file_path(self.form_filler.config.get("files", {}).get("cover_letter"))
-        if cover_letter_path:
-            has_cl_field = await target.query_selector(
-                'input[type="file"][data-field*="cover"], input[type="file"][name*="cover"], '
-                'input[type="file"]#cover_letter, input[type="file"][id*="cover"]'
-            )
-            if has_cl_field:
-                await self._upload_cover_letter(target, cover_letter_path)
-            else:
-                logger.debug("No cover letter field found — skipping upload")
+        # Cover letter DISABLED — skip unless field is explicitly required
+        # Generic AI cover letters hurt more than help (obvious AI slop)
+        logger.debug("Cover letter upload skipped (disabled — not submitting AI-generated cover letters)")
 
         # Upload transcript if available
         transcript_path = self._resolve_file_path(self.form_filler.config.get("files", {}).get("transcript"))
@@ -1820,6 +1809,7 @@ class GreenhouseHandler(BaseHandler):
                     pass
 
             if not found:
+                logger.warning(f"React-Select fill FAILED for {inp_id}: answer={answer[:30]!r}, question={question_text[:50]!r} — all strategies exhausted")
                 await self._get_keyboard(page).press("Escape")
                 return False
 
@@ -2556,6 +2546,29 @@ class GreenhouseHandler(BaseHandler):
             end_month = month_names[now.month - 1]
             end_year = str(now.year)
 
+        # Ensure work experience section is expanded — click "Add Work Experience" if needed
+        company_field = await page.query_selector('input#company-name-0, input[id*="company-name"]')
+        if not company_field or not await company_field.is_visible():
+            for add_sel in [
+                'button:has-text("Add Work Experience")',
+                'button:has-text("Add Employment")',
+                'a:has-text("Add Work Experience")',
+                'button:has-text("Add Another Employment")',
+                '[data-qa="add-employment"]',
+                'button[aria-label*="employment" i]',
+                'button[aria-label*="work experience" i]',
+            ]:
+                try:
+                    btn = await page.query_selector(add_sel)
+                    if btn and await btn.is_visible():
+                        await btn.click()
+                        await asyncio.sleep(0.8)
+                        logger.info(f"Clicked '{add_sel}' to expand work experience section")
+                        break
+                except Exception as e:
+                    logger.debug(f"Work experience expand: '{add_sel}' failed: {e}")
+                    continue
+
         # ── TEXT FIELDS: company-name-0, title-0 ──────────────────────
         text_fields = {
             "company-name": company,
@@ -2685,11 +2698,18 @@ class GreenhouseHandler(BaseHandler):
                     except Exception:
                         continue
 
+                if not inp:
+                    logger.debug(f"Work experience date '{field_id_base}' input not found by selector — trying React-Select dropdown")
+
                 if inp:
                     current_val = await inp.evaluate('(el) => el.value')
                     if current_val and current_val.strip():
-                        logger.debug(f"Work experience date '{field_id_base}' already has value: {current_val}")
-                        continue
+                        # Override if our config value differs (Simplify may have filled wrong year)
+                        if current_val.strip() == value:
+                            logger.debug(f"Work experience date '{field_id_base}' already correct: {current_val}")
+                            continue
+                        else:
+                            logger.info(f"Work experience date '{field_id_base}' has wrong value '{current_val}' — overriding with '{value}'")
 
                     # Force-set hidden input value
                     safe_val = value.replace("\\", "\\\\").replace('"', '\\"')
@@ -4184,7 +4204,9 @@ class GreenhouseHandler(BaseHandler):
         try:
             # PHASE 1: Force-fill education fields by ID (school--0, degree--0, etc.)
             # Also handles non-standard IDs like education-7--school, education-9--degree
-            edu = self.form_filler.config.get("education", {})
+            # education is a list in config — grab first entry
+            edu_raw = self.form_filler.config.get("education", {})
+            edu = edu_raw[0] if isinstance(edu_raw, list) and edu_raw else (edu_raw if isinstance(edu_raw, dict) else {})
             edu_fields = {
                 "school": edu.get("school", "San Jose State University"),
                 "degree": edu.get("degree", "Bachelor's Degree"),
@@ -4275,8 +4297,7 @@ class GreenhouseHandler(BaseHandler):
                 except Exception as e:
                     logger.debug(f"PRE-SUBMIT INJECT: Failed to force-fill date {field_id}: {e}")
 
-            if edu_injected:
-                logger.info(f"PRE-SUBMIT INJECT: Force-filled {edu_injected} education/date fields")
+            logger.info(f"PRE-SUBMIT INJECT P1: Scanned {len(edu_fields)} edu fields + dates, injected {edu_injected}")
 
             # PHASE 2: Generic React-Select injection for other dropdowns
             injected = await page.evaluate('''() => {
@@ -4294,8 +4315,9 @@ class GreenhouseHandler(BaseHandler):
                     }
                     const displayValue = sv.textContent.trim();
 
-                    // Find the container and look for empty type="text" or type="hidden" inputs
-                    let container = ctrl.closest('.field, .select, [class*="field"], [class*="question"]');
+                    // Find the container — narrow scope to avoid cross-question injection
+                    let container = ctrl.closest('.application-question, .field');
+                    if (!container) container = ctrl.parentElement?.parentElement?.parentElement?.parentElement;
                     if (!container) container = ctrl.parentElement?.parentElement?.parentElement;
                     if (!container) continue;
 
@@ -4333,6 +4355,43 @@ class GreenhouseHandler(BaseHandler):
                 logger.info(f"PRE-SUBMIT INJECT: Injected {len(injected)} empty inputs from React-Select display values")
             else:
                 logger.debug("PRE-SUBMIT INJECT: No empty inputs found needing injection")
+
+            # PHASE 3: Direct scan for question_* empty text inputs — find nearest React-Select display value
+            # Catches inputs Phase 2 missed (different DOM structure / no .select__control ancestor)
+            phase3_injected = await page.evaluate('''() => {
+                const results = [];
+                const desc = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value");
+                if (!desc || !desc.set) return results;
+                const nativeSetter = desc.set;
+                const questionInputs = document.querySelectorAll('input[id^="question_"]');
+                for (const inp of questionInputs) {
+                    if (inp.type === "hidden") continue;
+                    if (inp.getAttribute("role") === "combobox") continue;
+                    if (inp.id.includes("react-select")) continue;
+                    const val = inp.value ? inp.value.trim() : "";
+                    if (val !== "") continue; // already filled (possibly by Phase 2)
+                    let el = inp.parentElement;
+                    for (let k = 0; k < 6 && el; k++) {
+                        const sv = el.querySelector(".select__single-value, [class*=singleValue]");
+                        if (sv) {
+                            const trimmed = sv.textContent.trim();
+                            if (trimmed && trimmed !== "Select...") {
+                                nativeSetter.call(inp, trimmed);
+                                inp.dispatchEvent(new Event("input", { bubbles: true }));
+                                inp.dispatchEvent(new Event("change", { bubbles: true }));
+                                results.push({ inputId: inp.id, value: trimmed });
+                                break;
+                            }
+                        }
+                        el = el.parentElement;
+                    }
+                }
+                return results;
+            }''')
+            p3_count = len(phase3_injected or [])
+            for item in (phase3_injected or []):
+                logger.info(f"PRE-SUBMIT INJECT P3: Set {item['inputId']} = {item['value']}")
+            logger.info(f"PRE-SUBMIT INJECT P3: Scanned question_* inputs, injected {p3_count}")
 
         except Exception as e:
             logger.debug(f"Error in pre-submit inject: {e}")
@@ -4485,6 +4544,8 @@ class GreenhouseHandler(BaseHandler):
 
         # ── PRE-SUBMIT VALIDATION: Check all fields are filled ──────────
         validation = await self._pre_submit_validation(page)
+        logger.info(f"PRE-SUBMIT V1: passed={validation['passed']}, fill_rate={validation.get('dropdown_fill_pct', '?')}%, "
+                     f"empty_dropdowns={validation.get('empty_dropdowns', [])}, empty_required={validation.get('empty_required', [])}")
         if not validation["passed"]:
             logger.warning("PRE-SUBMIT: Empty fields detected — attempting retry fill...")
 
@@ -4546,6 +4607,8 @@ class GreenhouseHandler(BaseHandler):
 
             # Re-validate after retry
             validation2 = await self._pre_submit_validation(page)
+            logger.info(f"PRE-SUBMIT V2: passed={validation2['passed']}, fill_rate={validation2.get('dropdown_fill_pct', '?')}%, "
+                         f"empty_dropdowns={validation2.get('empty_dropdowns', [])}, empty_required={validation2.get('empty_required', [])}")
             if not validation2["passed"]:
                 empty_count = len(validation2["empty_dropdowns"]) + len(validation2["empty_required"])
                 if len(validation2["empty_required"]) > 0:
@@ -4636,7 +4699,15 @@ class GreenhouseHandler(BaseHandler):
                     # Check for email verification code field (appears AFTER first submit)
                     verified = await self._handle_email_verification(page)
                     if verified:
-                        logger.info("Verification code entered — re-submitting")
+                        logger.info("Verification code entered — re-solving reCAPTCHA before re-submitting")
+                        await self.browser_manager.human_delay(500, 1000)
+                        # Re-solve reCAPTCHA (token consumed by first submit)
+                        # solve_invisible_recaptcha already no-ops when no CAPTCHA is present
+                        captcha_ok = await self.solve_invisible_recaptcha(page)
+                        if captcha_ok:
+                            logger.info("Re-solved reCAPTCHA after verification code")
+                        else:
+                            logger.debug("reCAPTCHA re-solve returned False (may not be needed)")
                         await self.browser_manager.human_delay(500, 1000)
                         # Re-click submit after entering verification code
                         btn2 = await page.query_selector(selector)

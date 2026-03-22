@@ -751,7 +751,7 @@ class AshbyHandler(BaseHandler):
                 fields = await page.evaluate('''() => {
                     const results = [];
                     const inputs = document.querySelectorAll(
-                        'input:not([type="file"]):not([type="hidden"]):not([type="radio"]):not([type="checkbox"]):not([type="submit"]), textarea'
+                        'input:not([type="file"]):not([type="hidden"]):not([type="radio"]):not([type="checkbox"]):not([type="submit"]), textarea, select'
                     );
                     for (const inp of inputs) {
                         const rect = inp.getBoundingClientRect();
@@ -774,12 +774,24 @@ class AshbyHandler(BaseHandler):
                         // 3. Check parent/ancestor for label
                         if (!labelText) {
                             let parent = inp.parentElement;
-                            for (let i = 0; i < 4 && parent; i++) {
-                                const lbl = parent.querySelector("label, legend, h3, h4, [class*='label']");
-                                if (lbl && lbl.textContent.trim()) {
+                            for (let i = 0; i < 5 && parent; i++) {
+                                const lbl = parent.querySelector("label, legend, h3, h4, [class*='label'], [class*='Label'], [data-testid*='label']");
+                                if (lbl && lbl.textContent.trim() && !lbl.contains(inp)) {
                                     labelText = lbl.textContent;
                                     break;
                                 }
+                                // Also check direct child spans/divs that look like labels
+                                if (!labelText) {
+                                    for (const child of parent.children) {
+                                        if (child === inp || child.contains(inp)) continue;
+                                        if ((child.tagName === 'SPAN' || child.tagName === 'DIV' || child.tagName === 'P')
+                                            && child.textContent.trim().length < 50 && child.textContent.trim().length > 0) {
+                                            labelText = child.textContent;
+                                            break;
+                                        }
+                                    }
+                                }
+                                if (labelText) break;
                                 parent = parent.parentElement;
                             }
                         }
@@ -815,9 +827,10 @@ class AshbyHandler(BaseHandler):
 
                     # Get the actual element by index
                     idx = field_info["index"]
+                    tag_name = field_info.get("tagName", "input")
                     elem = await page.evaluate_handle(f'''() => {{
                         const inputs = document.querySelectorAll(
-                            'input:not([type="file"]):not([type="hidden"]):not([type="radio"]):not([type="checkbox"]):not([type="submit"]), textarea'
+                            'input:not([type="file"]):not([type="hidden"]):not([type="radio"]):not([type="checkbox"]):not([type="submit"]), textarea, select'
                         );
                         let visibleIdx = 0;
                         for (const inp of inputs) {{
@@ -832,16 +845,37 @@ class AshbyHandler(BaseHandler):
                     try:
                         elem_as_element = elem.as_element()
                         if elem_as_element:
-                            await elem_as_element.click()
-                            await self.browser_manager.human_delay(100, 300)
-                            # Triple-clear to handle React state + autofill
-                            await elem_as_element.fill("")
-                            await page.keyboard.press("Control+a")
-                            await page.keyboard.press("Backspace")
-                            await self.browser_manager.human_delay(50, 100)
-                            await elem_as_element.type(value, delay=50)
-                            await self.browser_manager.human_delay(300, 700)
-                            logger.debug(f"Filled Ashby field by label '{label_text[:30]}' = '{value[:30]}'")
+                            if tag_name == "select":
+                                # Handle <select> dropdown — try label match then value match
+                                try:
+                                    await elem_as_element.select_option(label=value)
+                                except Exception:
+                                    try:
+                                        await elem_as_element.select_option(value=value)
+                                    except Exception:
+                                        # Fuzzy match: find option containing the value text
+                                        options = await elem_as_element.evaluate('''el => {
+                                            return Array.from(el.options).map(o => ({
+                                                value: o.value, text: o.textContent.trim()
+                                            }));
+                                        }''')
+                                        val_lower = value.lower()
+                                        for opt in options:
+                                            if val_lower in opt["text"].lower() or opt["text"].lower() in val_lower:
+                                                await elem_as_element.select_option(value=opt["value"])
+                                                break
+                                logger.debug(f"Filled Ashby SELECT by label '{label_text[:30]}' = '{value[:30]}'")
+                            else:
+                                await elem_as_element.click()
+                                await self.browser_manager.human_delay(100, 300)
+                                # Triple-clear to handle React state + autofill
+                                await elem_as_element.fill("")
+                                await page.keyboard.press("Control+a")
+                                await page.keyboard.press("Backspace")
+                                await self.browser_manager.human_delay(50, 100)
+                                await elem_as_element.type(value, delay=50)
+                                await self.browser_manager.human_delay(300, 700)
+                                logger.debug(f"Filled Ashby field by label '{label_text[:30]}' = '{value[:30]}'")
                             return True
                     except Exception as e:
                         logger.debug(f"fill_by_label error for '{label_text[:30]}': {e}")
@@ -858,6 +892,50 @@ class AshbyHandler(BaseHandler):
                 logger.info("Waited for Ashby autofill from resume to complete")
 
             # STEP 2: Fill personal info — overwrite any autofill with our values
+            # Debug: log all discovered field labels for troubleshooting
+            try:
+                debug_labels = await page.evaluate('''() => {
+                    const results = [];
+                    const inputs = document.querySelectorAll(
+                        'input:not([type="file"]):not([type="hidden"]):not([type="radio"]):not([type="checkbox"]):not([type="submit"]), textarea'
+                    );
+                    for (const inp of inputs) {
+                        const rect = inp.getBoundingClientRect();
+                        if (rect.width === 0 || rect.height === 0) continue;
+                        let label = inp.getAttribute("aria-label") || "";
+                        if (!label && inp.id) {
+                            const lbl = document.querySelector('label[for="' + inp.id + '"]');
+                            if (lbl) label = lbl.textContent;
+                        }
+                        if (!label) {
+                            let parent = inp.parentElement;
+                            for (let i = 0; i < 5 && parent; i++) {
+                                const lbl = parent.querySelector("label, legend, h3, h4, [class*='label'], [class*='Label']");
+                                if (lbl && lbl.textContent.trim() && !lbl.contains(inp)) {
+                                    label = lbl.textContent;
+                                    break;
+                                }
+                                for (const child of parent.children) {
+                                    if (child === inp || child.contains(inp)) continue;
+                                    if ((child.tagName === 'SPAN' || child.tagName === 'DIV' || child.tagName === 'P')
+                                        && child.textContent.trim().length < 50 && child.textContent.trim().length > 0) {
+                                        label = child.textContent;
+                                        break;
+                                    }
+                                }
+                                if (label) break;
+                                parent = parent.parentElement;
+                            }
+                        }
+                        if (!label) label = inp.placeholder || "";
+                        results.push(label.trim().substring(0, 60) + " [name=" + (inp.name || "?") + "]");
+                    }
+                    return results;
+                }''')
+                logger.debug(f"Ashby form fields discovered: {debug_labels}")
+            except Exception:
+                pass
+
             full_name = f"{personal.get('first_name', '')} {personal.get('last_name', '')}".strip()
 
             # Try firstName/lastName split first
@@ -873,8 +951,10 @@ class AshbyHandler(BaseHandler):
                 ], personal.get("last_name", ""))
             else:
                 # Ashby often uses a single "Name" or "Full Name" field
+                # Also handles "First and Last Name" combined fields (e.g., Zello)
                 if not await fill_by_label(r"^(?:full\s+)?name\s*\*?$", full_name):
-                    await fill_by_label(r"\bname\b", full_name)
+                    if not await fill_by_label(r"first\s+and\s+last\s+name", full_name):
+                        await fill_by_label(r"\bname\b", full_name)
 
             # Email — always use our Ashby alias, not whatever autofill put in
             if not await fill([
@@ -915,7 +995,7 @@ class AshbyHandler(BaseHandler):
                 'input[name*="location"]', 'input[name*="city"]',
                 'input[placeholder*="Location"]', 'input[placeholder*="City"]',
             ], personal.get("city", "")):
-                await fill_by_label(r"location|city", f"{personal.get('city', '')}, {personal.get('state', '')}")
+                await fill_by_label(r"location|city|where.*(?:based|located)", f"{personal.get('city', '')}, {personal.get('state', '')}")
 
             # Education
             if not await fill([

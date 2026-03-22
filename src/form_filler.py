@@ -1088,6 +1088,12 @@ class FormFiller:
                     id_attr = await element.get_attribute("id") or ""
                     placeholder = await element.get_attribute("placeholder") or ""
 
+                    # Skip work experience date fields — GH handler fills these with correct config dates
+                    # form_filler would fill them with graduation dates (wrong)
+                    if id_attr and any(id_attr.startswith(p) for p in ['start-date-', 'end-date-']) and any(c.isdigit() for c in id_attr):
+                        logger.debug(f"Skipping work experience date field '{id_attr}' — GH handler will fill")
+                        continue
+
                     # Try to find associated label
                     label = await self._get_label_for_element(page, element, id_attr)
 

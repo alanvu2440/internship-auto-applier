@@ -55,6 +55,60 @@ questions:
   applicant privacy acknowledgement:
     answer: 'Yes'
     type: select
+  applicant privacy notice:
+    answer: Acknowledge / Confirm
+    type: select
+  "applicant privacy notice*":
+    answer: Acknowledge / Confirm
+    type: select
+  "applicant & employee privacy policy*":
+    answer: Acknowledge / Confirm
+    type: select
+  "applicant & employee privacy policy":
+    answer: Acknowledge / Confirm
+    type: select
+  ? "this is an internship role that will require about 3 days/week be spent onsite at our headquarters located in south austin (near dripping springs). are you willing to work onsite 3 days/week and do you have transportation to get to work?"
+  : answer: 'Yes'
+    type: select
+  "are you willing to work onsite 3 days/week":
+    answer: 'Yes'
+    type: select
+  privacy:
+    answer: 'Yes'
+    type: select
+  "privacy *":
+    answer: 'Yes'
+    type: select
+  what is your preferred work location?:
+    answer: 'New York'
+    type: select
+  sex:
+    answer: 'Male'
+    type: select
+  sex*:
+    answer: 'Male'
+    type: select
+  gender*:
+    answer: 'Male'
+    type: select
+  are you a veteran or active member of the united states armed forces?:
+    answer: 'I am not a protected veteran'
+    type: select
+  "are you a veteran or active member of the united states armed forces?*":
+    answer: 'I am not a protected veteran'
+    type: select
+  do you currently live within a 60-mile radius of houston, tx?:
+    answer: 'No'
+    type: select
+  "do you currently live within a 60-mile radius of houston, tx?*":
+    answer: 'No'
+    type: select
+  do you have a high school diploma, or have you successfully passed a high school equivalency exam such as the ged?:
+    answer: 'Yes'
+    type: select
+  which practice area of dark wolf solutions do you feel you most align with?:
+    answer: 'Software Engineering'
+    type: checkbox
   are any of your immediate family members practicing health care professionals that may use or purchase heartflow products?:
     answer: 'No'
     type: select
@@ -765,8 +819,8 @@ questions:
     answer: Bachelor of Science
     type: select
   desired salary or hourly rate:
-    answer: Hourly
-    type: select
+    answer: '20'
+    type: text
   did a comstock/parkx employee refer you to this position?:
     answer: 'No'
     type: select
@@ -814,7 +868,7 @@ questions:
   : answer: N/A
     type: textarea
   do you currently live or are you willing to relocate to the job’s location?:
-    answer: 'Yes'
+    answer: ‘I am willing to relocate to this job’’s location.’
     type: select
   do you currently or have you ever worked for lasko products or any of its associated companies?:
     answer: 'No'
@@ -844,7 +898,7 @@ questions:
     answer: San Jose, CA
     type: select
   do you currently reside in the greater seattle area?:
-    answer: San Jose, CA
+    answer: 'No'
     type: select
   do you currently reside in the state of kansas or missouri?:
     answer: San Jose, CA
@@ -1810,7 +1864,7 @@ questions:
     answer: San Jose, CA
     type: select
   in what state is the university you attend located?:
-    answer: SCHOOL_FROM_CONFIG
+    answer: California
     type: select
   internship terms (select one or more that match your availability):
     answer: Summer 2026
@@ -1979,7 +2033,7 @@ questions:
     answer: Online Job Board
     type: text
   'please specify how many hours per week you are available:':
-    answer: 40
+    answer: '40 hours'
     type: select
   please specify your expected graduation year (example, 2027):
     answer: May 2026
@@ -2022,7 +2076,7 @@ questions:
     answer: N/A
     type: select
   school name:
-    answer: SCHOOL_FROM_CONFIG
+    answer: San Jose State University
     type: select
   security clearance:
     answer: 'No'
@@ -2060,7 +2114,7 @@ questions:
     answer: Open to discuss
     type: select
   ? tell us about a time you took full ownership of a challenging moment (outside of your schoolwork), and saw it through to the end.
-  : answer: SCHOOL_FROM_CONFIG
+  : answer: 'During my time at Kruiz, I led the migration of our data pipeline from batch to real-time processing. I identified the bottleneck, designed the new architecture, coordinated with the team, and delivered the solution on time, reducing data latency from hours to minutes.'
     type: textarea
   ? tell us about your experience with cloud infrastructure, distributed systems, or large-scale computing. what projects, internships, or work experiences best demonstrate your skills in this area?
   : answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy
@@ -2239,7 +2293,7 @@ questions:
     answer: I'm drawn to the innovative work being done at this company and see a strong
     type: textarea
   what city and state is the college/university located in?:
-    answer: SCHOOL_FROM_CONFIG
+    answer: California
     type: textarea
   what city do you currently live in?:
     answer: San Jose, CA
@@ -2290,7 +2344,7 @@ questions:
     answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy
     type: textarea
   what is the name of the college or university are you attending?:
-    answer: SCHOOL_FROM_CONFIG
+    answer: San Jose State University
     type: select
   what is the time zone you most commonly operate in?:
     answer: America/Los_Angeles
@@ -2395,7 +2449,7 @@ questions:
     answer: Python
     type: select
   what length of internship are you available for?:
-    answer: 10-12 weeks
+    answer: '3 month'
     type: select
   what location do you intend to work out of?:
     answer: San Jose, CA
@@ -2413,10 +2467,10 @@ questions:
     answer: 25%
     type: select
   what school are you currently attending?:
-    answer: SCHOOL_FROM_CONFIG
+    answer: San Jose State University
     type: select
   what school/program are you enrolled in currently?:
-    answer: SCHOOL_FROM_CONFIG
+    answer: San Jose State University
     type: select
   what state and country do you currently reside in?:
     answer: San Jose, CA
@@ -2437,10 +2491,10 @@ questions:
     answer: Backend
     type: select
   what university are you currently attending?:
-    answer: 'SCHOOL_FROM_CONFIG'
+    answer: 'San Jose State University'
     type: select
   what university do you currently attend?:
-    answer: SCHOOL_FROM_CONFIG
+    answer: San Jose State University
     type: select
   what year do you expect to complete your bachelor’s degree?:
     answer: May 2026
@@ -2528,7 +2582,7 @@ questions:
     answer: 'Yes'
     type: select
   which college did you attend?:
-    answer: SCHOOL_FROM_CONFIG
+    answer: San Jose State University
     type: select
   which country in the united kingdom do you reside in?:
     answer: N/A
@@ -2537,7 +2591,7 @@ questions:
     answer: Bachelor of Science
     type: select
   which institution do you currently attend/have most recently attended?:
-    answer: SCHOOL_FROM_CONFIG
+    answer: San Jose State University
     type: select
   which masters or phd program do you currently attend and what is your expected graduation year?:
     answer: May 2026
@@ -2546,10 +2600,10 @@ questions:
     answer: Python
     type: select
   which school are you attending.:
-    answer: SCHOOL_FROM_CONFIG
+    answer: San Jose State University
     type: select
   which school are you currently attending?:
-    answer: SCHOOL_FROM_CONFIG
+    answer: San Jose State University
     type: select
   which scout motors location are you closest to?:
     answer: N/A
@@ -2564,7 +2618,7 @@ questions:
     answer: San Jose, CA
     type: select
   which university are you currently attending?:
-    answer: SCHOOL_FROM_CONFIG
+    answer: San Jose State University
     type: text
   ? while we don't require any cover letter as a part of our application, we understand you might want to share more than just your resume. is there anything else you'd like to share with our team at sigma?
   : answer: At Kruiz, I coordinated a data entry team of 3 and 2 web scraper engineers while building
@@ -2992,20 +3046,276 @@ building scalable systems.'
 
   # Missing from Tenstorrent (3 failed attempts)
   what length of internship are you available for?:
-    answer: '4 months'
+    answer: '3 month'
     type: select
   please specify how many hours per week you are available:
-    answer: '40'
-    type: text
+    answer: '40 hours'
+    type: select
   how many hours per week are you available?:
-    answer: '40'
-    type: text
+    answer: '40 hours'
+    type: select
   what is the length of your internship?:
-    answer: '4 months'
+    answer: '3 month'
     type: select
   internship duration:
-    answer: '4 months'
+    answer: '3 month'
     type: select
   hours per week:
-    answer: '40'
+    answer: '40 hours'
+    type: select
+
+  years of work experience:
+    answer: '1'
+    type: select
+
+  what is your preferred work location?:
+    answer: 'New York'
+    type: select
+
+  in which language(s) are you fluent (written) other than english?:
+    answer: 'None'
+    type: select
+
+  "in which language(s) are you fluent (written) other than english?*":
+    answer: 'None'
+    type: select
+
+  privacy:
+    answer: 'Yes'
+    type: select
+
+  "privacy *":
+    answer: 'Yes'
+    type: select
+
+  in which language(s) are you fluent (spoken) other than english?:
+    answer: 'None'
+    type: select
+
+  "in which language(s) are you fluent (spoken) other than english?*":
+    answer: 'None'
+    type: select
+
+  are you able to be located at dw office location for the summer of 2026?:
+    answer: 'Yes'
+    type: select
+
+  "if you don't currently hold a security clearance, are you open to being considered for security clearance sponsorship?":
+    answer: 'No'
+    type: select
+
+  "voluntary self-identification: for government reporting purposes, we ask candidates to respond to the below self-identification survey. completion of the form is entirely voluntary. whatever your decision, it will not be considered in the hiring process or thereafter. any information that you do provide will be recorded and maintained in a confidential file. as set forth in dark wolf solutions’s equal employment opportunity policy, we do not discriminate on the basis of any protected group status under any applicable law. gender:":
+    answer: 'Prefer not to say'
+    type: select
+
+  voluntary self-identification for government reporting purposes, we ask candidates to respond to the below self-identification survey. completion of the form is entirely voluntary. whatever your decision, it will not be considered in the hiring process or thereafter. any information that you do provide will be recorded and maintained in a confidential file. as set forth in dark wolf solutions’s equal employment opportunity policy, we do not discriminate on the basis of any protected group status under any applicable law. are you hispanic/latino?:
+    answer: 'No'
+    type: select
+
+  ? "if you believe you belong to any of the categories of protected veterans. veteran status"
+  :
+    type: select
+
+  ? "form cc-305 voluntary self-identification of disability. disability status"
+  :
+    type: select
+
+  are you authorized to work in canada?:
+    answer: 'No'
+    type: select
+
+  are at least 18 years or older?:
+    answer: 'Yes'
+    type: select
+
+  do you have a high school diploma, or have you successfully passed a high school equivalency exam such as the ged?:
+    answer: 'Yes'
+    type: select
+
+  as part of our hiring process, 2k will conduct a pre-employment background check. we may also require written verification from your current employer that you have ended your employment.:
+    answer: 'Yes'
+    type: select
+
+  are you local to the burnaby area (or open to relocation) and are willing to come into the office 2 days a week?:
+    answer: 'Yes'
+    type: select
+
+  are you related to, or in a shared housing situation with, anyone who currently works for sie or any sie-affiliated studios?:
+    answer: 'No'
+    type: select
+
+  do you currently live within a 60-mile radius of houston, tx?:
+    answer: 'San Jose, CA'
+    type: select
+
+  how did you learn about this job?:
+    answer: 'Online Job Board'
+    type: select
+
+  do you require a work permit, visa or additional right to work support for the country where you are applying to work?:
+    answer: 'No'
+    type: select
+
+  do you currently work for, or have you previously worked for zscaler?:
+    answer: 'No'
+    type: select
+
+  have you been involved in procurement or contract award activities involving zscaler as a government employee or official?:
+    answer: 'No'
+    type: select
+
+  "if yes, please advise what support is needed:":
+    answer: 'As a U.S. student graduating in May 2026, I'
+    type: textarea
+
+  what branch of the us department of defense are you currently with?:
+    answer: 'Given the information in the candidate profile,...'
+    type: select
+
+  when are you eligible for the skillbridge program?:
+    answer: 'As per the provided candidate profile, there is no information regarding military service or separation dates, which are'
+    type: select
+
+  when is your estimated separation date?:
+    answer: 'N/A - Not a transitioning service member.'
+    type: select
+
+  will you now, or in the future require defense unicorns to sponsor an immigration case in order to employee you?:
+    answer: 'No'
+    type: select
+
+  what is your us citizenship status?:
+    answer: 'Yes'
+    type: select
+
+  do you have a common access card (cac)?:
+    answer: 'No'
+    type: select
+
+  do you have a security clearance? if so, which clearance level?:
+    answer: 'No'
+    type: select
+
+  what is the status of your security clearance?:
+    answer: 'No Clearance'
+    type: select
+
+  "what is the status of your security clearance? *":
+    answer: 'No Clearance'
+    type: select
+
+  if you do not have a security clearance, are you able to obtain one if necessary?:
+    answer: 'Yes'
+    type: select
+
+  in this question description we have provided a link to our california consumer privacy act (ccpa) disclosure. please acknowledge that you have been provided with this disclosure - link included in question description.:
+    answer: 'Yes'
+    type: select
+
+  can you work onsite in our nyc office?:
+    answer: 'Yes'
+    type: select
+
+  are you able to work up to 20 hours per week? (all authentic internships are part-time):
+    answer: 'Yes'
+    type: select
+
+  are you available to start your internship on june 15, 2026?:
+    answer: 'Yes'
+    type: select
+
+  which u.s. state or canadian province do you reside in?:
+    answer: 'California'
+    type: select
+
+  are you authorized to lawfully work for roku in the country to which you are applying? (required) 3c82ecc8:
+    answer: 'Yes'
+    type: select
+
+  school (required) e17f3007:
+    answer: 'San Jose State University, BS in Software Engineering, Graduating May 2026'
     type: text
+
+  degree (required) 212eafe2:
+    answer: 'Bachelor of Science in Software Engineering'
+    type: text
+
+  discipline (required) 044948c4:
+    answer: 'Software Engineering'
+    type: text
+
+  start date (required) d9805087:
+    answer: 'Available to start in late May or early June 2025, aligning with a typical summer internship schedule.'
+    type: text
+
+  end date (required) b97b843f:
+    answer: 'August 30, 2024 (for Summer 202'
+    type: text
+
+  school (required) 1278a7c3:
+    answer: 'San Jose State University'
+    type: text
+
+  degree (required) 2fb4e380:
+    answer: 'Bachelor of Science in Software Engineering, San Jose State University'
+    type: text
+
+  discipline (required) b69822ba:
+    answer: 'Software Engineering'
+    type: text
+
+  start date (required) 1bb2cbc4:
+    answer: 'Flexible, typically late May or early June 2025, upon completing my academic year.'
+    type: text
+
+  end date (required) d89919c9:
+    answer: 'August 23, 2024'
+    type: text
+
+  school (required) 5c15131b:
+    answer: 'San Jose State University'
+    type: text
+
+  degree (required) 2722b208:
+    answer: 'Bachelor of Science in Software Engineering, San Jose State University'
+    type: text
+
+  discipline (required) 4abd59b8:
+    answer: 'Software Engineering'
+    type: text
+
+  start date (required) 5dec6037:
+    answer: 'Flexible, ideally for Summer 2025, starting May or June.'
+    type: text
+
+  end date (required) 4b1511ed:
+    answer: 'August 16, 2024'
+    type: text
+
+  how did you originally hear about alku?:
+    answer: 'Online Job Board'
+    type: select
+
+  what is your expected college graduation year (undergraduate or graduate school year of graduation)?:
+    answer: 'May 2026'
+    type: select
+
+  please provide your permanent address.:
+    answer: '123 University Drive, San Jose, CA 95112'
+    type: textarea
+
+  are you currently enrolled in a bs/ba/beng program?:
+    answer: 'Yes'
+    type: select
+
+  when do you expect to graduate college/university?:
+    answer: 'May 2026'
+    type: select
+
+  are you currently finishing your sophomore or junior year in a bachelors program?:
+    answer: 'Senior'
+    type: select
+
+  current or most recent employer:
+    answer: 'Kruiz'
+    type: select

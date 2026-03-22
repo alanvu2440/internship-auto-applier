@@ -471,15 +471,82 @@ class CaptchaSolver:
         return None
 
     def _solve_hcaptcha_2captcha(self, sitekey: str, page_url: str) -> Optional[str]:
-        """Solve hCaptcha using 2captcha."""
+        """Solve hCaptcha using 2captcha's createTask API.
+
+        The old in.php endpoint no longer accepts method=hcaptcha
+        (returns ERROR_METHOD_CALL), so we use the newer JSON-based
+        createTask API with HCaptchaTaskProxyless directly.
+        """
+        import time
+        import requests
+
         try:
-            logger.debug(f"Sending hCaptcha to 2captcha: sitekey={sitekey[:20]}...")
-            result = self._solver.hcaptcha(sitekey=sitekey, url=page_url)
-            token = result.get("code") if isinstance(result, dict) else str(result)
-            if token and len(token) > 20:
-                return token
-            logger.warning(f"2captcha hCaptcha returned unexpected result: {result}")
+            logger.debug(f"Sending hCaptcha to 2captcha createTask API: sitekey={sitekey[:20]}...")
+
+            # Step 1: Create task via JSON API
+            create_resp = requests.post(
+                "https://api.2captcha.com/createTask",
+                json={
+                    "clientKey": self.api_key,
+                    "task": {
+                        "type": "HCaptchaTaskProxyless",
+                        "websiteURL": page_url,
+                        "websiteKey": sitekey,
+                    },
+                },
+                timeout=30,
+            )
+            create_data = create_resp.json()
+
+            if create_data.get("errorId", 0) != 0:
+                error_code = create_data.get("errorCode", "unknown")
+                error_desc = create_data.get("errorDescription", "")
+                logger.error(f"2captcha createTask failed: {error_code} — {error_desc}")
+                return None
+
+            task_id = create_data.get("taskId")
+            if not task_id:
+                logger.error(f"2captcha createTask returned no taskId: {create_data}")
+                return None
+
+            logger.debug(f"hCaptcha task created: {task_id}")
+
+            # Step 2: Poll for result
+            max_wait = 180  # seconds
+            poll_interval = 5
+            elapsed = 0
+            while elapsed < max_wait:
+                time.sleep(poll_interval)
+                elapsed += poll_interval
+
+                result_resp = requests.post(
+                    "https://api.2captcha.com/getTaskResult",
+                    json={
+                        "clientKey": self.api_key,
+                        "taskId": task_id,
+                    },
+                    timeout=30,
+                )
+                result_data = result_resp.json()
+
+                if result_data.get("errorId", 0) != 0:
+                    error_code = result_data.get("errorCode", "unknown")
+                    logger.error(f"2captcha getTaskResult error: {error_code}")
+                    return None
+
+                status = result_data.get("status")
+                if status == "ready":
+                    solution = result_data.get("solution", {})
+                    token = solution.get("gRecaptchaResponse") or solution.get("token")
+                    if token and len(token) > 20:
+                        return token
+                    logger.warning(f"2captcha hCaptcha unexpected solution: {solution}")
+                    return None
+                # status == "processing" — keep polling
+
+            logger.error(f"2captcha hCaptcha timed out after {max_wait}s")
             return None
+
         except Exception as e:
             logger.error(f"2captcha hCaptcha solving failed: {e}")
             return None
