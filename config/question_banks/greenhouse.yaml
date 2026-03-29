@@ -842,7 +842,7 @@ questions:
   : answer: N/A
     type: textarea
   do you currently live or are you willing to relocate to the job’s location?:
-    answer: ‘Yes’
+    answer: ‘Yes, I am willing to relocate’
     type: select
   do you currently or have you ever worked for lasko products or any of its associated companies?:
     answer: 'No'

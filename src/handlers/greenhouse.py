@@ -1782,7 +1782,7 @@ class GreenhouseHandler(BaseHandler):
                     pass
 
             # Strategy 4: When answer is Yes/No but options are descriptive — pick best affirmative/negative
-            if not found and answer.lower() in ("yes", "no"):
+            if not found and (answer.lower() in ("yes", "no") or answer.lower().startswith("yes") or answer.lower().startswith("no,") or answer.lower().startswith("no ")):
                 try:
                     await react_select_elem.click()
                     await self.browser_manager.human_delay(300, 500)
@@ -1804,7 +1804,8 @@ class GreenhouseHandler(BaseHandler):
                         if answer.lower() == "yes":
                             affirm = ["i am", "i have", "i do", "i can", "i meet", "i qualify",
                                        "i acknowledge", "i agree", "yes", "authorized", "citizen",
-                                       "permanent resident", "u.s. person"]
+                                       "permanent resident", "u.s. person", "willing to relocate",
+                                       "currently live", "this aligns", "aligns with"]
                             for opt, t in visible_opts:
                                 if any(x in t.lower() for x in affirm):
                                     await opt.click()
@@ -1835,10 +1836,9 @@ class GreenhouseHandler(BaseHandler):
                     await react_select_elem.click()
                     await self.browser_manager.human_delay(400, 600)
                     s5_menu = await self._find_visible_select_menu(page)
-                    if not s5_menu:
-                        logger.debug(f"Strategy 5: no visible menu for '{question_text[:40]}', skipping")
-                        raise Exception("no menu")
-                    s5_opts = await s5_menu.query_selector_all('.select__option, [role="option"]')
+                    # Strategy 5 is LAST RESORT — accept page scope if no menu found
+                    s5_root = s5_menu if s5_menu else page
+                    s5_opts = await s5_root.query_selector_all('.select__option, [role="option"]')
                     if s5_opts:
                         # Try fuzzy match: pick option with most word overlap with our answer
                         best_opt = None
