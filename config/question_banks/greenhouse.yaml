@@ -13,16 +13,13 @@ questions:
   ? '1. please confirm that you are either: (a) a u.s. citizen; (b) lawful permanent resident of the u.s. (green card holder); or (3) protected individual as defined by 8 u.s.c. 1324b(a)(3).'
   : answer: 'Yes'
     type: select
-  ? 2. please indicate whether you ever been indicted for or convicted of violating any of the u.s. criminal statues enumerated in 22 cfr 120.6 or violating a foreign criminal law on exportation of defense
-    articles where conviction of such law carries a minimum term of imprisonment of greater than one year.
+  ? 2. please indicate whether you ever been indicted for or convicted of violating any of the u.s. criminal statues enumerated in 22 cfr 120.6 or violating a foreign criminal law on exportation of defense articles where conviction of such law carries a minimum term of imprisonment of greater than one year.
   : answer: 'No'
     type: select
-  ? 3. please indicate whether you have been declared ineligible to contract with, or to receive a license or other approval to import defense articles or defense services from, or to receive an export
-    license or other approval from, any agency of the u.s. government.
+  ? 3. please indicate whether you have been declared ineligible to contract with, or to receive a license or other approval to import defense articles or defense services from, or to receive an export license or other approval from, any agency of the u.s. government.
   : answer: 'No'
     type: select
-  ? a. if no, please indicate your country of citizenship and, if different, the country in which you have most recently obtained citizenship or permanent residency status. this information will be used
-    to determine whether it would be possible to obtain any required license from the u.s. government. (enter in "n/a" if marked yes above)
+  ? a. if no, please indicate your country of citizenship and, if different, the country in which you have most recently obtained citizenship or permanent residency status. this information will be used to determine whether it would be possible to obtain any required license from the u.s. government. (enter in "n/a" if marked yes above)
   : answer: 'Yes'
     type: text
   acknowledge, confirm, and agree to the following statements.:
@@ -55,6 +52,60 @@ questions:
   applicant privacy acknowledgement:
     answer: 'Yes'
     type: select
+  applicant privacy notice:
+    answer: Acknowledge / Confirm
+    type: select
+  applicant privacy notice*:
+    answer: Acknowledge / Confirm
+    type: select
+  applicant & employee privacy policy*:
+    answer: Acknowledge / Confirm
+    type: select
+  applicant & employee privacy policy:
+    answer: Acknowledge / Confirm
+    type: select
+  ? this is an internship role that will require about 3 days/week be spent onsite at our headquarters located in south austin (near dripping springs). are you willing to work onsite 3 days/week and do you have transportation to get to work?
+  : answer: 'Yes'
+    type: select
+  are you willing to work onsite 3 days/week:
+    answer: 'Yes'
+    type: select
+  privacy:
+    answer: 'Yes'
+    type: select
+  privacy *:
+    answer: 'Yes'
+    type: select
+  what is your preferred work location?:
+    answer: New York
+    type: select
+  sex:
+    answer: Male
+    type: select
+  sex*:
+    answer: Male
+    type: select
+  gender*:
+    answer: Male
+    type: select
+  are you a veteran or active member of the united states armed forces?:
+    answer: I am not a protected veteran
+    type: select
+  are you a veteran or active member of the united states armed forces?*:
+    answer: I am not a protected veteran
+    type: select
+  do you currently live within a 60-mile radius of houston, tx?:
+    answer: 'No'
+    type: select
+  do you currently live within a 60-mile radius of houston, tx?*:
+    answer: 'No'
+    type: select
+  do you have a high school diploma, or have you successfully passed a high school equivalency exam such as the ged?:
+    answer: 'Yes'
+    type: select
+  which practice area of dark wolf solutions do you feel you most align with?:
+    answer: Software Engineering
+    type: checkbox
   are any of your immediate family members practicing health care professionals that may use or purchase heartflow products?:
     answer: 'No'
     type: select
@@ -64,9 +115,7 @@ questions:
   are you 18 years or older?:
     answer: 'Yes'
     type: select
-  ? 'are you a citizen of any country that is not included in the following list: argentina, australia, austria, belgium, brazil, bulgaria, canada, croatia, cyprus, czech republic, denmark, estonia, finland,
-    france, germany, greece, hungary, indonesia, ireland, italy, japan, kazakhstan, the republic of korea, latvia, lithuania, luxembourg, malta, mexico, morocco, netherlands, norway, poland, portugal, romania,
-    slovakia, slovenia, south africa, spain, sweden, switzerland, taiwan, turkey, ukraine, united arab emirates, united kingdom, or vietnam?'
+  ? 'are you a citizen of any country that is not included in the following list: argentina, australia, austria, belgium, brazil, bulgaria, canada, croatia, cyprus, czech republic, denmark, estonia, finland, france, germany, greece, hungary, indonesia, ireland, italy, japan, kazakhstan, the republic of korea, latvia, lithuania, luxembourg, malta, mexico, morocco, netherlands, norway, poland, portugal, romania, slovakia, slovenia, south africa, spain, sweden, switzerland, taiwan, turkey, ukraine, united arab emirates, united kingdom, or vietnam?'
   : answer: 'Yes'
     type: select
   are you a current employee?:
@@ -75,8 +124,7 @@ questions:
   are you a current or former alphabet employee (including google)?:
     answer: 'No'
     type: select
-  ? are you a current or former direct employee of any government institutions (including any governmental entities at the federal/national, state/provincial, and local levels and including publicly funded
-    institutions)?
+  ? are you a current or former direct employee of any government institutions (including any governmental entities at the federal/national, state/provincial, and local levels and including publicly funded institutions)?
   : answer: 'No'
     type: select
   are you a dual citizen?:
@@ -121,8 +169,7 @@ questions:
   are you able to legally work in the region you are applying for?:
     answer: 'Yes'
     type: select
-  ? are you able to live in austin, texas between the months of june and august? please note no housing accommodations will be provided if offered a position. auctane does not offer relocation assistance
-    for internships.
+  ? are you able to live in austin, texas between the months of june and august? please note no housing accommodations will be provided if offered a position. auctane does not offer relocation assistance for internships.
   : answer: 'Yes'
     type: select
   ? are you able to meet the travel requirements outlined in the job description, including the expected type, location, and frequency of travel for this role?
@@ -140,8 +187,7 @@ questions:
   ? are you able to work 5 days a week in office at the location this position is posted? please note that the final working schedule will be determined between the selected candidate and hiring manager.
   : answer: 'Yes'
     type: select
-  ? are you able to work a hybrid schedule (mix of in-person/remote) at the location this position is posted? please note that the final working schedule will be determined between the selected candidate
-    and hiring manager.
+  ? are you able to work a hybrid schedule (mix of in-person/remote) at the location this position is posted? please note that the final working schedule will be determined between the selected candidate and hiring manager.
   : answer: 'Yes'
     type: select
   are you able to work from our san jose office at least 3 times per week?:
@@ -180,9 +226,8 @@ questions:
   are you able to work weekends?:
     answer: 'Yes'
     type: select
-  ? are you able to, and do you agree to, comply with our in-office policy, which currently requires interns to work from their assigned office location five days per week (subject to approved time off
-    and leave, holidays, reasonable accommodations, and other exceptions as required by law)?
-  : answer: San Jose, CA
+  ? are you able to, and do you agree to, comply with our in-office policy, which currently requires interns to work from their assigned office location five days per week (subject to approved time off and leave, holidays, reasonable accommodations, and other exceptions as required by law)?
+  : answer: 'Yes'
     type: select
   are you already a member of our expert network?:
     answer: 'No'
@@ -313,12 +358,11 @@ questions:
   are you currently authorized to work in the country outlined for this job?:
     answer: 'Yes'
     type: select
-  ? are you currently authorized to work in the united states for any employer without restriction? (“without restriction” means not tied to a specific employer and not dependent on a pending or future
-    government filing.)
+  ? are you currently authorized to work in the united states for any employer without restriction? (“without restriction” means not tied to a specific employer and not dependent on a pending or future government filing.)
   : answer: 'Yes'
     type: select
   ? are you currently based in any of these countries? please note these are the only countries where we are accepting applications
-  : answer: San Jose, CA
+  : answer: Other
     type: select
   are you currently based in the los angeles area or willing to relocate to the los angeles area?:
     answer: 'Yes'
@@ -335,12 +379,10 @@ questions:
   are you currently employed at an nisc member site?:
     answer: 'No'
     type: select
-  ? are you currently employed by, or have you previously been employed by, volkswagen group or any of its subsidiaries, including but not limited to scout motors, audi, porsche, bentley, ducati, cupra,
-    seat, or škoda?
+  ? are you currently employed by, or have you previously been employed by, volkswagen group or any of its subsidiaries, including but not limited to scout motors, audi, porsche, bentley, ducati, cupra, seat, or škoda?
   : answer: 'Yes'
     type: select
-  ? are you currently employed with or have been employed by deloitte? deloitte is our external financial auditor and due diligence may be performed prior to employment to ensure independence requirements
-    are met. if you indicate yes, you agree that certain information may need to be disclosed to deloitte before employment to confirm independence.
+  ? are you currently employed with or have been employed by deloitte? deloitte is our external financial auditor and due diligence may be performed prior to employment to ensure independence requirements are met. if you indicate yes, you agree that certain information may need to be disclosed to deloitte before employment to confirm independence.
   : answer: 'Yes'
     type: select
   are you currently employed?:
@@ -376,8 +418,7 @@ questions:
   are you currently enrolled in a registered co-op program?:
     answer: 'Yes'
     type: select
-  ? are you currently enrolled in an accredited university pursuing a bachelor’s, master’s, or phd degree in computer science, physics, applied mathematics, statistics, engineering, computational biology,
-    or a closely related quantitative discipline, and will you be enrolled in school during the internship period?
+  ? are you currently enrolled in an accredited university pursuing a bachelor’s, master’s, or phd degree in computer science, physics, applied mathematics, statistics, engineering, computational biology, or a closely related quantitative discipline, and will you be enrolled in school during the internship period?
   : answer: 'Yes'
     type: select
   are you currently enrolled in an undergraduate or graduate program?:
@@ -395,8 +436,7 @@ questions:
   are you currently on a graduate visa?:
     answer: 'No'
     type: select
-  ? are you currently on a nonimmigrant visa (ex. f-1)? if you are, will you now or in the future require alarm.com to provide a written submission to your school or a government agency for you to maintain
-    your employment eligibility (ex. cpt/opt/stem opt)?
+  ? are you currently on a nonimmigrant visa (ex. f-1)? if you are, will you now or in the future require alarm.com to provide a written submission to your school or a government agency for you to maintain your employment eligibility (ex. cpt/opt/stem opt)?
   : answer: 'No'
     type: select
   are you currently or previously an employee of legend biotech?:
@@ -408,8 +448,7 @@ questions:
   are you currently pursuing an undergraduate or graduate degree?:
     answer: 'Yes'
     type: select
-  ? are you currently subject to any restrictive covenant, non-compete, non-solicit, confidentiality or any other agreement that may limit or restrict your scope and ability to work for alarm.com (or its
-    subsidiaries)?
+  ? are you currently subject to any restrictive covenant, non-compete, non-solicit, confidentiality or any other agreement that may limit or restrict your scope and ability to work for alarm.com (or its subsidiaries)?
   : answer: 'No'
     type: select
   are you currently working under a non-compete agreement?:
@@ -604,8 +643,7 @@ questions:
   are you willing to work in bellevue, wa?:
     answer: 'Yes'
     type: select
-  ? are you willing to work on-site at our nyc hq a minimum of three times a week (monday, tuesday, thursday) with a possibility of up to five days a week based on business needs? please note that this
-    is an on-site role, and we are not able to consider candidates that are looking for fully remote opportunities
+  ? are you willing to work on-site at our nyc hq a minimum of three times a week (monday, tuesday, thursday) with a possibility of up to five days a week based on business needs? please note that this is an on-site role, and we are not able to consider candidates that are looking for fully remote opportunities
   : answer: 'Yes'
     type: select
   are you willing to work onsite?:
@@ -629,14 +667,10 @@ questions:
   ? as part of this position, you will be required to be in san francisco office 3 days a week. are you ok with this requirement?
   : answer: 'Yes'
     type: select
-  ? as the position you are applying for requires access to export controlled technology, we must ask the following questions for the sole purpose of ensuring compliance with u.s. rules concerning the export
-    of controlled or protected technologies or information, including but not limited to u.s. state department regulations at 22 c.f.r. part 120 et seq., the u.s. department of commerce’s export administration
-    regulations found in 15 c.f.r. part 730 et seq., and the office of foreign assets control, department of the treasury regulations at 31 c.f.r. part 500 et seq., as may be amended (collectively, “export
-    control laws”).
+  ? as the position you are applying for requires access to export controlled technology, we must ask the following questions for the sole purpose of ensuring compliance with u.s. rules concerning the export of controlled or protected technologies or information, including but not limited to u.s. state department regulations at 22 c.f.r. part 120 et seq., the u.s. department of commerce’s export administration regulations found in 15 c.f.r. part 730 et seq., and the office of foreign assets control, department of the treasury regulations at 31 c.f.r. part 500 et seq., as may be amended (collectively, “export control laws”).
   : answer: United States — citizen since birth
     type: select
-  ? as we receive many candidates, it can be helpful if you let us know if there are any ai2 researchers you're excited to work with and/or 1-3 recent ai2 projects that resonate with you and/or 1-3 keywords
-    to describe your specific areas of interest. these are by no means binding, but can help us make sure your application is read by the right people.
+  ? as we receive many candidates, it can be helpful if you let us know if there are any ai2 researchers you're excited to work with and/or 1-3 recent ai2 projects that resonate with you and/or 1-3 keywords to describe your specific areas of interest. these are by no means binding, but can help us make sure your application is read by the right people.
   : answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy
     type: textarea
   as you begin the next chapter of your career, what are you most eager to learn or accomplish as an engineer?:
@@ -651,8 +685,7 @@ questions:
   ? based on the description above in our jd, is your experience/interest better aligned with data engineering or data platform engineering?
   : answer: My recent experience as a Data Engineer at Kruiz strongly aligns with Data Engineering, where I've
     type: textarea
-  ? because this position may have itar restrictions per the type of work that is required, do you require any additional sponsorship for us citizenship, permanent residence, or anything regarding a protected
-    category at this time or going forward?
+  ? because this position may have itar restrictions per the type of work that is required, do you require any additional sponsorship for us citizenship, permanent residence, or anything regarding a protected category at this time or going forward?
   : answer: 'Yes'
     type: select
   briefly explain why the areas you selected are of interest to you.:
@@ -679,17 +712,13 @@ questions:
   ? by submitting this application, do you certify that the provided information is true and accurate to the best of your knowledge?
   : answer: 'No'
     type: select
-  ? by submitting this application, i hereby provide consent to knowbe4 to communicate directly with me, and any employment references i provide to knowbe4, via phone call, text message, email, and/or linkedin
-    regarding my application for and potential employment with knowbe4. if at any time i want to opt-out of any form of communication, i will promptly inform knowbe4 of this choice.
+  ? by submitting this application, i hereby provide consent to knowbe4 to communicate directly with me, and any employment references i provide to knowbe4, via phone call, text message, email, and/or linkedin regarding my application for and potential employment with knowbe4. if at any time i want to opt-out of any form of communication, i will promptly inform knowbe4 of this choice.
   : answer: LINKEDIN_FROM_CONFIG
     type: select
-  ? by submitting your application, you agree to our data privacy policy. we may use ai tools to help us organize and assess candidate information to ensure a timely response to your application. do you
-    acknowledge and provide consent for this use of ai?
+  ? by submitting your application, you agree to our data privacy policy. we may use ai tools to help us organize and assess candidate information to ensure a timely response to your application. do you acknowledge and provide consent for this use of ai?
   : answer: 'No'
     type: select
-  ? by submitting your application, you consent to bamboohr and its third-party service providers collecting and processing your personal data, including, but not limited to photographic, audio/video recordings,
-    and biometric data, which may involve ai or algorithmic analysis, as necessary for recruitment, hiring, and business administration purposes. you also confirm that you have read and agree to our general
-    privacy notice and california privacy notice.
+  ? by submitting your application, you consent to bamboohr and its third-party service providers collecting and processing your personal data, including, but not limited to photographic, audio/video recordings, and biometric data, which may involve ai or algorithmic analysis, as necessary for recruitment, hiring, and business administration purposes. you also confirm that you have read and agree to our general privacy notice and california privacy notice.
   : answer: 'Yes'
     type: select
   can you be in dallas, tx and ready to start your internship with pmg by june 1, 2025?:
@@ -726,13 +755,13 @@ questions:
     answer: US Citizen
     type: select
   city & country in which you are currently located:
-    answer: San Jose, CA
+    answer: Other
     type: select
   clearance eligibility - this position requires eligibility to obtain and maintain a u.s. security clearance.:
     answer: 'Yes'
     type: select
   comments?:
-    answer: I am highly enthusiastic about the Systems Software Engineer Intern position at Clockwork Systems. My strong
+    answer: I am passionate about building scalable software systems. As a Computer Science student at San Jose State with experience in full-stack development, data engineering, and AI applications, I am eager to contribute to impactful projects and grow as an engineer.
     type: textarea
   confirm your expected graduation date:
     answer: May 2026
@@ -765,13 +794,13 @@ questions:
     answer: Bachelor of Science
     type: select
   desired salary or hourly rate:
-    answer: Hourly
-    type: select
+    answer: '20'
+    type: text
   did a comstock/parkx employee refer you to this position?:
     answer: 'No'
     type: select
   ? did someone refer you to strata? if so, please provide the referrer's name. if not, feel free to leave blank or type "no" in the answer box below.
-  : answer: N/A
+  : answer: 'No'
     type: select
   did you attend a 2026 spring career fair?:
     answer: 'No'
@@ -788,15 +817,14 @@ questions:
   do you currently have a relative employed with verisign?:
     answer: 'No'
     type: select
-  ? 'do you currently have any relative(s) employed by realtor.com or any news corp subsidiaries or vendor partners that you are aware of? (including: spouse or domestic/common-law partner, parent(s)/parent
-    in-laws, child, sibling, aunt, uncle, niece, nephew, or cousin)'
-  : answer: 'Yes'
+  ? 'do you currently have any relative(s) employed by realtor.com or any news corp subsidiaries or vendor partners that you are aware of? (including: spouse or domestic/common-law partner, parent(s)/parent in-laws, child, sibling, aunt, uncle, niece, nephew, or cousin)'
+  : answer: 'No'
     type: select
   do you currently have legal work authorization in the country where this position is based?:
     answer: 'Yes'
     type: select
   do you currently hold a visa that permits you to work in the uk? if so, could you share which type of visa it is?:
-    answer: Citizen
+    answer: 'No'
     type: select
   do you currently hold an active security clearance?:
     answer: 'No'
@@ -808,13 +836,13 @@ questions:
   : answer: 'Yes'
     type: select
   ? do you currently know of anyone who works at impinj? if so, please provide the employee's name and a brief description as to how you're acquainted.
-  : answer: 'Yes'
+  : answer: 'No'
     type: text
   ? do you currently know or have a professional connection with any olsson employees? if so, please provide their name(s) and your relationship.
   : answer: N/A
     type: textarea
   do you currently live or are you willing to relocate to the job’s location?:
-    answer: 'Yes'
+    answer: ‘Yes, I am willing to relocate’
     type: select
   do you currently or have you ever worked for lasko products or any of its associated companies?:
     answer: 'No'
@@ -823,34 +851,34 @@ questions:
     answer: 'No'
     type: select
   do you currently require or will you need sponsorship for employment visa status now or in the future?:
-    answer: Citizen
+    answer: 'No'
     type: select
   do you currently require sponsorship for employment visa status (e.g. h-1b visa, f1 visa, etc.)?:
-    answer: Citizen
+    answer: 'No'
     type: select
   do you currently require sponsorship for employment visa status (e.g., h-1b, f-1, m-1, etc.) to work in the united states?:
-    answer: Citizen
+    answer: 'No'
     type: select
   do you currently require sponsorship for employment visa status?:
-    answer: Citizen
+    answer: 'No'
     type: select
   do you currently reside in or will you be relocating to any of the following states?:
-    answer: San Jose, CA
+    answer: 'Yes'
     type: select
   do you currently reside in san francisco?:
-    answer: San Jose, CA
+    answer: 'Yes'
     type: select
   do you currently reside in the bay area?:
-    answer: San Jose, CA
+    answer: 'Yes'
     type: select
   do you currently reside in the greater seattle area?:
-    answer: San Jose, CA
+    answer: 'No'
     type: select
   do you currently reside in the state of kansas or missouri?:
-    answer: San Jose, CA
+    answer: 'No'
     type: select
   do you currently reside in toronto or the waterloo-kitchener area?:
-    answer: San Jose, CA
+    answer: 'No'
     type: select
   ? do you currently reside within a commutable distance to san francisco, ca, los angeles, ca or new york, ny for this internship?
   : answer: 'Yes'
@@ -862,7 +890,7 @@ questions:
     answer: 'Yes'
     type: text
   do you currently reside within commuting distance of our headquarters in chicago, il?:
-    answer: San Jose, CA
+    answer: 'No'
     type: select
   do you currently reside within the continental united states?:
     answer: 'Yes'
@@ -876,8 +904,7 @@ questions:
   do you currently, or will you in the future, require visa sponsorship to work in the country where this position is based?:
     answer: 'No'
     type: select
-  ? do you have a disability or chronic condition (physical, visual, auditory, cognitive, mental, emotional, or other) that substantially limits one or more of your major life activities, including mobility,
-    communication (seeing, hearing, speaking), and learning?
+  ? do you have a disability or chronic condition (physical, visual, auditory, cognitive, mental, emotional, or other) that substantially limits one or more of your major life activities, including mobility, communication (seeing, hearing, speaking), and learning?
   : answer: English (fluent), Vietnamese (conversational)
     type: select
   do you have a family member who works at commvault?:
@@ -907,8 +934,7 @@ questions:
   do you have an environmental science, engineering, water resources background?:
     answer: 'No'
     type: select
-  ? do you have any conflicts of interest that could affect your ability to perform the duties of the role you are applying for at scout motors, including financial interests held by you or your immediate
-    family in competitors, vendors, or clients relevant to this role, or any personal or professional relationships that could create a conflict? please describe any such conflicts.
+  ? do you have any conflicts of interest that could affect your ability to perform the duties of the role you are applying for at scout motors, including financial interests held by you or your immediate family in competitors, vendors, or clients relevant to this role, or any personal or professional relationships that could create a conflict? please describe any such conflicts.
   : answer: 'No'
     type: textarea
   ? do you have any contractual obligations (such as non-compete or non-solicitation agreements) that may impact your ability to work for us? if unsure, we encourage you to discuss this with a legal professional.
@@ -926,8 +952,7 @@ questions:
   do you have any professional experience with c# or .net?:
     answer: 'Yes'
     type: select
-  ? do you have any professional or personal connections to individuals currently employed by scout motors or any of its subsidiaries or related entities (for example, volkswagen group companies), including
-    relationships as a colleague, friend, or family member?
+  ? do you have any professional or personal connections to individuals currently employed by scout motors or any of its subsidiaries or related entities (for example, volkswagen group companies), including relationships as a colleague, friend, or family member?
   : answer: 'Yes'
     type: select
   do you have any relatives employed at the company?:
@@ -1023,8 +1048,7 @@ questions:
   do you have transportation and living accommodations in los angeles for the duration of the internship?:
     answer: 'Yes'
     type: select
-  ? do you have unlimited and unrestricted authorization to work in the united states (or, if the position is not based in the united states., do you have unlimited and unrestricted authorization to work
-    in the country where the position is located)?
+  ? do you have unlimited and unrestricted authorization to work in the united states (or, if the position is not based in the united states., do you have unlimited and unrestricted authorization to work in the country where the position is located)?
   : answer: 'Yes'
     type: select
   do you hold a security clearance?:
@@ -1060,8 +1084,7 @@ questions:
   do you need visa sponsorship?:
     answer: 'No'
     type: select
-  ? do you need, or will you need in the future, any immigration related support or sponsorship from verisign in order to begin or continue employment with verisign? this includes support (such as j-1,
-    f-1 opt, cpt, or stem opt) and/or visa sponsorship for employment (h-1b, h-1b1, e-3, or o-1).
+  ? do you need, or will you need in the future, any immigration related support or sponsorship from verisign in order to begin or continue employment with verisign? this includes support (such as j-1, f-1 opt, cpt, or stem opt) and/or visa sponsorship for employment (h-1b, h-1b1, e-3, or o-1).
   : answer: May 2026
     type: select
   do you now or in the future require sponsorship for employment visa status (e.g., h-1b, tn, e-3, f-1 visa status)?:
@@ -1091,8 +1114,7 @@ questions:
   ? do you now, or will you at any time in the future, require visa sponsorship for employment at realtor.com (beyond cpt or opt authorization)?
   : answer: 'No'
     type: select
-  ? 'do you now, or will you in the future, need sponsorship from an employer in order to obtain, extend or renew your authorization to work in the united states? please note: if you are on f-1 optional
-    practical training (opt) or cpt answer yes. we will review your individual case if selected for a position.'
+  ? 'do you now, or will you in the future, need sponsorship from an employer in order to obtain, extend or renew your authorization to work in the united states? please note: if you are on f-1 optional practical training (opt) or cpt answer yes. we will review your individual case if selected for a position.'
   : answer: 'No'
     type: select
   do you now, or will you in the future, require any type of visa sponsorship?:
@@ -1183,7 +1205,7 @@ questions:
     answer: 'Yes'
     type: select
   'end date of current/most recent employer: if applicable. if currently employed, enter n/a':
-    answer: N/A
+    answer: 'No'
     type: select
   ? 'engineering organization involvement: indicate if you are an active participant in any of the following engineering student groups or competitions listed below:'
   : answer: Given the lack of specific information in the c...
@@ -1191,15 +1213,13 @@ questions:
   expected graduation date?:
     answer: May 2026
     type: select
-  ? 'export control and compliance: for the sole purpose of determining export licensing requirements, please list any countries of which you are a citizen or legal permanent resident, and when you obtained
-    such status.'
+  ? 'export control and compliance: for the sole purpose of determining export licensing requirements, please list any countries of which you are a citizen or legal permanent resident, and when you obtained such status.'
   : answer: 'Yes'
     type: select
   'export control question:':
     answer: United States — citizen since birth
     type: select
-  ? export controls - this position requires access to information and technology that is subject to u.s. export controls. your responses to the questions below will be used solely to determine your eligibility
-    under u.s. law to receive information and materials subject to u.s. export controls.
+  ? export controls - this position requires access to information and technology that is subject to u.s. export controls. your responses to the questions below will be used solely to determine your eligibility under u.s. law to receive information and materials subject to u.s. export controls.
   : answer: United States — citizen since birth
     type: select
   feel free to write in your preferred pronouns or self-description, if not listed above. (optional):
@@ -1208,8 +1228,7 @@ questions:
   for a desirable role, would you consider relocating to another state?:
     answer: 'Yes'
     type: select
-  ? 'for export compliance assessment purposes only, is your national origin one of the following countries: north korea, cuba, syria, iran? this information is requested solely for the purpose of complying
-    with us export control laws and will not be used for other purposes.'
+  ? 'for export compliance assessment purposes only, is your national origin one of the following countries: north korea, cuba, syria, iran? this information is requested solely for the purpose of complying with us export control laws and will not be used for other purposes.'
   : answer: 'No'
     type: select
   for program 1 and 2 you will need genai experience.:
@@ -1251,8 +1270,7 @@ questions:
   have you completed at least one prior internship or co-op experience?:
     answer: 'Yes'
     type: select
-  ? have you entered into an agreement (such as a non-competition or non-solicitation agreement) with your current employer, or any former employer or other party, that might, in any way, restrict your
-    ability to work for our company?
+  ? have you entered into an agreement (such as a non-competition or non-solicitation agreement) with your current employer, or any former employer or other party, that might, in any way, restrict your ability to work for our company?
   : answer: 'No'
     type: select
   ? have you entered into an agreement with any former employer or other party (such as a noncompetition agreement) that might, in any way, restrict your ability to work for our company?
@@ -1369,8 +1387,7 @@ questions:
   have you previously worked for voyager?:
     answer: 'No'
     type: text
-  ? 'have you recently completed a degree or masters in information technology and information systems such as: computer science, software engineering, computer engineering and attained a 1st degree, masters
-    or higher?'
+  ? 'have you recently completed a degree or masters in information technology and information systems such as: computer science, software engineering, computer engineering and attained a 1st degree, masters or higher?'
   : answer: May 2026
     type: select
   have you served in the military?:
@@ -1380,7 +1397,7 @@ questions:
     answer: 'No'
     type: select
   have you used vercel, next.js, or any of our products? if so, how — and if not, what drew you to this role specifically?:
-    answer: While I haven't directly used Vercel or Next.js, I have extensive experience with
+    answer: While I haven't directly used Vercel or Next.js, I have extensive experience with modern web frameworks and cloud deployment. I've built full-stack applications using React, Python/Flask, and PostgreSQL, and deployed them using Docker and cloud services. I'm drawn to this role because of Vercel's impact on developer experience and web performance.
     type: textarea
   have you worked at applovin or any of its affiliates before?:
     answer: 'No'
@@ -1391,8 +1408,7 @@ questions:
   have you worked at neo4j before?:
     answer: 'No'
     type: select
-  ? have you worked at or been a consultant for sofi or any company subsequently acquired by a sofi entity (including galileo financial technologies, technisys, wyndham capital mortgage, zenbanx, 8 securities,
-    and/or golden pacific bancorp, clara lending)?
+  ? have you worked at or been a consultant for sofi or any company subsequently acquired by a sofi entity (including galileo financial technologies, technisys, wyndham capital mortgage, zenbanx, 8 securities, and/or golden pacific bancorp, clara lending)?
   : answer: 'No'
     type: select
   have you worked for bamboohr previously?:
@@ -1533,8 +1549,7 @@ questions:
   i acknowledge that all information provided is accurate and true.:
     answer: 'Yes'
     type: select
-  ? i acknowledge that by providing my phone number, i agree to receive text messages from sofi technologies in relation to this job application. message frequency varies. reply stop to opt-out of future
-    messaging. reply help for help. message and data rates may apply.
+  ? i acknowledge that by providing my phone number, i agree to receive text messages from sofi technologies in relation to this job application. message frequency varies. reply stop to opt-out of future messaging. reply help for help. message and data rates may apply.
   : answer: 'Yes'
     type: select
   ? i acknowledge that i have read, understood, and agree to be bound by the terms and conditions set forth in the applicant non-disclosure agreement.
@@ -1549,8 +1564,7 @@ questions:
   i confirm that my graduation date will be either fall 2025 or spring 2026:
     answer: May 2026
     type: select
-  ? i confirm that the information i have provided in my application and resume is true, complete, and accurate to the best of my knowledge. i understand that any false, misleading, or omitted information
-    may result in disqualification from consideration, withdrawal of an offer, or termination of employment if already hired.
+  ? i confirm that the information i have provided in my application and resume is true, complete, and accurate to the best of my knowledge. i understand that any false, misleading, or omitted information may result in disqualification from consideration, withdrawal of an offer, or termination of employment if already hired.
   : answer: 'Yes'
     type: select
   ? i consent to have my personal data disclosed to other momentum group entities to be considered for all open positions that fit my profile.
@@ -1565,19 +1579,14 @@ questions:
   i have read and understand the export control statement included in the job description above.:
     answer: 'Yes'
     type: select
-  ? i hereby certify that all information in my application is true and complete to the best of my knowledge. i understand that ai2 may perform a background investigation to make inquiries regarding my
-    education, work experience, credit record, criminal history, and references to determine my suitability for employment. i authorize ai2. to secure any information necessary to make a decision. i understand
-    that ai2 will adhere to the provisions of the fair credit reporting act, if applicable, and other applicable state and federal statutes concerning the securing of information, handling, utilization,
-    and release of information obtained in the pre-employment investigation. i understand that any material misrepresentation or omission on this application may be grounds for rejection of my application
-    or termination of any subsequent employment with ai2.
+  ? i hereby certify that all information in my application is true and complete to the best of my knowledge. i understand that ai2 may perform a background investigation to make inquiries regarding my education, work experience, credit record, criminal history, and references to determine my suitability for employment. i authorize ai2. to secure any information necessary to make a decision. i understand that ai2 will adhere to the provisions of the fair credit reporting act, if applicable, and other applicable state and federal statutes concerning the securing of information, handling, utilization, and release of information obtained in the pre-employment investigation. i understand that any material misrepresentation or omission on this application may be grounds for rejection of my application or termination of any subsequent employment with ai2.
   : answer: 'Yes'
     type: select
-  ? i understand and agree that knowbe4 does not permit the use of ai tools or assistance during the interview process. exceptions may be made for approved reasonable accommodations (please visit www.knowbe4.com/careers/request-accommodation
-    to make a request).
+  ? i understand and agree that knowbe4 does not permit the use of ai tools or assistance during the interview process. exceptions may be made for approved reasonable accommodations (please visit www.knowbe4.com/careers/request-accommodation to make a request).
   : answer: 'No'
     type: select
   ? i understand scout motors' internship program is designed for current undergraduate students who live in our local market and that no housing stipend is provided.
-  : answer: San Jose, CA
+  : answer: 'No'
     type: select
   ? i would like to receive updates from a recruiter about jobs and/or application activity via sms. please answer with yes or no.
   : answer: 'Yes'
@@ -1592,7 +1601,7 @@ questions:
   : answer: 'No'
     type: text
   'if citizenship status other, please explain:':
-    answer: N/A
+    answer: 'No'
     type: select
   if currently employed, reason for seeking new opportunity?:
     answer: 'No'
@@ -1615,35 +1624,32 @@ questions:
   if selected "referral", who referred you?:
     answer: 'No'
     type: select
-  ? if selected for hire, would you like to receive information regarding your first day via text message/sms? you may receive up to three messages via text by opting in. message and data rates may apply
-    depending on your mobile plan. you can opt out at any time.
+  ? if selected for hire, would you like to receive information regarding your first day via text message/sms? you may receive up to three messages via text by opting in. message and data rates may apply depending on your mobile plan. you can opt out at any time.
   : answer: 'Yes'
     type: select
   if selected self-describe for pronouns, please specify:
     answer: He/him
     type: select
   if yes, give name and relationship:
-    answer: N/A
+    answer: 'No'
     type: select
-  ? if yes, please briefly describe the nature of the crime(s), the date and place of conviction and the legal disposition of the case. this company will not deny employment to any applicant solely because
-    the person has been convicted of a crime. the company however, may consider the nature, date and circumstances of the offense as well as whether the offense is relevant to the duties of the position
-    applied for.
+  ? if yes, please briefly describe the nature of the crime(s), the date and place of conviction and the legal disposition of the case. this company will not deny employment to any applicant solely because the person has been convicted of a crime. the company however, may consider the nature, date and circumstances of the offense as well as whether the offense is relevant to the duties of the position applied for.
   : answer: N/A
     type: textarea
   if yes, please list relatives name(s) and department(s):
-    answer: N/A
+    answer: 'No'
     type: select
   if yes, please provide name(s) of individual(s) and your relationship to them.:
-    answer: N/A
+    answer: 'No'
     type: select
   if yes, please provide the name:
-    answer: N/A
+    answer: 'No'
     type: select
   if yes, please provide the name used during your employment and the approximate dates.:
-    answer: N/A
+    answer: 'No'
     type: select
   if yes, please state their name, the department or studio they work for, and their job title (if you know it).:
-    answer: N/A
+    answer: 'No'
     type: select
   if yes, which level of security clearance do you hold?:
     answer: 'No'
@@ -1723,8 +1729,7 @@ questions:
   if you have held a u.s. security clearance in the past, what clearance level have you held?:
     answer: 'No'
     type: select
-  ? if you have selected yes to the question above, please provide further details. if you choose to share this information with maven, you consent to the processing of the data provided for the purposes
-    of enabling maven to facilitate any required support or adjustments.
+  ? if you have selected yes to the question above, please provide further details. if you choose to share this information with maven, you consent to the processing of the data provided for the purposes of enabling maven to facilitate any required support or adjustments.
   : answer: 'Yes'
     type: select
   if you heard about this job through a referral, please list their name. if not applicable, skip this question.:
@@ -1779,7 +1784,7 @@ questions:
   : answer: I'm a U.S. citizen available to start full-time in May 2026 and flexible on location.
     type: text
   if you were referred by a corcept employee, please indicate the employee name or not applicable:
-    answer: N/A
+    answer: 'No'
     type: select
   if you were referred by an employee, please list their name.:
     answer: 'No'
@@ -1787,30 +1792,26 @@ questions:
   if you were referred, please identify how you know your referral source. if you were not referred, select not applicable.:
     answer: Not Applicable
     type: select
-  ? if your scope of work requires exposure to u.s. export administration controlled technology and you are a non-us person as defined below, will you be able to coordinate with axon trade compliance on
-    obtaining u.s. department of commerce licensing as needed?
+  ? if your scope of work requires exposure to u.s. export administration controlled technology and you are a non-us person as defined below, will you be able to coordinate with axon trade compliance on obtaining u.s. department of commerce licensing as needed?
   : answer: 'No'
     type: select
   impinj employment history:
     answer: 'No'
     type: select
-  ? impinj's summer internship program begins on monday, june 15th and wraps friday, september 3rd (the start date is non-negotiable while the end date is flexible to accommodate your academic obligations).
-    are you able to meet the required dates of the program?
+  ? impinj's summer internship program begins on monday, june 15th and wraps friday, september 3rd (the start date is non-negotiable while the end date is flexible to accommodate your academic obligations). are you able to meet the required dates of the program?
   : answer: May 2026
     type: select
-  ? in compliance with federal and state laws, all persons hired will be required to verify identity and eligibility to work in the united states and to complete the required employment eligibility verification
-    form upon hire. are you authorized to work lawfully in the united states for tenstorrent?
+  ? in compliance with federal and state laws, all persons hired will be required to verify identity and eligibility to work in the united states and to complete the required employment eligibility verification form upon hire. are you authorized to work lawfully in the united states for tenstorrent?
   : answer: 'Yes'
     type: select
-  ? in compliance with federal law, all persons hired will be required to verify identity and eligibility to work in the united states, and to complete the required employment eligibility verification form
-    (form i-9) at the start of employment. are you authorized to work lawfully in the united states for gelber group?
+  ? in compliance with federal law, all persons hired will be required to verify identity and eligibility to work in the united states, and to complete the required employment eligibility verification form (form i-9) at the start of employment. are you authorized to work lawfully in the united states for gelber group?
   : answer: 'Yes'
     type: select
   in what state do you currently reside?:
-    answer: San Jose, CA
+    answer: California
     type: select
   in what state is the university you attend located?:
-    answer: SCHOOL_FROM_CONFIG
+    answer: California
     type: select
   internship terms (select one or more that match your availability):
     answer: Summer 2026
@@ -1851,31 +1852,23 @@ questions:
   linkedin profile:
     answer: LINKEDIN_FROM_CONFIG
     type: select
-  ? madison energy infrastructure is an equal opportunity employer. madison energy infrastructure does not discriminate in employment on account of race, color, religion, national origin, citizenship status,
-    ancestry, age, sex (including sexual harassment), sexual orientation, marital status, physical or mental disability, military status, or unfavorable discharge from military service. i understand that
-    neither the completion of this application nor any other part of my consideration for employment establishes any obligation for madison energy infrastructure to hire me. if i am hired, i understand
-    that either madison energy infrastructure or i can terminate my employment at any time and for any reason, with or without cause and without prior notice. i understand that no representative of madison
-    energy infrastructure has the authority to make any assurance to the contrary. i attest with my signature below that i have given to madison energy infrastructure true and complete information on this
-    application. no requested information has been concealed. i authorize madison energy infrastructure to contact references provided for employment reference checks. if any information i have provided
-    is untrue, or if i have concealed material information, i understand that this will constitute cause for the denial of employment or immediate dismissal.
+  ? madison energy infrastructure is an equal opportunity employer. madison energy infrastructure does not discriminate in employment on account of race, color, religion, national origin, citizenship status, ancestry, age, sex (including sexual harassment), sexual orientation, marital status, physical or mental disability, military status, or unfavorable discharge from military service. i understand that neither the completion of this application nor any other part of my consideration for employment establishes any obligation for madison energy infrastructure to hire me. if i am hired, i understand that either madison energy infrastructure or i can terminate my employment at any time and for any reason, with or without cause and without prior notice. i understand that no representative of madison energy infrastructure has the authority to make any assurance to the contrary. i attest with my signature below that i have given to madison energy infrastructure true and complete information on
+    this application. no requested information has been concealed. i authorize madison energy infrastructure to contact references provided for employment reference checks. if any information i have provided is untrue, or if i have concealed material information, i understand that this will constitute cause for the denial of employment or immediate dismissal.
   : answer: 'No'
     type: select
-  ? oklo requires employees to travel twice a quarter annually to either headquarters or another designated location based on team/company needs or events. are you willing/able to travel twice a quarter
-    annually?
+  ? oklo requires employees to travel twice a quarter annually to either headquarters or another designated location based on team/company needs or events. are you willing/able to travel twice a quarter annually?
   : answer: 'Yes'
     type: select
   ? our headquarters office is a pet friendly office. is there anything that would prevent you from working in an office where there are dogs?
   : answer: 'No'
     type: select
-  ? our hybrid work model requires employees to be in our toronto office, located in little italy, at least two days per week (tuesdays and thursdays) and for three consecutive days at the end of each month
-    (tuesday, wednesday, thursday). are you able to meet this requirement?
+  ? our hybrid work model requires employees to be in our toronto office, located in little italy, at least two days per week (tuesdays and thursdays) and for three consecutive days at the end of each month (tuesday, wednesday, thursday). are you able to meet this requirement?
   : answer: 'Yes'
     type: select
   our internships are typically a hybrid work model from our head office at 2 queen street east, toronto.:
     answer: 'Yes'
     type: select
-  ? our team primarily uses email to ensure all communications are documented and addressed promptly. in the event that an update is time-sensitive or we haven't heard back from you, are you comfortable
-    receiving a brief text notification?
+  ? our team primarily uses email to ensure all communications are documented and addressed promptly. in the event that an update is time-sensitive or we haven't heard back from you, are you comfortable receiving a brief text notification?
   : answer: 'Yes'
     type: select
   ? outside of university coursework, what amount of software engineering experience do you have? this can include research/ laboratory work, and/or personal/team project experience.
@@ -1911,8 +1904,7 @@ questions:
   please describe a recent piece of research you’re most proud of.:
     answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy
     type: textarea
-  ? 'please describe the research directions you’re interested in pursuing that align with our team’s mission: "developing new architectures and training methods that enable models to use data more effectively,
-    including improvements in training, inference-time conditioning, and retrieval."'
+  ? 'please describe the research directions you’re interested in pursuing that align with our team’s mission: "developing new architectures and training methods that enable models to use data more effectively, including improvements in training, inference-time conditioning, and retrieval."'
   : answer: 'No'
     type: textarea
   ? please double-check all the information provided above. ensuring accuracy is crucial, as any errors or omissions may impact the review of your application.
@@ -1924,8 +1916,7 @@ questions:
   please identify your u.s. veteran status:
     answer: I am not a veteran
     type: select
-  ? please include a shareable link to your creative project submission (required). your project should answer the creative project questions listed in the job description and be accessible to anyone with
-    the link (e.g., google drive, dropbox, youtube). applications without an accessible project link will not be reviewed.
+  ? please include a shareable link to your creative project submission (required). your project should answer the creative project questions listed in the job description and be accessible to anyone with the link (e.g., google drive, dropbox, youtube). applications without an accessible project link will not be reviewed.
   : answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy
     type: textarea
   ? 'please indicate whether you are either a citizen or resident of any of the following countries: cuba, iran, north korea, syria or crimea region of ukraine.'
@@ -1935,7 +1926,7 @@ questions:
     answer: '3.6'
     type: select
   please list any additional address information here, such as an apartment number, lot/space number, suite, etc.:
-    answer: N/A
+    answer: 'No'
     type: select
   please list any relevant professional certifications and/or licenses you currently hold.:
     answer: I do not currently hold any professional certifications or licenses. However, my Bachelor of Science in Software
@@ -1946,8 +1937,7 @@ questions:
   please note your expected graduation date (mm/yyyy).:
     answer: May 2026
     type: select
-  ? 'please note: by proceeding with the application process, you acknowledge that, if hired by underdog, your existing personal account will be restricted for the duration of your employment. all active
-    contest entries on your account will be canceled, and any applicable refunds will be processed accordingly.'
+  ? 'please note: by proceeding with the application process, you acknowledge that, if hired by underdog, your existing personal account will be restricted for the duration of your employment. all active contest entries on your account will be canceled, and any applicable refunds will be processed accordingly.'
   : answer: 'Yes'
     type: select
   please provide home state:
@@ -1968,9 +1958,8 @@ questions:
   please select your current gpa range:
     answer: '3.6'
     type: select
-  ? please select your current province of residence. select “not in canada” if you reside outside of canada. this information helps us understand our talent pool and ensures we provide accurate resources
-    throughout the hiring process.
-  : answer: San Jose, CA
+  ? please select your current province of residence. select “not in canada” if you reside outside of canada. this information helps us understand our talent pool and ensures we provide accurate resources throughout the hiring process.
+  : answer: 'No'
     type: select
   please select your highest completed level of education.:
     answer: Bachelor of Science
@@ -1979,22 +1968,18 @@ questions:
     answer: Online Job Board
     type: text
   'please specify how many hours per week you are available:':
-    answer: 40
+    answer: 40 hours
     type: select
   please specify your expected graduation year (example, 2027):
     answer: May 2026
     type: select
-  ? please tell us about a research project that you’ve worked on in the past few years that you found exciting and important. the project does not need to be in machine reasoning, nlp, or even in ai. please
-    use 100 words or less, and include a url to any paper/code/blog/video/website where we can learn more about this work.
+  ? please tell us about a research project that you’ve worked on in the past few years that you found exciting and important. the project does not need to be in machine reasoning, nlp, or even in ai. please use 100 words or less, and include a url to any paper/code/blog/video/website where we can learn more about this work.
   : answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy using XGBoost, neural networks, and Elo models trained on 20,000+ fights. The system processes real-time odds data through automated pipelines and serves predictions via a Flask API.
     type: textarea
-  ? please tell us about one research question or problem that you’d be excited to work on with our team and why you think this problem is important, challenging, and relevant to our efforts. importantly,
-    your answer is not a commitment to future work; it’s only meant as a way for us to learn about your interests and gauge their alignment to ours. please limit your answer to 200 words.
+  ? please tell us about one research question or problem that you’d be excited to work on with our team and why you think this problem is important, challenging, and relevant to our efforts. importantly, your answer is not a commitment to future work; it’s only meant as a way for us to learn about your interests and gauge their alignment to ours. please limit your answer to 200 words.
   : answer: 'No'
     type: textarea
-  ? please tell us about one research topic or problem that you’d be excited to work on with our team, and why you think this problem is important and challenging. your answer doesn’t need to be tied to
-    your answer for the previous questions. please note that your answer is not a commitment to future work; it’s only meant as a way for us to learn about your interests and gauge their alignment with
-    ours. please limit your answer to 200 words.
+  ? please tell us about one research topic or problem that you’d be excited to work on with our team, and why you think this problem is important and challenging. your answer doesn’t need to be tied to your answer for the previous questions. please note that your answer is not a commitment to future work; it’s only meant as a way for us to learn about your interests and gauge their alignment with ours. please limit your answer to 200 words.
   : answer: 'No'
     type: textarea
   ? please tell us in a few sentences about the most impressive thing that you have built or achieved. (if you are describing a team effort or group project, please be specific about your personal contribution.)
@@ -2019,10 +2004,10 @@ questions:
     answer: East Asian
     type: select
   referrals only - if you were referred by a lg employee, please state the employee’s name:
-    answer: N/A
+    answer: 'No'
     type: select
   school name:
-    answer: SCHOOL_FROM_CONFIG
+    answer: San Jose State University
     type: select
   security clearance:
     answer: 'No'
@@ -2033,15 +2018,8 @@ questions:
   select your anticipated master's degree graduation date:
     answer: May 2026
     type: select
-  ? 'signifyd are an equal opportunities employer. we do not discriminate against our job applicants or employees and we aim to select the best person for the job. we monitor the community background and
-    sex of our job applicants and employees in order to demonstrate our commitment to promoting equality of opportunity in employment and to comply with our duties under the fair employment & treatment
-    (ni) order 1998. you are not obliged to answer the questions on this form and you will not suffer any penalty if you choose not to do so. nevertheless, we encourage you to answer these questions. your
-    answers will be used by us to prepare and submit a monitoring return to the equality commission, but your identity will be kept anonymous. in all other regards your answers will be treated with the
-    strictest confidence. we assure you that your answers will not be used by us to make any decisions affecting you, whether in a recruitment exercise or during the course of any employment with us. regardless
-    of whether they actually practice religion, most people in northern ireland are perceived to be members of either the protestant or roman catholic communities. please indicate the community to which
-    you belong in the next question. if you do not answer the question below, or if you tick the “not a member of either” box, we are encouraged to use the residuary method of making a determination, which
-    means that we can make a determination as to your community background on the basis of the personal information supplied by you in your application form/personnel file. note: if you answer this questionnaire
-    you are obliged to do so truthfully as it is a criminal offence under the fair employment (monitoring) regulations (ni) 1999 to knowingly give false answers to these questions.'
+  ? 'signifyd are an equal opportunities employer. we do not discriminate against our job applicants or employees and we aim to select the best person for the job. we monitor the community background and sex of our job applicants and employees in order to demonstrate our commitment to promoting equality of opportunity in employment and to comply with our duties under the fair employment & treatment (ni) order 1998. you are not obliged to answer the questions on this form and you will not suffer any penalty if you choose not to do so. nevertheless, we encourage you to answer these questions. your answers will be used by us to prepare and submit a monitoring return to the equality commission, but your identity will be kept anonymous. in all other regards your answers will be treated with the strictest confidence. we assure you that your answers will not be used by us to make any decisions affecting you, whether in a recruitment exercise or during the course of any employment with us. regardless
+    of whether they actually practice religion, most people in northern ireland are perceived to be members of either the protestant or roman catholic communities. please indicate the community to which you belong in the next question. if you do not answer the question below, or if you tick the “not a member of either” box, we are encouraged to use the residuary method of making a determination, which means that we can make a determination as to your community background on the basis of the personal information supplied by you in your application form/personnel file. note: if you answer this questionnaire you are obliged to do so truthfully as it is a criminal offence under the fair employment (monitoring) regulations (ni) 1999 to knowingly give false answers to these questions.'
   : answer: 'No'
     type: select
   ? some positions with dlh require government security clearances. you may be required to provide proof of u.s. citizenship. are you able to provide proof of u.s. citizenship?
@@ -2060,7 +2038,7 @@ questions:
     answer: Open to discuss
     type: select
   ? tell us about a time you took full ownership of a challenging moment (outside of your schoolwork), and saw it through to the end.
-  : answer: SCHOOL_FROM_CONFIG
+  : answer: During my time at Kruiz, I led the migration of our data pipeline from batch to real-time processing. I identified the bottleneck, designed the new architecture, coordinated with the team, and delivered the solution on time, reducing data latency from hours to minutes.
     type: textarea
   ? tell us about your experience with cloud infrastructure, distributed systems, or large-scale computing. what projects, internships, or work experiences best demonstrate your skills in this area?
   : answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy
@@ -2071,12 +2049,10 @@ questions:
   ? this internship is an onsite position in our san francisco office. are you able to relocate to san francisco/bay area for the summer?
   : answer: 'Yes'
     type: select
-  ? this internship offers a hybrid work schedule and is located in reston, virginia. reston-based interns must live within a 70-mile driving distance of the office during the duration of the internship.
-    do you have residence within 70 miles of reston, virginia?
+  ? this internship offers a hybrid work schedule and is located in reston, virginia. reston-based interns must live within a 70-mile driving distance of the office during the duration of the internship. do you have residence within 70 miles of reston, virginia?
   : answer: 'Yes'
     type: select
-  ? this internship pays $22/hour and the work schedule is monday – friday 8:00 am – 4:30 pm with a 1-hour lunch break. the total hours are 37.5 hours per week. does this align with what you’re targeting
-    for compensation?
+  ? this internship pays $22/hour and the work schedule is monday – friday 8:00 am – 4:30 pm with a 1-hour lunch break. the total hours are 37.5 hours per week. does this align with what you’re targeting for compensation?
   : answer: Open to discuss
     type: select
   ? this internship requires daily attendance in office with in-person meetings and events, as outlined in the job description. are you able to meet the on-site requirements for this role?
@@ -2106,12 +2082,7 @@ questions:
   ? this is a hybrid role located in montreal, quebec, canada. are you able to commute in office a few times per week for this role?
   : answer: 'Yes'
     type: select
-  ? this is a remote-based role within select states in the united states. are you located in or willing to relocate to one of the following states? - arizona, delaware, florida, georgia, kentucky, nevada,
-    new jersey, new york, north carolina, ohio, rhode island, south carolina, tennessee, texas, virginia, and washington
-  : answer: 'Yes'
-    type: select
-  ? this is an internship role that will require about 3 days/week be spent onsite at our headquarters located in south austin (near dripping springs). are you willing to work onsite 3 days/week and do
-    you have transportation to get to work?
+  ? this is a remote-based role within select states in the united states. are you located in or willing to relocate to one of the following states? - arizona, delaware, florida, georgia, kentucky, nevada, new jersey, new york, north carolina, ohio, rhode island, south carolina, tennessee, texas, virginia, and washington
   : answer: 'Yes'
     type: select
   this job requires 4 days a week onsite (monday-thursday). are you comfortable with this?:
@@ -2120,26 +2091,22 @@ questions:
   ? this position follows an in-person work schedule, requiring five days per week in office. are you comfortable with this arrangement?
   : answer: 'Yes'
     type: select
-  ? this position is based in seattle, wa and follows a hybrid working model (i.e. some days on-site, some days remote). if you are not currently based within reasonable commuting distance of this location,
-    are you willing to relocate? please note that relocation assistance is not available at this time.
-  : answer: San Jose, CA
+  ? this position is based in seattle, wa and follows a hybrid working model (i.e. some days on-site, some days remote). if you are not currently based within reasonable commuting distance of this location, are you willing to relocate? please note that relocation assistance is not available at this time.
+  : answer: 'No'
     type: select
   this position is based in seattle. are you willing to relocate?:
     answer: 'Yes'
     type: text
-  ? this position is supported by a masscec grant which requires specific candidate eligibility. to be considered for this funded role, you must be a current massachusetts resident or be currently enrolled
-    in (or have graduated within the past year from) a college or university located in massachusetts. does your current residency or enrollment status meet these mandatory grant requirements?
+  ? this position is supported by a masscec grant which requires specific candidate eligibility. to be considered for this funded role, you must be a current massachusetts resident or be currently enrolled in (or have graduated within the past year from) a college or university located in massachusetts. does your current residency or enrollment status meet these mandatory grant requirements?
   : answer: 'Yes'
     type: select
-  ? this position requires access to information and technology that is subject to u.s. export controls. your responses to the questions below will be used solely to determine your eligibility under u.s.
-    law to receive information and materials subject to u.s. export controls.
+  ? this position requires access to information and technology that is subject to u.s. export controls. your responses to the questions below will be used solely to determine your eligibility under u.s. law to receive information and materials subject to u.s. export controls.
   : answer: United States — citizen since birth
     type: select
   this position requires eligibility to obtain and maintain a u.s. security clearance.:
     answer: 'Yes'
     type: select
-  ? this role is based out of one of strata's campuses. if you are not currently located in/near chicago (il) or chesterfield (mo), are you willing to relocate (within 40 miles of a campus) if offered the
-    opportunity to join our team?
+  ? this role is based out of one of strata's campuses. if you are not currently located in/near chicago (il) or chesterfield (mo), are you willing to relocate (within 40 miles of a campus) if offered the opportunity to join our team?
   : answer: At Kruiz, I coordinated a data entry team of 3 ...
     type: select
   ? this role is designed for new graduates or engineers with less than 1 year of professional experience. how much full-time professional software engineering experience do you have (excluding internships)?
@@ -2173,8 +2140,8 @@ questions:
     answer: 'Yes'
     type: select
   twitter:
-    answer: N/A
-    type: select
+    answer: ''
+    type: text
   upon employment, can you submit verification of your legal right to work for toshiba in the united states?:
     answer: 'Yes'
     type: select
@@ -2206,8 +2173,8 @@ questions:
     answer: N/A
     type: text
   website/portfolio:
-    answer: N/A
-    type: select
+    answer: ''
+    type: text
   were you previously employed with geotab?:
     answer: 'No'
     type: select
@@ -2236,13 +2203,13 @@ questions:
     answer: He/Him
     type: select
   what attracted you to this role and industry?:
-    answer: I'm drawn to the innovative work being done at this company and see a strong
+    answer: I'm drawn to the innovative work being done at this company and see a strong alignment with my skills in full-stack development, data engineering, and building scalable systems. As a Computer Science student at San Jose State with hands-on experience building AI-powered applications and managing data pipelines, I'm eager to contribute to impactful projects while growing as an engineer in a fast-paced environment.
     type: textarea
   what city and state is the college/university located in?:
-    answer: SCHOOL_FROM_CONFIG
+    answer: California
     type: textarea
   what city do you currently live in?:
-    answer: San Jose, CA
+    answer: Other
     type: select
   what date are you available to start?:
     answer: May 2026
@@ -2260,22 +2227,22 @@ questions:
     answer: Gain hands-on industry experience
     type: select
   what do you want to achieve from this internship?:
-    answer: As an Associate Product Manager Intern, I aim to leverage my strong technical background in software engineering to contribute
+    answer: I want to gain hands-on experience building production software, learn industry best practices for scalable system design, and contribute meaningfully to the team's engineering goals. I'm also eager to develop my collaboration skills by working alongside experienced engineers on real-world projects.
     type: textarea
   what excites you about this opportunity?:
-    answer: I'm drawn to the innovative work being done at this company and see a strong
+    answer: I'm drawn to the innovative work being done at this company and see a strong alignment with my skills in full-stack development, data engineering, and building scalable systems. As a Computer Science student at San Jose State with hands-on experience building AI-powered applications and managing data pipelines, I'm eager to contribute to impactful projects while growing as an engineer in a fast-paced environment.
     type: textarea
   what field are you looking to complete your internship in?:
     answer: Software Engineering
     type: select
   what interested you in olsson and/or this position?:
-    answer: I'm drawn to the innovative work being done at this company and see a strong
+    answer: I'm drawn to the innovative work being done at this company and see a strong alignment with my skills in full-stack development, data engineering, and building scalable systems. As a Computer Science student at San Jose State with hands-on experience building AI-powered applications and managing data pipelines, I'm eager to contribute to impactful projects while growing as an engineer in a fast-paced environment.
     type: textarea
   what interests you about madison and this internship?:
-    answer: I'm drawn to the innovative work being done at this company and see a strong
+    answer: I'm drawn to the innovative work being done at this company and see a strong alignment with my skills in full-stack development, data engineering, and building scalable systems. As a Computer Science student at San Jose State with hands-on experience building AI-powered applications and managing data pipelines, I'm eager to contribute to impactful projects while growing as an engineer in a fast-paced environment.
     type: textarea
   what intrigues you the most about being a data engineer?:
-    answer: I'm drawn to the innovative work being done at this company and see a strong
+    answer: What intrigues me most about data engineering is the challenge of building reliable, scalable data pipelines that power real decision-making. At Kruiz, I built ETL pipelines processing 10K+ records and designed database schemas that improved query performance. I enjoy the intersection of software engineering and data — architecting systems that transform raw data into actionable insights.
     type: textarea
   what is an achievement, accomplishment, or passion project that you are proud of?:
     answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy
@@ -2290,7 +2257,7 @@ questions:
     answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy
     type: textarea
   what is the name of the college or university are you attending?:
-    answer: SCHOOL_FROM_CONFIG
+    answer: San Jose State University
     type: select
   what is the time zone you most commonly operate in?:
     answer: America/Los_Angeles
@@ -2323,7 +2290,7 @@ questions:
     answer: '3.6'
     type: select
   what is your current state of residence?:
-    answer: San Jose, CA
+    answer: California
     type: select
   what is your current visa status?:
     answer: Citizen
@@ -2332,8 +2299,8 @@ questions:
     answer: Bachelor of Science
     type: textarea
   what is your desired salary range/hourly rate?:
-    answer: N/A
-    type: select
+    answer: Open to discussion
+    type: text
   what is your expected date of graduation (month/year)?:
     answer: '2026'
     type: select
@@ -2368,7 +2335,7 @@ questions:
     answer: 2026
     type: select
   what is your interest in fantasy sports, sports betting, or just sports in general?:
-    answer: I'm drawn to the innovative work being done at this company and see a strong
+    answer: I'm a lifelong sports fan and have always been fascinated by the data-driven side of sports. I enjoy analyzing statistics and building predictive models — I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy using machine learning. The intersection of sports, data, and technology is exactly where I want to build my career.
     type: textarea
   what is your major or field of study?:
     answer: Software Engineering
@@ -2395,10 +2362,10 @@ questions:
     answer: Python
     type: select
   what length of internship are you available for?:
-    answer: 10-12 weeks
+    answer: 3 month
     type: select
   what location do you intend to work out of?:
-    answer: San Jose, CA
+    answer: Other
     type: select
   what major are you pursuing in your degree program?:
     answer: Software Engineering
@@ -2413,19 +2380,19 @@ questions:
     answer: 25%
     type: select
   what school are you currently attending?:
-    answer: SCHOOL_FROM_CONFIG
+    answer: San Jose State University
     type: select
   what school/program are you enrolled in currently?:
-    answer: SCHOOL_FROM_CONFIG
+    answer: San Jose State University
     type: select
   what state and country do you currently reside in?:
-    answer: San Jose, CA
+    answer: California
     type: select
   what state are you currently located in?:
-    answer: San Jose, CA
+    answer: California
     type: select
   what state do you currently reside in?:
-    answer: San Jose, CA
+    answer: California
     type: select
   what term were you looking to start your internship? (month/day/year)?:
     answer: Summer 2026
@@ -2437,10 +2404,10 @@ questions:
     answer: Backend
     type: select
   what university are you currently attending?:
-    answer: 'SCHOOL_FROM_CONFIG'
+    answer: San Jose State University
     type: select
   what university do you currently attend?:
-    answer: SCHOOL_FROM_CONFIG
+    answer: San Jose State University
     type: select
   what year do you expect to complete your bachelor’s degree?:
     answer: May 2026
@@ -2487,24 +2454,23 @@ questions:
   when will you be completing your degree?:
     answer: May 2026
     type: select
-  ? when would you be able to start your internship with us? we offer both part-time and full-time research internships, so please also indicate the hours/week you’d be able to work during the school term
-    and/or summer.
+  ? when would you be able to start your internship with us? we offer both part-time and full-time research internships, so please also indicate the hours/week you’d be able to work during the school term and/or summer.
   : answer: May 2026
     type: text
   when would you be able to start?:
     answer: May 2026
     type: select
   where are you currently based?:
-    answer: San Jose, CA
+    answer: Other
     type: select
   where are you currently located within the united kingdom?:
-    answer: San Jose, CA
+    answer: 'No'
     type: select
   where are you currently located? where will you be located during the length of this internship program?:
-    answer: San Jose, CA
+    answer: Other
     type: select
   where are you located?:
-    answer: San Jose, CA
+    answer: Other
     type: select
   where did you hear about geotab?:
     answer: Online Job Board
@@ -2528,16 +2494,16 @@ questions:
     answer: 'Yes'
     type: select
   which college did you attend?:
-    answer: SCHOOL_FROM_CONFIG
+    answer: San Jose State University
     type: select
   which country in the united kingdom do you reside in?:
-    answer: N/A
+    answer: 'No'
     type: select
   which degree subject are you currently studying/have most recently studied?:
     answer: Bachelor of Science
     type: select
   which institution do you currently attend/have most recently attended?:
-    answer: SCHOOL_FROM_CONFIG
+    answer: San Jose State University
     type: select
   which masters or phd program do you currently attend and what is your expected graduation year?:
     answer: May 2026
@@ -2546,37 +2512,37 @@ questions:
     answer: Python
     type: select
   which school are you attending.:
-    answer: SCHOOL_FROM_CONFIG
+    answer: San Jose State University
     type: select
   which school are you currently attending?:
-    answer: SCHOOL_FROM_CONFIG
+    answer: San Jose State University
     type: select
   which scout motors location are you closest to?:
-    answer: N/A
+    answer: 'No'
     type: select
   ? 'which state are you located in? note: the residential address entered must correspond to your primary, permanent place of residence for administrative and legal compliance purposes.'
   : answer: 'Yes'
     type: select
   which state do you currently live in full time?:
-    answer: San Jose, CA
+    answer: California
     type: select
   which state do you currently reside in?:
-    answer: San Jose, CA
+    answer: California
     type: select
   which university are you currently attending?:
-    answer: SCHOOL_FROM_CONFIG
+    answer: San Jose State University
     type: text
   ? while we don't require any cover letter as a part of our application, we understand you might want to share more than just your resume. is there anything else you'd like to share with our team at sigma?
   : answer: At Kruiz, I coordinated a data entry team of 3 and 2 web scraper engineers while building
     type: textarea
   why are you interested in this opportunity?:
-    answer: I'm drawn to the innovative work being done at this company and see a strong
+    answer: I'm drawn to the innovative work being done at this company and see a strong alignment with my skills in full-stack development, data engineering, and building scalable systems. As a Computer Science student at San Jose State with hands-on experience building AI-powered applications and managing data pipelines, I'm eager to contribute to impactful projects while growing as an engineer in a fast-paced environment.
     type: textarea
   why are you interested in this role at health-e commerce?:
-    answer: I'm drawn to the innovative work being done at this company and see a strong
+    answer: I'm drawn to the innovative work being done at this company and see a strong alignment with my skills in full-stack development, data engineering, and building scalable systems. As a Computer Science student at San Jose State with hands-on experience building AI-powered applications and managing data pipelines, I'm eager to contribute to impactful projects while growing as an engineer in a fast-paced environment.
     type: textarea
   why are you interested in this role at knowbe4?:
-    answer: I'm drawn to the innovative work being done at this company and see a strong
+    answer: I'm drawn to the innovative work being done at this company and see a strong alignment with my skills in full-stack development, data engineering, and building scalable systems. As a Computer Science student at San Jose State with hands-on experience building AI-powered applications and managing data pipelines, I'm eager to contribute to impactful projects while growing as an engineer in a fast-paced environment.
     type: textarea
   why are you looking for a new position at this time?:
     answer: Graduating in May 2026
@@ -2629,16 +2595,13 @@ questions:
   will you need sponsorship to work in the u.s. now or anytime in the future?:
     answer: 'No'
     type: select
-  ? will you now or at any point in the future require armada to file, transfer, extend, or support any immigration or employment authorization, or is your ability to work in the united states dependent
-    on a pending or future government application, approval, or renewal, in order for you to begin or continue working? (examples include work visas, extensions, transfers, employment authorization documents,
-    pending adjustments, renewals, or permanent residency filings.)
+  ? will you now or at any point in the future require armada to file, transfer, extend, or support any immigration or employment authorization, or is your ability to work in the united states dependent on a pending or future government application, approval, or renewal, in order for you to begin or continue working? (examples include work visas, extensions, transfers, employment authorization documents, pending adjustments, renewals, or permanent residency filings.)
   : answer: 'No'
     type: select
   will you now or at any time in the future require visa sponsorship?:
     answer: 'No'
     type: select
-  ? will you now or could you in the future require sponsorship to obtain work authorization or to transfer or extend your current visa? (you must answer “yes” if your current visa is tied to your spouse
-    or partner’s visa or if you are on a bridging visa or working holiday visa)
+  ? will you now or could you in the future require sponsorship to obtain work authorization or to transfer or extend your current visa? (you must answer “yes” if your current visa is tied to your spouse or partner’s visa or if you are on a bridging visa or working holiday visa)
   : answer: 'No'
     type: select
   will you now or ever in the future require visa sponsorship from your employer?:
@@ -2650,19 +2613,16 @@ questions:
   will you now or in the future require "sponsorship for an immigration-related employment benefit"?:
     answer: 'No'
     type: select
-  ? 'will you now or in the future require any type of immigration/visa sponsorship or support? sponsorship or support for an immigration-related employment benefit includes but is not limited to the following:
-    h-1b, h-1b1, j-1, tn, e-3, o-1, job portability benefit (i-485 supplement js), f-1 cpt, f-1 stem opt, or any employment authorization application that may require immigration support from redwood materials.'
+  ? 'will you now or in the future require any type of immigration/visa sponsorship or support? sponsorship or support for an immigration-related employment benefit includes but is not limited to the following: h-1b, h-1b1, j-1, tn, e-3, o-1, job portability benefit (i-485 supplement js), f-1 cpt, f-1 stem opt, or any employment authorization application that may require immigration support from redwood materials.'
   : answer: 'No'
     type: select
-  ? will you now or in the future require bamboohr to file a petition or application for employment - based status on your behalf to begin or continue employment with bamboohr? if you have nonimmigrant
-    status, for example f-1 or h-1, your answer to this question should be yes.
+  ? will you now or in the future require bamboohr to file a petition or application for employment - based status on your behalf to begin or continue employment with bamboohr? if you have nonimmigrant status, for example f-1 or h-1, your answer to this question should be yes.
   : answer: May 2026
     type: select
   ? will you now or in the future require company sponsorship for an immigration-related employment benefit (i.e., a work visa, work permit, etc.)?
   : answer: 'No'
     type: select
-  ? will you now or in the future require conner strong & buckelew to commence ("sponsor") an immigration case in order to employ you (for example, h-1b or other employment based immigration case)? this
-    is sometimes called sponsorship for an employment-based visa status.
+  ? will you now or in the future require conner strong & buckelew to commence ("sponsor") an immigration case in order to employ you (for example, h-1b or other employment based immigration case)? this is sometimes called sponsorship for an employment-based visa status.
   : answer: 'No'
     type: select
   will you now or in the future require employment visa sponsorship to work at our company?:
@@ -2671,19 +2631,16 @@ questions:
   will you now or in the future require employment visa sponsorship?:
     answer: 'No'
     type: select
-  ? will you now or in the future require flexport to commence ("sponsor") an immigration case in order to employ you (for example, h-1b or other employment-based immigration case)? this is sometimes called
-    "sponsorship" for an employment-based visa status.
+  ? will you now or in the future require flexport to commence ("sponsor") an immigration case in order to employ you (for example, h-1b or other employment-based immigration case)? this is sometimes called "sponsorship" for an employment-based visa status.
   : answer: 'No'
     type: select
-  ? will you now or in the future require gelber group to commence ("sponsor") an immigration case in order to employ you (for example, h-1b or other employment-based immigration case)? this is sometimes
-    called "sponsorship" for an employment-based visa status.
+  ? will you now or in the future require gelber group to commence ("sponsor") an immigration case in order to employ you (for example, h-1b or other employment-based immigration case)? this is sometimes called "sponsorship" for an employment-based visa status.
   : answer: 'No'
     type: select
   ? will you now or in the future require harbinger motors to commence (“sponsor”) an immigration case in order to employ you (for example, h-1b or other employment-based immigration cases)?
   : answer: 'No'
     type: select
-  ? will you now or in the future require sila to commence (“sponsor”) an immigration case in order to employ you (for example, h-1b or other employment-based immigration case)? this is sometimes called
-    “sponsorship” for an employment-based visa status.
+  ? will you now or in the future require sila to commence (“sponsor”) an immigration case in order to employ you (for example, h-1b or other employment-based immigration case)? this is sometimes called “sponsorship” for an employment-based visa status.
   : answer: 'No'
     type: select
   will you now or in the future require sofi to commence (“sponsor”) an immigration case in order to employ you?:
@@ -2722,8 +2679,7 @@ questions:
   will you now or in the future require sponsorship for employment visa status? (e.g. h-1b visa status?):
     answer: 'No'
     type: select
-  ? will you now or in the future require sponsorship for employment? for instance, an h-1b? toshiba global commerce solutions will not be providing visa sponsorship for this position now or in the future.
-    therefore, in order to be considered for this position, you must have the ability to work without a need for current or future visa sponsorship.
+  ? will you now or in the future require sponsorship for employment? for instance, an h-1b? toshiba global commerce solutions will not be providing visa sponsorship for this position now or in the future. therefore, in order to be considered for this position, you must have the ability to work without a need for current or future visa sponsorship.
   : answer: 'No'
     type: select
   will you now or in the future require sponsorship for employment? if yes, please specify dates and status:
@@ -2747,12 +2703,10 @@ questions:
   will you now or in the future require sponsorship to work within the united states?:
     answer: 'No'
     type: select
-  ? will you now or in the future require tatari to commence ("sponsor") an immigration case in order to employ you (for example, h-1b or other employment-based immigration case)? this is sometimes called
-    "sponsorship" for an employment-based visa status.
+  ? will you now or in the future require tatari to commence ("sponsor") an immigration case in order to employ you (for example, h-1b or other employment-based immigration case)? this is sometimes called "sponsorship" for an employment-based visa status.
   : answer: 'No'
     type: select
-  ? will you now or in the future require unitedmasters, inc. to file a petition or application for employment - based status on your behalf to begin or continue employment with unitedmasters, inc.? if
-    you have nonimmigrant status, for example f-1 or h-1, your answer to this question should be yes.
+  ? will you now or in the future require unitedmasters, inc. to file a petition or application for employment - based status on your behalf to begin or continue employment with unitedmasters, inc.? if you have nonimmigrant status, for example f-1 or h-1, your answer to this question should be yes.
   : answer: 'No'
     type: select
   will you now or in the future require visa sponsorship for employment at anaplan?:
@@ -2779,8 +2733,7 @@ questions:
   will you now or in the future require visa sponsorship?:
     answer: 'No'
     type: select
-  ? 'will you now or in the future require visa sponsorship? (note: if you are on cpt, opt, or opt-stem please respond yes, as you would need visa sponsorship in the future in order to continue working
-    in the us.)'
+  ? 'will you now or in the future require visa sponsorship? (note: if you are on cpt, opt, or opt-stem please respond yes, as you would need visa sponsorship in the future in order to continue working in the us.)'
   : answer: 'No'
     type: select
   will you now or in the future require work visa sponsorship (e.g.h-1b, tn, e-3, f-1 stem eligible) for employment?:
@@ -2829,7 +2782,7 @@ questions:
     answer: 'No'
     type: select
   ? will you require commvault to sponsor a work visa or work authorization for you to be employed in the country where the role is located?
-  : answer: San Jose, CA
+  : answer: 'Yes'
     type: select
   will you require employer sponsorship for work authorization now or in the future?:
     answer: 'No'
@@ -2861,16 +2814,13 @@ questions:
   will you, either now or in the future, require a sponsorship to work in the united states?:
     answer: 'No'
     type: select
-  ? will you, now or in the future, require axsome to file a petition or application on your behalf for an employment-based visa to begin or continue employment with our company? if you do not have permanent
-    work authorization (for example, if you are on f-1, opt, cpt or h-1 visas), your answer to this question should be “yes.”
+  ? will you, now or in the future, require axsome to file a petition or application on your behalf for an employment-based visa to begin or continue employment with our company? if you do not have permanent work authorization (for example, if you are on f-1, opt, cpt or h-1 visas), your answer to this question should be “yes.”
   : answer: 'No'
     type: select
-  ? will you, now or in the future, require company assistance or sponsorship in order to ensure your continued eligibility to work lawfully for the company in the country in which you’re applying to work
-    (e.g., h-1b visa, e-3 visa, o-1 visa, tn visa)?
+  ? will you, now or in the future, require company assistance or sponsorship in order to ensure your continued eligibility to work lawfully for the company in the country in which you’re applying to work (e.g., h-1b visa, e-3 visa, o-1 visa, tn visa)?
   : answer: 'No'
     type: select
-  ? will you, now or in the future, require sponsorship for work authorization, a work visa, or permanent residence from our company, including sponsorship for a change of status (such as f-1 to h-1b) or
-    change of employer? ezcater does not sponsor applicants for work visas or legal permanent residence.
+  ? will you, now or in the future, require sponsorship for work authorization, a work visa, or permanent residence from our company, including sponsorship for a change of status (such as f-1 to h-1b) or change of employer? ezcater does not sponsor applicants for work visas or legal permanent residence.
   : answer: 'No'
     type: select
   willingness to relocate:
@@ -2879,8 +2829,7 @@ questions:
   'work authorization: are you authorized to work in the us?':
     answer: 'Yes'
     type: select
-  ? 'would employment at olsson now or any time in the future require you to obtain sponsorship for an immigration case (for example: h1-b, opt, or other employment-based immigration case which is sometimes
-    called "sponsorship" for an employment-based visa status)?'
+  ? 'would employment at olsson now or any time in the future require you to obtain sponsorship for an immigration case (for example: h1-b, opt, or other employment-based immigration case which is sometimes called "sponsorship" for an employment-based visa status)?'
   : answer: 'No'
     type: select
   ? would you be comfortable and available to work on-site for four days each week in our office as part of this position's requirements?
@@ -2895,8 +2844,7 @@ questions:
   would you like to opt in to text messaging?:
     answer: 'Yes'
     type: select
-  ? 'would you like to opt-in to receiving text messages from the recruiter for this role in relation to the hiring process – such as interview requests, reminders, etc.? note: selecting “no” will not eliminate
-    you from consideration for this role. if you select "yes", you can always opt-out later by replying stop.'
+  ? 'would you like to opt-in to receiving text messages from the recruiter for this role in relation to the hiring process – such as interview requests, reminders, etc.? note: selecting “no” will not eliminate you from consideration for this role. if you select "yes", you can always opt-out later by replying stop.'
   : answer: 'Yes'
     type: select
   ? would you like to receive communications via sms and/or whatsapp to the number provided [above or during the application process] about your application process?
@@ -2914,8 +2862,7 @@ questions:
   would you, now or in the future, require immigration sponsorship for work authorization?:
     answer: 'No'
     type: select
-  ? you can choose to receive recruitment marketing communications from us, including updates on job opportunities, career advice, and recruitment events. select yes if you wish to receive email communications
-    from our recruitment team.
+  ? you can choose to receive recruitment marketing communications from us, including updates on job opportunities, career advice, and recruitment events. select yes if you wish to receive email communications from our recruitment team.
   : answer: At Kruiz, I coordinated a data entry team of 3 ...
     type: select
   your authorization to work in the country where you live. please choose the option that describes your work authorization.:
@@ -2924,88 +2871,693 @@ questions:
   ? ​if you provided a phone number, do you consent to receiving follow-up communication via text message (or sms message) regarding your application status?
   : answer: 'Yes'
     type: select
-
   how did you learn about this opportunity?:
-    answer: 'Online Job Board'
+    answer: Online Job Board
     type: select
-
   have you previously worked for lucid, or any of its entities, as a contractor?:
     answer: 'No'
     type: select
-
   when are you able to start in this intern role?:
-    answer: 'May 2026'
+    answer: May 2026
     type: select
-
   are you willing to be onsite 5x a week for this role in the newark, ca office(s)?:
     answer: 'Yes'
     type: select
-
   what is your highest level of education completed?:
-    answer: 'Bachelor of Science'
+    answer: Bachelor of Science
     type: select
-
   please describe your previous sensing hardware experience:
-    answer: 'I have 3 years of coding experience with Python and JavaScript, building full-stack applications
-with React, Node.js, Flask, and FastAPI. I''ve worked extensively with PostgreSQL, built
-automated scraping pipelines with Puppeteer, deployed services on GCP Cloud Run, and
-used scikit-learn for machine learning models.'
+    answer: I have 3 years of coding experience with Python and JavaScript, building full-stack applications with React, Node.js, Flask, and FastAPI. I've worked extensively with PostgreSQL, built automated scraping pipelines with Puppeteer, deployed services on GCP Cloud Run, and used scikit-learn for machine learning models.
     type: textarea
-
   what interests you most about building full-stack features in a fast-paced startup environment?:
-    answer: 'I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy
-using Monte Carlo simulation and Random Forest models trained on 1,700+ fights. It has
-a FastAPI backend, React frontend, and PostgreSQL database deployed on GCP Cloud Run.
-I''m proud of it because it combines my interests in data engineering and full-stack
-development into one end-to-end system.'
+    answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy using Monte Carlo simulation and Random Forest models trained on 1,700+ fights. It has a FastAPI backend, React frontend, and PostgreSQL database deployed on GCP Cloud Run. I'm proud of it because it combines my interests in data engineering and full-stack development into one end-to-end system.
     type: textarea
-
-  thank you for your interest in this internship. please tell us a bit about why you are interested in this opportunity and which relevant courses you have completed.:
-    answer: 'I''m drawn to the innovative work being done at this company and see a strong
-alignment with my skills in full-stack development, data engineering, and
-building scalable systems.'
+  ? thank you for your interest in this internship. please tell us a bit about why you are interested in this opportunity and which relevant courses you have completed.
+  : answer: I'm drawn to the innovative work being done at this company and see a strong alignment with my skills in full-stack development, data engineering, and building scalable systems.
     type: textarea
-
   this onsite internship is located in wilmington, ma. where will you be residing during the summer of 2026?:
     answer: 'Yes'
     type: textarea
-
   are you able to be onsite in wilmington ma, on a four day hybrid schedule, 9 am to 5 pm?:
     answer: 'Yes'
     type: select
-
   first name:
-    answer: 'Alan'
+    answer: Alan
     type: text
-
   last name:
-    answer: 'Vu'
+    answer: Vu
     type: text
-
   email:
-    answer: 'alanvu2440@gmail.com'
+    answer: alanvu2440@gmail.com
     type: text
-
   phone:
-    answer: '+1 408-921-7836'
+    answer: +1 408-921-7836
     type: tel
-
-  # Missing from Tenstorrent (3 failed attempts)
-  what length of internship are you available for?:
-    answer: '4 months'
-    type: select
   please specify how many hours per week you are available:
-    answer: '40'
-    type: text
+    answer: 40 hours
+    type: select
   how many hours per week are you available?:
-    answer: '40'
-    type: text
+    answer: 40 hours
+    type: select
   what is the length of your internship?:
-    answer: '4 months'
+    answer: 3 month
     type: select
   internship duration:
-    answer: '4 months'
+    answer: 3 month
     type: select
   hours per week:
-    answer: '40'
+    answer: 40 hours
+    type: select
+  years of work experience:
+    answer: '1'
+    type: select
+  in which language(s) are you fluent (written) other than english?:
+    answer: None
+    type: select
+  in which language(s) are you fluent (written) other than english?*:
+    answer: None
+    type: select
+  in which language(s) are you fluent (spoken) other than english?:
+    answer: None
+    type: select
+  in which language(s) are you fluent (spoken) other than english?*:
+    answer: None
+    type: select
+  are you able to be located at dw office location for the summer of 2026?:
+    answer: 'Yes'
+    type: select
+  if you don't currently hold a security clearance, are you open to being considered for security clearance sponsorship?:
+    answer: 'No'
+    type: select
+  if you believe you belong to any of the categories of protected veterans. veteran status:
+    type: select
+  form cc-305 voluntary self-identification of disability. disability status:
+    type: select
+  are you authorized to work in canada?:
+    answer: 'No'
+    type: select
+  are at least 18 years or older?:
+    answer: 'Yes'
+    type: select
+  ? as part of our hiring process, 2k will conduct a pre-employment background check. we may also require written verification from your current employer that you have ended your employment.
+  : answer: 'Yes'
+    type: select
+  are you local to the burnaby area (or open to relocation) and are willing to come into the office 2 days a week?:
+    answer: 'Yes'
+    type: select
+  ? are you related to, or in a shared housing situation with, anyone who currently works for sie or any sie-affiliated studios?
+  : answer: 'No'
+    type: select
+  how did you learn about this job?:
+    answer: Online Job Board
+    type: select
+  do you require a work permit, visa or additional right to work support for the country where you are applying to work?:
+    answer: 'No'
+    type: select
+  do you currently work for, or have you previously worked for zscaler?:
+    answer: 'No'
+    type: select
+  have you been involved in procurement or contract award activities involving zscaler as a government employee or official?:
+    answer: 'No'
+    type: select
+  'if yes, please advise what support is needed:':
+    answer: As a U.S. student graduating in May 2026, I
+    type: textarea
+  what branch of the us department of defense are you currently with?:
+    answer: Given the information in the candidate profile,...
+    type: select
+  when are you eligible for the skillbridge program?:
+    answer: As per the provided candidate profile, there is no information regarding military service or separation dates, which are
+    type: select
+  when is your estimated separation date?:
+    answer: N/A - Not a transitioning service member.
+    type: select
+  will you now, or in the future require defense unicorns to sponsor an immigration case in order to employee you?:
+    answer: 'No'
+    type: select
+  what is your us citizenship status?:
+    answer: 'Yes'
+    type: select
+  do you have a common access card (cac)?:
+    answer: 'No'
+    type: select
+  do you have a security clearance? if so, which clearance level?:
+    answer: 'No'
+    type: select
+  what is the status of your security clearance?:
+    answer: No Clearance
+    type: select
+  what is the status of your security clearance? *:
+    answer: No Clearance
+    type: select
+  if you do not have a security clearance, are you able to obtain one if necessary?:
+    answer: 'Yes'
+    type: select
+  ? in this question description we have provided a link to our california consumer privacy act (ccpa) disclosure. please acknowledge that you have been provided with this disclosure - link included in question description.
+  : answer: 'Yes'
+    type: select
+  can you work onsite in our nyc office?:
+    answer: 'Yes'
+    type: select
+  are you able to work up to 20 hours per week? (all authentic internships are part-time):
+    answer: 'Yes'
+    type: select
+  are you available to start your internship on june 15, 2026?:
+    answer: 'Yes'
+    type: select
+  which u.s. state or canadian province do you reside in?:
+    answer: California
+    type: select
+  are you authorized to lawfully work for roku in the country to which you are applying? (required) 3c82ecc8:
+    answer: 'Yes'
+    type: select
+  school (required) e17f3007:
+    answer: San Jose State University, BS in Software Engineering, Graduating May 2026
     type: text
+  degree (required) 212eafe2:
+    answer: Bachelor of Science in Software Engineering
+    type: text
+  discipline (required) 044948c4:
+    answer: Software Engineering
+    type: text
+  start date (required) d9805087:
+    answer: Available to start in late May or early June 2025, aligning with a typical summer internship schedule.
+    type: text
+  end date (required) b97b843f:
+    answer: August 30, 2024 (for Summer 202
+    type: text
+  school (required) 1278a7c3:
+    answer: San Jose State University
+    type: text
+  degree (required) 2fb4e380:
+    answer: Bachelor of Science in Software Engineering, San Jose State University
+    type: text
+  discipline (required) b69822ba:
+    answer: Software Engineering
+    type: text
+  start date (required) 1bb2cbc4:
+    answer: Flexible, typically late May or early June 2025, upon completing my academic year.
+    type: text
+  end date (required) d89919c9:
+    answer: August 23, 2024
+    type: text
+  school (required) 5c15131b:
+    answer: San Jose State University
+    type: text
+  degree (required) 2722b208:
+    answer: Bachelor of Science in Software Engineering, San Jose State University
+    type: text
+  discipline (required) 4abd59b8:
+    answer: Software Engineering
+    type: text
+  start date (required) 5dec6037:
+    answer: Flexible, ideally for Summer 2025, starting May or June.
+    type: text
+  end date (required) 4b1511ed:
+    answer: August 16, 2024
+    type: text
+  how did you originally hear about alku?:
+    answer: Online Job Board
+    type: select
+  what is your expected college graduation year (undergraduate or graduate school year of graduation)?:
+    answer: May 2026
+    type: select
+  please provide your permanent address.:
+    answer: 123 University Drive, San Jose, CA 95112
+    type: textarea
+  are you currently enrolled in a bs/ba/beng program?:
+    answer: 'Yes'
+    type: select
+  when do you expect to graduate college/university?:
+    answer: May 2026
+    type: select
+  are you currently finishing your sophomore or junior year in a bachelors program?:
+    answer: Senior
+    type: select
+  current or most recent employer:
+    answer: Kruiz
+    type: select
+  where are you based out of?:
+    answer: Other
+    type: select
+  are you currently pursuing or have recently completed a bachelor’s degree in computer science or a related stem field?:
+    answer: ‘Yes’
+    type: select
+  this is a full-time summer 2026 internship. will you be available for 8 consecutive weeks during the summer of 2026?:
+    answer: 'Yes'
+    type: select
+  this internship opportunity pays $25 per hour. are you aligned with this hourly rate?:
+    answer: 'Yes'
+    type: select
+  ? do you currently have, or are you subject to, any non-compete, non-solicitation, confidentiality, or other restrictive agreements with a current or former employer that may limit or affect your ability to perform in a role at impiricus? disclosure will not affect your candidacy and is only used for compliance purposes.
+  : answer: 'No'
+    type: select
+  what interests you about pacvue?:
+    answer: I'm drawn to [Company]'s innovative use of ML to solve complex problems and create
+    type: select
+  ? are you currently based in austin, san francisco or new york? or do you have plans to relocate to either of these cities for the duration of the internship?
+  : answer: 'No'
+    type: select
+  if you are enrolled in university, what degree are you currently pursuing?:
+    answer: Bachelor of Science
+    type: select
+  ? if you are currently enrolled in a university or program, when do you expect to graduate or complete your program? (select the closest date.)
+  : answer: May 2026
+    type: select
+  are you currently enrolled in a university or program and will return to the program upon completion of internship?:
+    answer: 'Yes'
+    type: select
+  what degree level are you currently pursuing, or have you most recently completed?:
+    answer: Bachelor of Science
+    type: select
+  were you referred to double good by a current employee?:
+    answer: 'No'
+    type: select
+  if yes, please list the name of the employee.:
+    answer: 'No'
+    type: select
+  are you available to work full-time (40 hours/week) for the entire duration of the 10-week internship (june 2 - august 7)?:
+    answer: 'Yes'
+    type: select
+  are you currently enrolled in a college or university?:
+    answer: 'Yes'
+    type: select
+  if you answered yes to the last question, when is your expected graduation date?:
+    answer: May 2026
+    type: select
+  why are you interested in this internship at double good?:
+    answer: I'm drawn to the innovative work being done at this company and see a strong alignment with my skills in full-stack development, data engineering, and building scalable systems.
+    type: textarea
+  how did you hear about this employment opportunity?:
+    answer: Online Job Board
+    type: select
+  were you referred by a lumos employee? please let us know who!:
+    answer: 'No'
+    type: select
+  have you previously worked for, or are you currently employed with, lumos or one of our contracting partners?:
+    answer: '3.6'
+    type: select
+  what is your ideal annual pay range?:
+    answer: Open to discuss
+    type: select
+  are you willing to travel?:
+    answer: 'Yes'
+    type: select
+  are you related to anyone that is a current employee of edmentum or apex learning, if so who?:
+    answer: 'No'
+    type: select
+  have you ever been terminated for misconduct from a prior employer?:
+    answer: 'No'
+    type: select
+  ? are you currently a senior undergraduate, recent graduate, or enrolled in a graduate program in an analytics-focused discipline or closely related field?
+  : answer: 'Yes'
+    type: select
+  ? i certify that by submitting my application, the information i have provided is true and complete. i further understand falsification of information may result in disciplinary action up to & including termination should i accept a position.
+  : answer: 'Yes'
+    type: select
+  can you confirm your school name?:
+    answer: 'Yes'
+    type: select
+  are you a current sanmar employee?:
+    answer: 'No'
+    type: select
+  have you ever been employed by sanmar or an affiliate?:
+    answer: 'No'
+    type: select
+  desired hourly rate:
+    answer: Open to discuss
+    type: select
+  current location (state):
+    answer: California
+    type: select
+  are you authorized to work in the usa?:
+    answer: 'Yes'
+    type: select
+  do you or will you require sponsorship?:
+    answer: 'No'
+    type: select
+  will you require employment sponsorship in the future?:
+    answer: 'No'
+    type: select
+  ? have you ever been employed by bloomberg or bloomberg affiliated organizations? this includes full-time, temporary and internship positions.
+  : answer: 'No'
+    type: select
+  ? do you have any relatives currently employed by bloomberg or its subsidiaries or affiliates ("bloomberg"), or who may be providing services to bloomberg either as a contingent worker (e.g., consultant, contractor, freelancer, stringer, etc.) or through a vendor?
+  : answer: 'No'
+    type: select
+  are you currently located in washington d.c area or plan to be located in the area this summer?:
+    answer: 'No'
+    type: select
+  do you have 5+ years of experience in reinforcement learning (rl)?:
+    answer: 'Yes'
+    type: select
+  do you have 2+ years of experience deploying rl on legged robot hardware?:
+    answer: 'Yes'
+    type: select
+  do you know anyone who works at smartsheet?:
+    answer: 'No'
+    type: textarea
+  ? in our pursuit of ai-driven advancements, how would you rate your overall familiarity with artificial intelligence (ai) concepts and tools?
+  : answer: Intermediate
+    type: select
+  why cognitiv? why are you interested in this role with us?:
+    answer: I'm drawn to the innovative work being done at this company and see a strong alignment with my skills in full-stack development, data engineering, and building scalable systems.
+    type: textarea
+  are you currently pursuing a bs, ms, or phd in computer science or a related technical field?:
+    answer: 'Yes'
+    type: select
+  on a scale 1-10, how would you rate your python proficiency regarding data structures and algorithms and why?:
+    answer: I would rate my Python proficiency regarding data structures and algorithms an 8. My Software Engineering
+    type: textarea
+  do you have experience with machine learning frameworks such as pytorch or tensorflow?:
+    answer: 'Yes'
+    type: select
+  do you have familiarity with data processing and building ml workflows or pipelines?:
+    answer: 'Yes'
+    type: select
+  do you have strong understanding of algorithms, data structures, and software engineering fundamentals?:
+    answer: 'Yes'
+    type: select
+  ? this is a hybrid role based in bellevue, wa, with in-office collaboration mtw each week. does this schedule work for you, and will you be based in the greater seattle area for the duration of the internship?
+  : answer: 'Yes'
+    type: select
+  cognitiv does not provide housing. are you able to provide your own housing for the duration of the internship?:
+    answer: 'Yes'
+    type: select
+  ? 'confirming your availability: this internship requires a full-time commitment from june 1 through august 14, 2026. does this align with your schedule?'
+  : answer: 'Yes'
+    type: select
+  home address:
+    answer: One Washington Square
+    type: textarea
+  what is your preferred name?:
+    answer: Alan
+    type: select
+  describe a data project you’ve worked on (coursework, personal project, or internship).:
+    answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy using Monte Carlo simulation and Random Forest models trained on 1,700+ fights. It has a FastAPI backend, React frontend, and PostgreSQL database deployed on GCP Cloud Run. I'm proud of it because it combines my interests in data engineering and full-stack development into one end-to-end system.
+    type: textarea
+  what tools did you use in this project (e.g., python libraries, sql, visualization tools), and why did you choose them?:
+    answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy using Monte Carlo simulation and Random Forest models trained on 1,700+ fights. It has a FastAPI backend, React...
+    type: select
+  are you able and willing to commute to and work from our sf office at least every monday/tuesday/thursday?:
+    answer: 'Yes'
+    type: select
+  what do you hope to learn from this internship, and what kind of projects excite you most?:
+    answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy using Monte Carlo simulation and Random Forest models trained on 1,700+ fights. It has a FastAPI backend, React frontend, and PostgreSQL database deployed on GCP Cloud Run. I'm proud of it because it combines my interests in data engineering and full-stack development into one end-to-end system.
+    type: textarea
+  what are your total comp expectations?:
+    answer: 'Yes'
+    type: select
+  will you require visa sponsorship now or in the future?:
+    answer: 'No'
+    type: select
+  do you have any experience testing or using testing libraries, such as junit?:
+    answer: 'Yes'
+    type: select
+  what are you looking for in an internship at eulerity?:
+    answer: I'm looking for an internship where I can apply my skills in full-stack development and data engineering to solve real-world problems. As a Computer Science student at San Jose State with experience building AI-powered applications, managing data pipelines, and leading engineering teams, I'm eager to contribute to meaningful projects while learning from experienced engineers in a collaborative environment.
+    type: textarea
+  are you currently based in the nyc tri-state area?:
+    answer: 'No'
+    type: select
+  are you able to come to the nyc office at least once per week?:
+    answer: 'Yes'
+    type: select
+  will you now or will you in the future require employment visa sponsorship (e.g., h-1b visa status)?:
+    answer: 'No'
+    type: select
+  ? this role is based onsite at our chicago office five days per week. are you willing and able to commit to working onsite during the summer?
+  : answer: 'Yes'
+    type: select
+  ? are you currently bound by any agreements with a current or former employer that may restrict your ability to work for scale ai or perform the duties of the position for which you are applying? this includes, but is not limited to, non-compete agreements, non-solicitation agreements, confidentiality or non-disclosure agreements, or any other contractual obligations that could limit your employment activities.
+  : answer: 'Yes'
+    type: select
+  will you be graduating in the summer or fall of 2027?:
+    answer: 'No'
+    type: select
+  school (required) def3f966:
+    answer: San Jose State University
+    type: text
+  degree (required) 335a68f5:
+    answer: Bachelor of Science in Software Engineering
+    type: text
+  discipline (required) b46ea880:
+    answer: Software Engineering
+    type: text
+  start date (required) 2828f7f7:
+    answer: May 2026
+    type: text
+  end date (required) 85e9505d:
+    answer: August 31, 2025
+    type: text
+  ? are you available to work up to 25 hours per week throughout the duration of the internship, from june 15 through august 7?
+  : answer: 'Yes'
+    type: select
+  are you currently based in the united states?:
+    answer: 'Yes'
+    type: select
+  do you reside in the southern california? if no, are you willing to relocate for the summer?:
+    answer: 'Yes'
+    type: select
+  when would you be able to start, and when would you ideally finish?:
+    answer: May 2026
+    type: select
+  are you able to work onsite in our mountain view, ca office?:
+    answer: 'Yes'
+    type: select
+  why are you interested in galaxy digital?:
+    answer: I'm enthusiastic about [Company]'s innovative work and reputation for driving impact in the
+    type: textarea
+  are you an undergraduate or master’s students graduating between december 2026 and june 2027?:
+    answer: 'Yes'
+    type: select
+  ? are you seeking course credit for this internship, and if so, please list any requirements your school has in terms of hours, supervision, projects, etc.
+  : answer: I built Scorecard, an AI boxing prediction engine that achieves 86% ensemble accuracy using Monte Carlo simulation and Random Forest models trained on 1,700+ fights. It has a FastAPI backend, React frontend, and PostgreSQL database deployed on GCP Cloud Run. I'm proud of it because it combines my interests in data engineering and full-stack development into one end-to-end system.
+    type: textarea
+  background check:
+    answer: 'Yes'
+    type: select
+  remote work:
+    answer: 'Yes'
+    type: select
+  what is a piece of software or tech gadget you couldn't live without?:
+    answer: I couldn't live without Visual Studio Code. Its robust features, extensive extensions for Python and JavaScript
+    type: textarea
+  why hone?:
+    answer: I am incredibly enthusiastic about [Company]'s mission to leverage data for personalized health and wellness.
+    type: textarea
+  why this role?:
+    answer: I am deeply interested in [Company]'s mission and am eager to apply my robust data
+    type: textarea
+  school (required) 8614d2a7:
+    answer: San Jose State University
+    type: text
+  degree (required) f4c86455:
+    answer: Bachelor of Science in Software Engineering, San Jose State University (expected May 2026)
+    type: text
+  discipline (required) 8ad6d12a:
+    answer: Software Engineering
+    type: text
+  start date (required) a4cca2f1:
+    answer: May 2026
+    type: text
+  end date (required) da2dd866:
+    answer: August 16, 2024
+    type: text
+  ? do you have more than 12 months of professional work experience in a technical field (excluding internships and research assistant roles)?
+  : answer: 'No'
+    type: select
+  today's date of application (mm/dd/yy format):
+    answer: 06/11/24
+    type: select
+  ? are you currently located within, or planning to relocate to be within, a reasonable commute of any of this job's listed hiring locations?
+  : answer: Other
+    type: select
+  ? we prioritize building a local team around our arlington, va office who are able to work at least 2 days per week in office (some positions may require more days). are you able to work at least 2 days per week out of our arlington, va office?
+  : answer: I built Scorecard, an AI boxing prediction engi...
+    type: select
+  how many years of relevant experience to this role do you have?:
+    answer: 'Yes'
+    type: select
+  we pay all interns $15/hr. are you comfortable with this amount?:
+    answer: 'Yes'
+    type: select
+  are you comfortable working 25-29 hours per week this summer in a hybrid setting?:
+    answer: 'Yes'
+    type: select
+  our internship program begins tuesday, june 8th, 2026 - can you confirm you can start on this day?:
+    answer: Summer 2026
+    type: select
+  non-disclosure agreement:
+    answer: 'Yes'
+    type: select
+  upon hire, can you provide verification of your identity and legal right to work in the country where this job is located?:
+    answer: 'Yes'
+    type: select
+  are you willing to work in-person at our office downtown indianapolis?:
+    answer: 'Yes'
+    type: select
+  do you live in indiana?:
+    answer: 'Yes'
+    type: select
+  are you legally allowed to work in the united states?:
+    answer: 'Yes'
+    type: select
+  what is your current employment visa status (e.g., h-1b / stem opt/ cpt/citizen/green card holder)?:
+    answer: 'Yes'
+    type: select
+  are you open to relocate to chicago and work from office twice a week?:
+    answer: 'Yes'
+    type: select
+  what is your earliest joining date?:
+    answer: 'Yes'
+    type: select
+  are you currently located in the chicago area, or are you willing to relocate for this position?:
+    answer: 'Yes'
+    type: select
+  do you have an active security clearance?:
+    answer: 'No'
+    type: select
+  what is your current security clearance level?:
+    answer: 'Yes'
+    type: select
+  what is your current address?:
+    answer: For privacy and security reasons, my current address is not included in this public profile. I am prepared to provide this information directly and confidentially as
+    type: textarea
+  do you currently reside in the san francisco bay area?:
+    answer: 'Yes'
+    type: select
+  school (required) 32b4c354:
+    answer: San Jose State University
+    type: text
+  degree (required) 756f2649:
+    answer: Bachelor of Science in Software Engineering, San Jose State University (expected May 2026)
+    type: text
+  discipline (required) 3d1fddb2:
+    answer: Software Engineering
+    type: text
+  start date (required) ca4c054d:
+    answer: May 2026
+    type: text
+  end date (required) 5381ab75:
+    answer: August 2025
+    type: text
+  do you reside in the san francisco bay area? if so, where?:
+    answer: 'Yes'
+    type: select
+  ? what is your cumulative gpa? if you are in the 1st year of a master's or phd program, please submit your gpa from your undergrad.
+  : answer: '3.6'
+    type: select
+  are you willing to work in our toronto office for 5 days per week?:
+    answer: 'Yes'
+    type: select
+  were you referred by a mq employee?:
+    answer: 'No'
+    type: select
+  'name of mq employee who referred you:':
+    answer: 'No'
+    type: select
+  current position/title:
+    answer: Data Engineer
+    type: select
+  ? offers of employment are contingent upon passing pre-employment background checks. drug and/or credit check screenings may be required for specific positions.
+  : answer: 'Yes'
+    type: select
+  do you acknowledge the aeg hr privacy notice?:
+    answer: 'No'
+    type: select
+  do you acknowledge the aeg job applicant privacy policy?:
+    answer: 'No'
+    type: select
+  are you currently employed by aeg or any affiliates- full time or part time?:
+    answer: 'Yes'
+    type: select
+  have you previously been employed with aeg or any affiliates either full-time or part-time?:
+    answer: 'No'
+    type: select
+  are you able to perform all essential job duties with or without accommodation?:
+    answer: 'Yes'
+    type: select
+  will you now of in the future require sponsorship for employment?:
+    answer: 'No'
+    type: select
+  preferred pronouns:
+    answer: He/Him
+    type: select
+  what is your permanent work location?:
+    answer: Other
+    type: select
+  please confirm what time zone you are located in.:
+    answer: America/Los_Angeles
+    type: textarea
+  do you now or in the future require immigration sponsorship.:
+    answer: 'No'
+    type: select
+  do your compensation expectations align with the posted range? (base compensation):
+    answer: Open to discuss
+    type: select
+  when is the earliest you could start in this role?:
+    answer: May 2026
+    type: select
+  i am a currently an employee or contractor of newsela.:
+    answer: 'No'
+    type: select
+  i am a former employee of newsela.:
+    answer: 'No'
+    type: select
+  i am, or was in the past, a customer of newsela.:
+    answer: 'No'
+    type: select
+  edit!!!! {{custom job app q 1, yes/no}} do you have experience with x.:
+    answer: 'Yes'
+    type: select
+  edit!!! {{custom job app q 1, explained}} please elaborate on your experience with x.:
+    answer: My experience as a Data Engineer at Kruiz involved developing robust data pipelines and performing data analysis using Python and Java. This practical application, coupled with my coursework in
+    type: textarea
+  edit!!!! {{custom job app q 2, yes/no}} do you have experience with x.:
+    answer: 'Yes'
+    type: select
+  edit!!!! {{custom job app q 2, explained}} please elaborate on your experience with x.:
+    answer: As a Data Engineer at Kruiz, I've gained hands-on experience processing and manipulating large datasets, which is foundational for impact research.
+    type: textarea
+  edit!!!! {{custom job app q 3, yes/no}} do you have experience with x.:
+    answer: 'Yes'
+    type: select
+  edit!!!! {{custom job app q 3, explained}} please elaborate on your experience with x.:
+    answer: My experience encompasses a strong foundation in programming languages like Python, JavaScript, and Java, coupled with practical application in frameworks such as React.js, Node.js
+    type: textarea
+  will you now or in the future require sponsorship to legally work in the united states?:
+    answer: 'Yes'
+    type: select
+
+  this is a hybrid role, requiring at least being in our austin office on wednesdays. are you able to commit to this requirement?:
+    answer: 'Yes'
+    type: select
+
+  the internship program pays an hourly rate of $20/hour - does this align with your expectations?:
+    answer: 'Open to discuss'
+    type: select
+
+  what are you majoring in?:
+    answer: 'Software Engineering'
+    type: select
+
+  what are some relevant courses you are taking/have taken?:
+    answer: 'Software Engineering, Data Structures & Algorithms, and Database Systems, providing a strong foundation for AI Ops.'
+    type: select
+
+  do you have any experience with ai tools?:
+    answer: 'Yes'
+    type: select
+
+  are you a current or former employee of palmetto?:
+    answer: 'No'
+    type: select
+
+  do you have any agreements with a current or former employer, such as a non-compete or non-solicitation agreement, that would restrict your ability to work for palmetto?:
+    answer: 'No'
+    type: select
+
+  how did you hear about palmetto?:
+    answer: 'Online Job Board'
+    type: select

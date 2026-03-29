@@ -85,6 +85,13 @@ class JobParser:
             r'boards\.greenhouse\.io',
             r'job-boards\.greenhouse\.io',
             r'greenhouse\.io',
+            r'weareroku\.com',
+            r'careers\.rivian\.com',
+            r'app\.careerpuck\.com',
+            r'sofi\.com/careers',
+            r'ripple\.com/careers',
+            r'careers\.formlabs\.com',
+            r'ithaka\.org/job',
         ],
         ATSType.LEVER: [
             r'jobs\.lever\.co',

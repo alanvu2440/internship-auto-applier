@@ -4,6 +4,10 @@ Email Response Tracker
 Scans Gmail for responses to job applications and categorizes them into
 a pipeline: follow_up → assessment → interview_invite → offer (or rejection).
 Reuses Gmail IMAP credentials from EmailVerifier.
+
+Classification uses a two-pass confidence scoring system:
+  Pass 1 — Wide net: scan for ALL signal keywords, accumulate scores per category
+  Pass 2 — Filter: apply negative signals, context checks, and minimum thresholds
 """
 
 from __future__ import annotations
@@ -35,94 +39,189 @@ RESPONSE_PRIORITY = {
     "offer": 5,
 }
 
-# Classification keywords — checked against subject + body
-CLASSIFICATION_RULES = {
+# ── Confidence-scored classification rules ─────────────────────────────
+# Each keyword has a weight. Subject matches get 2x weight.
+# Final score must meet a minimum threshold for each category.
+
+SCORED_RULES = {
     "offer": {
-        "strong": [
-            "offer letter",
-            "pleased to extend",
-            "congratulations on your offer",
-            "extending an offer",
-            "formal offer",
-            "compensation package",
-            "accept your offer",
-            "offer of employment",
-        ],
+        "keywords": {
+            "offer letter": 10,
+            "pleased to extend": 10,
+            "congratulations on your offer": 10,
+            "extending an offer": 10,
+            "formal offer": 8,
+            "compensation package": 7,
+            "accept your offer": 9,
+            "offer of employment": 10,
+            "start date and compensation": 8,
+            "sign your offer": 9,
+        },
+        "threshold": 8,
+        "subject_multiplier": 2.0,
     },
     "interview_invite": {
-        "strong": [
-            "schedule an interview",
-            "schedule your interview",
-            "interview invitation",
-            "phone screen",
-            "technical interview",
-            "next round",
-            "interview with",
-            "video interview",
-            "on-site interview",
-            "final round",
-            "meet the team",
-            "panel interview",
-            "behavioral interview",
-            "superday",
-            "hiring manager",
-            "calendly",
-            "book a time",
-            "schedule a call",
-            "interview slot",
-        ],
+        "keywords": {
+            # Scheduling-specific (high signal — someone is actively booking time)
+            "schedule your interview": 8,
+            "schedule an interview": 8,
+            "interview invitation": 9,
+            "interview confirmation": 8,
+            "interview scheduled": 8,
+            "interview slot": 7,
+            "your interview is": 8,
+            "confirm your interview": 8,
+            # Format-specific
+            "phone screen": 6,
+            "technical interview": 7,
+            "video interview": 6,
+            "on-site interview": 7,
+            "virtual interview": 6,
+            "panel interview": 7,
+            "behavioral interview": 6,
+            "final round": 6,
+            "superday": 8,
+            # Progression signals (moderate — could be template filler)
+            "next round": 4,
+            "next step": 3,
+            "next steps in": 3,
+            "move forward": 3,
+            "moved to the next": 5,
+            "pleased to invite": 7,
+            "like to invite you": 7,
+            "meet the team": 5,
+            # Booking tools (high signal if in subject or body link)
+            "calendly.com": 7,
+            "goodtime.io": 7,
+            "greenhouse.io/interviews": 7,
+            "book a time": 5,
+            "pick a time": 5,
+            "select a time": 5,
+            "availability": 3,
+        },
+        "threshold": 7,
+        "subject_multiplier": 2.5,
     },
     "assessment": {
-        "strong": [
-            "coding challenge",
-            "hackerrank",
-            "codesignal",
-            "online assessment",
-            "technical assessment",
-            "take-home",
-            "coding test",
-            "skills assessment",
-            "oa link",
-            "complete the assessment",
-            "leetcode",
-            "karat",
-            "codility",
-            "complete your assessment",
-        ],
+        "keywords": {
+            "coding challenge": 8,
+            "hackerrank": 9,
+            "codesignal": 9,
+            "online assessment": 8,
+            "technical assessment": 8,
+            "take-home": 7,
+            "coding test": 8,
+            "skills assessment": 7,
+            "oa link": 8,
+            "complete the assessment": 8,
+            "complete your assessment": 8,
+            "leetcode": 8,
+            "karat": 8,
+            "codility": 8,
+            "hirevue": 7,
+            "assessment invitation": 8,
+            "pymetrics": 7,
+        },
+        "threshold": 7,
+        "subject_multiplier": 2.0,
     },
     "rejection": {
-        "strong": [
-            "unfortunately",
-            "not moving forward",
-            "other candidates",
-            "position filled",
-            "decided not to proceed",
-            "will not be moving",
-            "unable to offer",
-            "not been selected",
-            "decided to move forward with",
-            "pursue other candidates",
-            "not a fit",
-            "regret to inform",
-            "after careful consideration",
-            "competitive applicant pool",
-            "will not be advancing",
-        ],
+        "keywords": {
+            "unfortunately": 4,
+            "not moving forward": 8,
+            "other candidates": 5,
+            "position filled": 7,
+            "decided not to proceed": 8,
+            "will not be moving": 8,
+            "unable to offer": 7,
+            "not been selected": 8,
+            "decided to move forward with": 7,
+            "pursue other candidates": 7,
+            "not a fit": 5,
+            "regret to inform": 7,
+            "after careful consideration": 5,
+            "competitive applicant pool": 4,
+            "will not be advancing": 8,
+            "no longer being considered": 8,
+            "not able to move forward": 8,
+            "have decided to go with": 7,
+        },
+        "threshold": 6,
+        "subject_multiplier": 2.0,
     },
     "follow_up": {
-        "strong": [
-            "application received",
-            "thank you for applying",
-            "under review",
-            "we received your application",
-            "application has been submitted",
-            "application confirmation",
-            "we have received",
-            "reviewing your application",
-            "keep you updated",
-        ],
+        "keywords": {
+            "application received": 5,
+            "thank you for applying": 6,
+            "under review": 5,
+            "we received your application": 6,
+            "application has been submitted": 6,
+            "application confirmation": 5,
+            "we have received": 5,
+            "reviewing your application": 5,
+            "keep you updated": 4,
+            "thank you for your interest": 5,
+            "we will review": 4,
+            "application successfully submitted": 6,
+        },
+        "threshold": 5,
+        "subject_multiplier": 1.5,
     },
 }
+
+# Negative signals — if present, DEMOTE from interview_invite/offer to lower category
+NEGATIVE_SIGNALS = {
+    # These indicate the email is NOT a real interview invite
+    "interview_invite": [
+        # Rejection language (overrides interview keywords in templates)
+        "unfortunately",
+        "not moving forward",
+        "not been selected",
+        "will not be moving",
+        "unable to offer",
+        "decided not to proceed",
+        "regret to inform",
+        "no longer being considered",
+        "we have decided to go with",
+        "role has been closed",
+        "position has been filled",
+        "decided to close this role",
+        "pausing this role",
+        # Generic confirmation template filler
+        "your application has been received",
+        "we will review it and get back",
+        "our team will review",
+        "we'll be in touch if there's a match",
+        "if your qualifications match",
+        "should your background be a match",
+        "if we feel your experience is a match",
+    ],
+    "offer": [
+        "unfortunately",
+        "not moving forward",
+        "not been selected",
+        "regret to inform",
+    ],
+}
+
+# Auto-reply patterns — emails matching 2+ of these are confirmation emails,
+# NOT interview invites or assessments
+AUTO_REPLY_INDICATORS = [
+    "your application has been received",
+    "we will review it",
+    "thank you for applying",
+    "thank you for your interest",
+    "application received",
+    "we have received your application",
+    "reviewing your application",
+    "application confirmation",
+    "application successfully submitted",
+    "thank you for applying",
+    "we've received your application",
+    "we appreciate your interest",
+    "our team will review your",
+    "we will carefully review",
+]  # All lowercase — matched against lowercased body text
 
 # ATS noreply domains — for these, rely on subject matching instead of sender domain
 ATS_NOREPLY_DOMAINS = [
@@ -131,6 +230,7 @@ ATS_NOREPLY_DOMAINS = [
     "ashbyhq.com",
     "smartrecruiters.com",
     "myworkdayjobs.com",
+    "myworkday.com",
     "icims.com",
     "applytojob.com",
     "jobvite.com",
@@ -206,9 +306,16 @@ class EmailResponseTracker:
                 raw_body_hash TEXT,
                 processed_at TEXT NOT NULL DEFAULT (datetime('now')),
                 notified INTEGER DEFAULT 0,
+                confidence_score REAL DEFAULT 0.0,
                 FOREIGN KEY (job_id) REFERENCES jobs(id)
             );
         """)
+        # Add confidence_score column if missing (upgrade path)
+        try:
+            db.execute("SELECT confidence_score FROM email_responses LIMIT 0")
+        except sqlite3.OperationalError:
+            db.execute("ALTER TABLE email_responses ADD COLUMN confidence_score REAL DEFAULT 0.0")
+            db.commit()
         # Add response_status column if missing
         try:
             db.execute("SELECT response_status FROM jobs LIMIT 0")
@@ -255,8 +362,8 @@ class EmailResponseTracker:
         """Match an email against applied companies.
 
         Returns the best-matching job dict, or None.
-        Uses strict matching: company name must appear in sender OR subject
-        as a recognizable phrase, not just overlapping common tokens.
+        Uses word-boundary matching to avoid substring false positives
+        (e.g. "Tive" matching "Intuitive").
         """
         sender_lower = sender_name.lower()
         email_lower = sender_email.lower()
@@ -278,7 +385,6 @@ class EmailResponseTracker:
             score = 0
             has_strong_match = False
 
-            # Strong match: full company name (or major portion) in sender or subject
             # Build a "core name" — first 2-3 meaningful tokens joined
             core_tokens = company_tokens[:3]
             core_name = " ".join(core_tokens)
@@ -294,9 +400,19 @@ class EmailResponseTracker:
             elif len(core_tokens) >= 2 and core_name in subject_lower:
                 score += 6
                 has_strong_match = True
-            # Single distinctive token (4+ chars) in sender name
-            elif any(len(t) >= 4 and t in sender_lower for t in core_tokens):
+            # Single distinctive token — WORD BOUNDARY match only (4+ chars)
+            # Word boundaries prevent "Tive" matching inside "Intuitive"
+            elif any(
+                len(t) >= 4 and re.search(r'\b' + re.escape(t) + r'\b', sender_lower)
+                for t in core_tokens
+            ):
                 score += 5
+                has_strong_match = True
+            elif any(
+                len(t) >= 4 and re.search(r'\b' + re.escape(t) + r'\b', subject_lower)
+                for t in core_tokens
+            ):
+                score += 4
                 has_strong_match = True
             # Check email domain for company name (not ATS noreply)
             elif not is_ats_noreply and any(
@@ -321,46 +437,108 @@ class EmailResponseTracker:
 
         return best_match
 
-    # ── Classification ───────────────────────────────────────────
+    # ── Classification (confidence-scored) ────────────────────────
 
     @staticmethod
-    def _classify_email(subject: str, body: str) -> str:
-        """Classify email into a response category using keyword matching.
+    def _classify_email(subject: str, body: str) -> Tuple[str, float]:
+        """Classify email into a response category using confidence scoring.
 
-        Uses subject-weighted matching: keywords in subject are stronger signals
-        than keywords buried in body template text.
+        Two-pass system:
+          Pass 1 — Accumulate scores for every category from keyword hits.
+          Pass 2 — Apply negative signals and context filters; pick the
+                    highest-scoring category that meets its threshold.
+
+        Returns (category, confidence_score).
         """
         subject_lower = subject.lower()
-        body_lower = body.lower()
-        text = subject_lower + " " + body_lower
 
-        # If body is clearly an auto-reply confirmation, classify as follow_up
-        # BEFORE checking interview/assessment keywords (which may appear in templates)
-        follow_up_signals = [
-            "your application has been received",
-            "we will review it",
-            "thank you for applying",
-            "application received",
-            "we have received your application",
-            "reviewing your application",
-        ]
-        is_auto_reply = sum(1 for s in follow_up_signals if s in body_lower) >= 2
+        # Strip HTML tags from body for cleaner matching, but keep raw for link detection
+        body_text = re.sub(r'<[^>]+>', ' ', body.lower())
+        body_text = re.sub(r'\s+', ' ', body_text).strip()
 
-        # Check categories in priority order (offer first, follow_up last)
-        for category in ["offer", "interview_invite", "assessment", "rejection", "follow_up"]:
-            rules = CLASSIFICATION_RULES[category]
-            for keyword in rules["strong"]:
+        # Reply chains: "Re:" subjects carry historical keywords from the
+        # original email.  The actual new content is in the body, so we
+        # reduce subject weight for replies.
+        is_reply = bool(re.match(r'^re:\s', subject_lower))
+
+        # ── Pass 1: Score accumulation ──
+
+        category_scores: Dict[str, float] = {}
+
+        for category, rules in SCORED_RULES.items():
+            score = 0.0
+            base_multiplier = rules["subject_multiplier"]
+            # Replies: subject keywords get 0.5x instead of full multiplier
+            # because the subject line is just the forwarded original topic
+            multiplier = 0.5 if is_reply else base_multiplier
+
+            for keyword, weight in rules["keywords"].items():
+                # Subject match — stronger signal (unless reply)
                 if keyword in subject_lower:
-                    # Subject match is always strong
-                    return category
-                if keyword in body_lower:
-                    # Body match: if this is an auto-reply, don't promote to
-                    # interview/assessment just because the template mentions it
-                    if is_auto_reply and category in ("interview_invite", "assessment"):
-                        continue
-                    return category
+                    score += weight * multiplier
+                # Body match
+                if keyword in body_text:
+                    score += weight
 
-        return "other"
+            category_scores[category] = score
+
+        # ── Pass 2: Auto-reply detection ──
+        # Count auto-reply indicators in body
+        auto_reply_count = sum(
+            1 for pattern in AUTO_REPLY_INDICATORS if pattern in body_text
+        )
+        is_auto_reply = auto_reply_count >= 2
+
+        # If it's clearly an auto-reply, heavily penalize interview/assessment/offer
+        # These categories should NOT fire on generic "thank you for applying" emails
+        if is_auto_reply:
+            category_scores["interview_invite"] *= 0.15  # 85% penalty
+            category_scores["assessment"] *= 0.15
+            category_scores["offer"] *= 0.15
+            # Boost follow_up since that's what auto-replies actually are
+            category_scores["follow_up"] += 5
+
+        # ── Pass 2b: Negative signal check ──
+        # If the body contains rejection language, crush interview/offer scores.
+        # Also cross-boost: if we find rejection signals while checking interview,
+        # boost the rejection score — the email is ABOUT a rejection.
+        for category, neg_patterns in NEGATIVE_SIGNALS.items():
+            if category_scores.get(category, 0) > 0:
+                neg_hits = sum(1 for p in neg_patterns if p in body_text)
+                if neg_hits > 0:
+                    # Aggressive penalty: 1 hit = 60%, 2 hits = 85%, 3+ = 95%
+                    penalty = min(0.95, 0.60 + (neg_hits - 1) * 0.25)
+                    category_scores[category] *= (1 - penalty)
+                    # Cross-boost: if rejection patterns found in an interview email,
+                    # the email is probably a rejection
+                    if category == "interview_invite":
+                        category_scores["rejection"] = max(
+                            category_scores.get("rejection", 0),
+                            7.0 + neg_hits * 2  # ensure it clears threshold
+                        )
+
+        # ── Pass 2c: ATS noreply sender penalty ──
+        # Emails from myworkday.com, greenhouse.io etc. are almost always
+        # auto-generated; real interview invites come from actual recruiters
+        # Exception: if the subject itself is very specific
+        # (We can't check sender here, but we can check for common noreply patterns in body)
+        noreply_in_body = any(
+            domain in body_text for domain in ["noreply", "no-reply", "do-not-reply", "donotreply"]
+        )
+        if noreply_in_body:
+            category_scores["interview_invite"] *= 0.5
+            category_scores["offer"] *= 0.5
+
+        # ── Pick winner ──
+        # Sort by score descending, then check threshold
+        sorted_cats = sorted(category_scores.items(), key=lambda x: x[1], reverse=True)
+
+        for category, score in sorted_cats:
+            threshold = SCORED_RULES[category]["threshold"]
+            if score >= threshold:
+                return category, round(score, 1)
+
+        return "other", 0.0
 
     # ── Email parsing ────────────────────────────────────────────
 
@@ -528,9 +706,9 @@ class EmailResponseTracker:
                 if not matched_job:
                     continue
 
-                # 6. Get body and classify
+                # 6. Get body and classify with confidence scoring
                 body = self._get_email_body(msg)
-                category = self._classify_email(subject, body)
+                category, confidence = self._classify_email(subject, body)
 
                 # Apply category filter
                 if category_filter and category != category_filter:
@@ -548,8 +726,8 @@ class EmailResponseTracker:
                         INSERT OR IGNORE INTO email_responses
                         (job_id, message_id, sender, sender_email, subject,
                          received_at, category, company_matched, snippet,
-                         raw_body_hash, processed_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         raw_body_hash, processed_at, confidence_score)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         matched_job["id"],
                         message_id,
@@ -562,6 +740,7 @@ class EmailResponseTracker:
                         snippet,
                         body_hash,
                         datetime.now().isoformat(),
+                        confidence,
                     ))
                     db.commit()
                 except sqlite3.IntegrityError:
@@ -580,12 +759,14 @@ class EmailResponseTracker:
                     "subject": subject,
                     "received_at": received_at,
                     "category": category,
+                    "confidence": confidence,
                     "snippet": snippet,
                 }
                 new_responses.append(response_record)
 
                 logger.info(
-                    f"[{category.upper()}] {matched_job['company']} — \"{subject}\""
+                    f"[{category.upper()}] (conf={confidence}) "
+                    f"{matched_job['company']} — \"{subject}\""
                 )
 
             except Exception as e:
@@ -705,13 +886,15 @@ class EmailResponseTracker:
                 subject = resp.get("subject", "")
                 received = resp.get("received_at", "")[:10]
                 role = resp.get("role", "")
+                conf = resp.get("confidence_score", resp.get("confidence", 0))
 
                 print(f"  {i}. {company} — \"{subject}\"")
-                if received:
-                    line = f"     Received: {received}"
-                    if role:
-                        line += f"  |  Role: {role}"
-                    print(line)
+                line = f"     Received: {received}"
+                if role:
+                    line += f"  |  Role: {role}"
+                if conf:
+                    line += f"  |  Conf: {conf}"
+                print(line)
 
             if len(items) > 10:
                 print(f"  ... and {len(items) - 10} more")
@@ -722,6 +905,7 @@ class EmailResponseTracker:
         interviews = stats.get("by_category", {}).get("interview_invite", 0)
         assessments = stats.get("by_category", {}).get("assessment", 0)
         offers = stats.get("by_category", {}).get("offer", 0)
+        rejections = stats.get("by_category", {}).get("rejection", 0)
         response_pct = stats.get("response_rate_pct", 0)
         interview_pct = (interviews / total_applied * 100) if total_applied > 0 else 0
 
@@ -730,6 +914,8 @@ class EmailResponseTracker:
               f"({response_pct}%) → {interviews} interviews ({interview_pct:.1f}%)")
         if assessments:
             print(f"          {assessments} assessments pending")
+        if rejections:
+            print(f"          {rejections} rejections")
         if offers:
             print(f"          {offers} offers!")
 
@@ -739,6 +925,80 @@ class EmailResponseTracker:
 
         print("=" * 66)
         print()
+
+    # ── Re-classify existing entries ─────────────────────────────
+
+    def reclassify(self) -> Dict:
+        """Re-run classification on all stored emails.
+
+        Useful after updating classification rules. Re-reads snippets
+        from DB and re-classifies, updating categories and job statuses.
+        """
+        db = self._get_db()
+        cursor = db.execute("""
+            SELECT id, subject, snippet, category as old_category,
+                   company_matched, job_id
+            FROM email_responses
+        """)
+        rows = cursor.fetchall()
+        logger.info(f"Re-classifying {len(rows)} stored emails...")
+
+        changes = []
+        for row in rows:
+            row = dict(row)
+            # Re-classify using snippet as body (we don't store full body)
+            new_cat, confidence = self._classify_email(
+                row["subject"], row["snippet"] or ""
+            )
+
+            if new_cat != row["old_category"]:
+                changes.append({
+                    "id": row["id"],
+                    "company": row["company_matched"],
+                    "subject": row["subject"],
+                    "old": row["old_category"],
+                    "new": new_cat,
+                    "confidence": confidence,
+                })
+                db.execute(
+                    "UPDATE email_responses SET category = ?, confidence_score = ? WHERE id = ?",
+                    (new_cat, confidence, row["id"]),
+                )
+
+            else:
+                # Just update confidence score
+                db.execute(
+                    "UPDATE email_responses SET confidence_score = ? WHERE id = ?",
+                    (confidence, row["id"]),
+                )
+
+        db.commit()
+
+        # Rebuild job response_status from scratch
+        # Reset all to NULL, then replay all emails in chronological order
+        db.execute("UPDATE jobs SET response_status = NULL WHERE status = 'applied'")
+        db.commit()
+
+        cursor = db.execute("""
+            SELECT job_id, category FROM email_responses
+            ORDER BY received_at ASC
+        """)
+        for row in cursor.fetchall():
+            self._update_response_status(db, row["job_id"], row["category"])
+
+        db.close()
+
+        if changes:
+            logger.info(f"Re-classified {len(changes)} emails:")
+            for c in changes:
+                logger.info(
+                    f"  {c['company']}: {c['old']} → {c['new']} "
+                    f"(conf={c['confidence']}) \"{c['subject'][:60]}\""
+                )
+        else:
+            logger.info("No classification changes")
+
+        return {"changes": changes, "total_reviewed": len(rows)}
 
     # ── Continuous tracking ──────────────────────────────────────
 

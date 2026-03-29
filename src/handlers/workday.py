@@ -83,7 +83,10 @@ class WorkdayHandler(BaseHandler):
 
     @property
     def WORKDAY_PASSWORD(self):
+        # Check both top-level accounts and secrets.accounts
         password = self.form_filler.config.get("accounts", {}).get("workday_password")
+        if not password:
+            password = self.form_filler.config.get("secrets", {}).get("accounts", {}).get("workday_password")
         if not password:
             raise ValueError(
                 "workday_password not set in config.accounts — cannot log into Workday. "

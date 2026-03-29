@@ -471,15 +471,89 @@ class CaptchaSolver:
         return None
 
     def _solve_hcaptcha_2captcha(self, sitekey: str, page_url: str) -> Optional[str]:
-        """Solve hCaptcha using 2captcha."""
+        """Solve hCaptcha using 2captcha's Python library.
+
+        Uses the TwoCaptcha library's built-in hcaptcha() method which
+        handles the correct API endpoint and polling automatically.
+        Falls back to raw in.php API if the library method fails.
+        """
+        import time
+        import requests
+
+        # Strategy 1: Use TwoCaptcha library (preferred)
+        if self._solver:
+            try:
+                logger.debug(f"Solving hCaptcha via TwoCaptcha library: sitekey={sitekey[:20]}...")
+                result = self._solver.hcaptcha(sitekey=sitekey, url=page_url)
+                token = result.get("code") if isinstance(result, dict) else str(result)
+                if token:
+                    logger.info(f"hCaptcha solved via library (token: {token[:30]}...)")
+                    return token
+            except Exception as e:
+                logger.warning(f"TwoCaptcha library hcaptcha() failed: {e}")
+
+        # Strategy 2: Raw in.php API (method=hcaptcha)
         try:
-            logger.debug(f"Sending hCaptcha to 2captcha: sitekey={sitekey[:20]}...")
-            result = self._solver.hcaptcha(sitekey=sitekey, url=page_url)
-            token = result.get("code") if isinstance(result, dict) else str(result)
-            if token and len(token) > 20:
-                return token
-            logger.warning(f"2captcha hCaptcha returned unexpected result: {result}")
+            logger.debug(f"Trying hCaptcha via in.php API: sitekey={sitekey[:20]}...")
+            create_resp = requests.get(
+                "https://2captcha.com/in.php",
+                params={
+                    "key": self.api_key,
+                    "method": "hcaptcha",
+                    "sitekey": sitekey,
+                    "pageurl": page_url,
+                    "json": 1,
+                },
+                timeout=30,
+            )
+            create_data = create_resp.json()
+
+            if create_data.get("status") != 1:
+                error = create_data.get("request", "unknown")
+                logger.error(f"2captcha in.php hcaptcha failed: {error}")
+                return None
+
+            task_id = create_data.get("request")
+            if not task_id:
+                logger.error(f"2captcha in.php returned no task ID: {create_data}")
+                return None
+
+            logger.debug(f"hCaptcha task created via in.php: {task_id}")
+
+            # Poll for result
+            max_wait = 180
+            poll_interval = 5
+            elapsed = 0
+            while elapsed < max_wait:
+                time.sleep(poll_interval)
+                elapsed += poll_interval
+
+                result_resp = requests.get(
+                    "https://2captcha.com/res.php",
+                    params={
+                        "key": self.api_key,
+                        "action": "get",
+                        "id": task_id,
+                        "json": 1,
+                    },
+                    timeout=30,
+                )
+                result_data = result_resp.json()
+
+                status = result_data.get("status")
+                request = result_data.get("request", "")
+
+                if status == 1 and request and len(request) > 20:
+                    return request  # This is the token
+                elif request == "CAPCHA_NOT_READY":
+                    continue  # Still solving
+                else:
+                    logger.error(f"2captcha res.php error: {request}")
+                    return None
+
+            logger.error(f"2captcha hCaptcha timed out after {max_wait}s")
             return None
+
         except Exception as e:
             logger.error(f"2captcha hCaptcha solving failed: {e}")
             return None

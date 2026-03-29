@@ -340,6 +340,22 @@ class BaseHandler(ABC):
                             if (rsContainer.classList && rsContainer.classList.contains('select')) break;
                             rsContainer = rsContainer.parentElement;
                         }
+                        // Also check globally: if this input is a question_* field,
+                        // see if the surrounding section has a selected React-Select value
+                        if (!isReactSelectFilled && (inp.id || '').startsWith('question_')) {
+                            const section = inp.closest('.application-question, .field');
+                            if (section) {
+                                const sv = section.querySelector('.select__single-value, [class*="singleValue"], [class*="single-value"]');
+                                if (sv && sv.textContent.trim()) isReactSelectFilled = true;
+                                // Also check if placeholder is absent (means a value was selected)
+                                const ctrl = section.querySelector('.select__control, [class*="select__control"]');
+                                if (ctrl) {
+                                    const ph = ctrl.querySelector('.select__placeholder, [class*="placeholder"]');
+                                    const vc = ctrl.querySelector('.select__value-container, [class*="ValueContainer"], [class*="value-container"]');
+                                    if (!ph && vc && vc.textContent.trim()) isReactSelectFilled = true;
+                                }
+                            }
+                        }
                         if (!isReactSelectFilled) {
                             empty.push(labelText || inp.name || inp.id || "unknown_field");
                         }
@@ -671,29 +687,59 @@ class BaseHandler(ABC):
             autofill_clicked = False
 
             async def _find_autofill_in_shadows() -> dict:
-                """Search ALL simplify shadow roots for Autofill button and click it."""
-                return await page.evaluate("""() => {
+                """Search ALL simplify shadow roots for Autofill button and click it with Playwright."""
+                # Use Playwright's shadow-piercing locator for a TRUSTED click that handles offscreen buttons
+                # "Autofill this page" is the ACTION button; plain "Autofill" is just the sidebar tab
+                for sel in [
+                    '.simplify-jobs-shadow-root >> button:has-text("Autofill this page")',
+                    '.simplify-jobs-shadow-root >> [role="button"]:has-text("Autofill this page")',
+                    '.simplify-jobs-shadow-root >> a:has-text("Autofill this page")',
+                    '.simplify-jobs-shadow-root >> button:has-text("Autofill this page again")',
+                ]:
+                    try:
+                        btn = page.locator(sel).first
+                        if await btn.count() > 0:
+                            text = (await btn.text_content() or "").strip()
+                            logger.info(f"[SIMPLIFY] Found autofill button via locator: '{text[:50]}'")
+                            await btn.scroll_into_view_if_needed()
+                            await btn.click(timeout=3000)
+                            await asyncio.sleep(1)
+                            # Check if Simplify responded
+                            status = await page.evaluate("""() => {
+                                const hosts = document.querySelectorAll('.simplify-jobs-shadow-root');
+                                for (const host of hosts) {
+                                    const shadow = host.shadowRoot;
+                                    if (!shadow) continue;
+                                    const t = shadow.textContent || '';
+                                    if (/complete|success|filled/i.test(t)) return 'complete';
+                                    if (/sign.?in|log.?in|create.*account/i.test(t)) return 'needs_login';
+                                }
+                                return 'unknown';
+                            }""")
+                            logger.info(f"[SIMPLIFY] Post-click status: {status}")
+                            return {'found': True, 'clicked': text, 'method': 'playwright_locator', 'status': status}
+                    except Exception as e:
+                        logger.debug(f"[SIMPLIFY] Locator '{sel}' failed: {e}")
+                        continue
+
+                # Fallback: scan shadow DOM for button texts
+                all_texts = await page.evaluate("""() => {
                     const hosts = document.querySelectorAll('.simplify-jobs-shadow-root, [class*="simplify-jobs"]');
-                    const allTexts = [];
+                    const texts = [];
                     for (const host of hosts) {
                         const shadow = host.shadowRoot;
                         if (!shadow) continue;
-                        const clickables = shadow.querySelectorAll('button, [role="button"], a');
-                        for (const el of clickables) {
-                            const text = el.textContent?.trim() || '';
-                            allTexts.push(text.substring(0, 60));
-                            if (/autofill|auto.?fill/i.test(text)) {
-                                el.click();
-                                return {found: true, clicked: text, method: 'shadow_autofill_text'};
-                            }
+                        for (const el of shadow.querySelectorAll('button, [role="button"], a')) {
+                            texts.push(el.textContent?.trim()?.substring(0, 60) || '');
                         }
                     }
-                    return {found: false, allTexts: allTexts.slice(0, 15)};
+                    return texts.slice(0, 15);
                 }""")
+                return {'found': False, 'allTexts': all_texts}
 
             async def _open_simplify_panel() -> bool:
-                """Click the Simplify widget to open the full panel."""
-                return await page.evaluate("""() => {
+                """Click the Simplify widget to open the full panel using trusted click."""
+                coords = await page.evaluate("""() => {
                     const hosts = document.querySelectorAll('.simplify-jobs-shadow-root');
                     for (const host of hosts) {
                         const shadow = host.shadowRoot;
@@ -702,13 +748,16 @@ class BaseHandler(ABC):
                         for (const el of clickables) {
                             const rect = el.getBoundingClientRect();
                             if (rect.width > 0 && rect.height > 0) {
-                                el.click();
-                                return true;
+                                return {x: rect.x + rect.width/2, y: rect.y + rect.height/2};
                             }
                         }
                     }
-                    return false;
+                    return null;
                 }""")
+                if coords:
+                    await page.mouse.click(coords['x'], coords['y'])
+                    return True
+                return False
 
             # Step 1: Try to find Autofill button directly (in case panel is already open)
             result = await _find_autofill_in_shadows()
@@ -733,9 +782,9 @@ class BaseHandler(ABC):
                     else:
                         # Step 3: Playwright shadow-piercing selectors as fallback
                         for autofill_sel in [
-                            '.simplify-jobs-shadow-root >> button:has-text("Autofill")',
-                            '.simplify-jobs-shadow-root >> [role="button"]:has-text("Autofill")',
-                            'button:has-text("Autofill")',
+                            '.simplify-jobs-shadow-root >> button:has-text("Autofill this page")',
+                            '.simplify-jobs-shadow-root >> [role="button"]:has-text("Autofill this page")',
+                            '.simplify-jobs-shadow-root >> button:has-text("Autofill this page again")',
                         ]:
                             try:
                                 btn = page.locator(autofill_sel).first
@@ -813,7 +862,17 @@ class BaseHandler(ABC):
                       if v and before_snapshot.get(k) and before_snapshot[k] != v}
 
             net_filled = len(newly_filled) + len(changed)
+            before_empty = sum(1 for v in before_snapshot.values() if not v)
+            after_empty = sum(1 for v in after_snapshot.values() if not v)
             logger.info(f"Simplify filled {net_filled} fields ({len(newly_filled)} new, {len(changed)} updated)")
+            logger.debug(f"Simplify snapshot: before={len(before_snapshot)} fields ({before_empty} empty), after={len(after_snapshot)} fields ({after_empty} empty)")
+            # Log which fields Simplify filled so we can spot wrong values
+            if newly_filled:
+                for fk, fv in list(newly_filled.items())[:15]:
+                    logger.debug(f"  [SIMPLIFY NEW] {fk} = '{str(fv)[:60]}'")
+            if changed:
+                for fk, fv in list(changed.items())[:10]:
+                    logger.debug(f"  [SIMPLIFY CHG] {fk}: '{before_snapshot.get(fk, '')[:30]}' -> '{str(fv)[:60]}'")
 
             # Secondary verification via Playwright's input_value() on critical fields
             # This catches React-managed values that JS el.value misses

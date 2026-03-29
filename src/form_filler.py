@@ -1088,6 +1088,12 @@ class FormFiller:
                     id_attr = await element.get_attribute("id") or ""
                     placeholder = await element.get_attribute("placeholder") or ""
 
+                    # Skip work experience date fields — GH handler fills these with correct config dates
+                    # form_filler would fill them with graduation dates (wrong)
+                    if id_attr and any(id_attr.startswith(p) for p in ['start-date-', 'end-date-']) and any(c.isdigit() for c in id_attr):
+                        logger.debug(f"Skipping work experience date field '{id_attr}' — GH handler will fill")
+                        continue
+
                     # Try to find associated label
                     label = await self._get_label_for_element(page, element, id_attr)
 
@@ -1942,7 +1948,18 @@ class FormFiller:
         await page.wait_for_timeout(600)
 
         try:
-            # Find individual option elements
+            # Scope option search to the VISIBLE dropdown menu to avoid
+            # picking up options from other React-Select dropdowns on the page
+            menu = None
+            for menu_sel in ['.select__menu', '[class*="menu-list"]', '[role="listbox"]']:
+                menus = await page.query_selector_all(menu_sel)
+                for m in menus:
+                    if await m.is_visible():
+                        menu = m
+                        break
+                if menu:
+                    break
+
             option_selectors = [
                 '.select__option',
                 '[id^="react-select-"][id*="-option-"]',
@@ -1950,16 +1967,17 @@ class FormFiller:
             ]
 
             options = []
+            search_root = menu if menu else page
             for sel in option_selectors:
-                found = await page.query_selector_all(sel)
+                found = await search_root.query_selector_all(sel)
                 if found:
                     options = found
                     break
 
             if not options:
-                options = await page.query_selector_all('[class*="option"]:not([class*="menu"]):not([class*="container"])')
+                options = await search_root.query_selector_all('[class*="option"]:not([class*="menu"]):not([class*="container"])')
 
-            logger.debug(f"Found {len(options)} dropdown options")
+            logger.debug(f"Found {len(options)} dropdown options (scoped={menu is not None})")
 
             # Collect all visible option texts
             option_data = []
