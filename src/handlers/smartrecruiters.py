@@ -3794,7 +3794,8 @@ class SmartRecruitersHandler(BaseHandler):
                             await nd_page.activate()
                             await asyncio.sleep(0.3)
                             import nodriver.cdp as cdp_priv
-                            # Force-check ALL spl-checkbox elements via multiple strategies
+                            # DON'T force-check via JS — it poisons CDP clicks.
+                            # Instead, just click the host element which triggers Angular's zone.
                             force_result = await nd_page.evaluate("""
                                 (function() {
                                     var fixed = [];
@@ -3804,27 +3805,10 @@ class SmartRecruitersHandler(BaseHandler):
                                         if (!sr) continue;
                                         var inner = sr.querySelector('input[type="checkbox"]');
                                         if (!inner) continue;
-                                        // Force checked state via native setter (bypasses Angular tracking)
-                                        var descriptor = Object.getOwnPropertyDescriptor(
-                                            window.HTMLInputElement.prototype, 'checked');
-                                        if (descriptor && descriptor.set) {
-                                            descriptor.set.call(inner, true);
-                                        } else {
-                                            inner.checked = true;
-                                        }
-                                        inner.setAttribute('aria-checked', 'true');
-                                        // Click the inner input to trigger Angular's click handler
-                                        inner.focus();
-                                        inner.click();
-                                        // Dispatch all necessary events for Angular
-                                        inner.dispatchEvent(new Event('change', {bubbles: true, composed: true}));
-                                        inner.dispatchEvent(new Event('input', {bubbles: true, composed: true}));
-                                        // Also click the host element (triggers Angular's zone)
+                                        // DON'T set checked via JS — let CDP click handle it
+                                        // Just click the host element to trigger Angular's zone
+                                        splChecks[i].scrollIntoView({behavior: 'instant', block: 'center'});
                                         splChecks[i].click();
-                                        // Trigger zone.js spl-change on the host element
-                                        splChecks[i].dispatchEvent(new CustomEvent('spl-change', {
-                                            detail: {value: true, checked: true}, bubbles: true, composed: true
-                                        }));
                                         // Also try direct zone.js handler invocation
                                         for (var key in splChecks[i]) {
                                             if (key.indexOf('__zone_symbol__spl-change') === 0) {
@@ -4402,7 +4386,10 @@ class SmartRecruitersHandler(BaseHandler):
                             var sr = splChecks[i].shadowRoot;
                             if (!sr) continue;
                             var inner = sr.querySelector('input[type="checkbox"]');
-                            if (inner && !inner.checked) {
+                            if (inner) {
+                                // ALWAYS return coords — even if checked via JS, Angular may not know
+                                // CDP click will toggle through Angular's zone properly
+                                var isChecked = inner.checked;
                                 splChecks[i].scrollIntoView({behavior: 'instant', block: 'center'});
                                 // Try label first (proper way to toggle checkbox)
                                 var label = sr.querySelector('label');
@@ -4415,6 +4402,7 @@ class SmartRecruitersHandler(BaseHandler):
                                         y: labelRect.y + labelRect.height/2,
                                         id: splChecks[i].id || ('spl-cb-' + i),
                                         type: 'spl-label',
+                                        checked: isChecked,
                                         labelW: Math.round(labelRect.width),
                                         labelH: Math.round(labelRect.height)
                                     });
@@ -4423,6 +4411,7 @@ class SmartRecruitersHandler(BaseHandler):
                                         x: hostRect.x + 10,
                                         y: hostRect.y + hostRect.height/2,
                                         id: splChecks[i].id || ('spl-cb-' + i),
+                                        checked: isChecked,
                                         type: 'spl-host'
                                     });
                                 }
@@ -4501,9 +4490,16 @@ class SmartRecruitersHandler(BaseHandler):
                     await asyncio.sleep(0.5)
 
                 for cb in individual_cbs:
-                    await _cdp_click_checkbox(
-                        float(cb['x']), float(cb['y']),
-                        cb.get('id', 'unknown'))
+                    x, y = float(cb['x']), float(cb['y'])
+                    cb_id = cb.get('id', 'unknown')
+                    was_checked = cb.get('checked', False)
+                    if was_checked:
+                        # Checkbox was checked by JS but Angular doesn't know.
+                        # Uncheck via CDP (toggle off), then re-check (toggle on through Angular)
+                        logger.info(f"Checkbox '{cb_id}' was JS-checked — toggling off then on via CDP for Angular")
+                        await _cdp_click_checkbox(x, y, cb_id + '-uncheck')
+                        await asyncio.sleep(0.3)
+                    await _cdp_click_checkbox(x, y, cb_id)
 
                 # Verify checkboxes are checked
                 await asyncio.sleep(0.5)
