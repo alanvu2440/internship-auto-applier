@@ -277,7 +277,29 @@ class SmartRecruitersHandler(BaseHandler):
             # --- Use shared nodriver browser (ONE window, new tab per job) ---
             nd_browser = await self._ensure_browser()
 
-            nd_page = await nd_browser.get(job_url, new_tab=True)
+            # Open new tab — try new_tab=True first, fall back to manual CDP createTarget
+            try:
+                nd_page = await nd_browser.get(job_url, new_tab=True)
+            except Exception as tab_err:
+                logger.warning(f"new_tab=True failed ({tab_err}), trying manual CDP createTarget")
+                import nodriver.cdp as cdp
+                target_id = await nd_browser.connection.send(
+                    cdp.target.create_target(job_url, new_window=False)
+                )
+                # Find the new tab in targets
+                nd_page = None
+                for t in nd_browser.targets:
+                    if hasattr(t, 'target_id') and t.target_id == target_id:
+                        nd_page = t
+                        break
+                if not nd_page:
+                    # Last resort: just navigate the first non-keeper tab
+                    tabs = nd_browser.tabs
+                    if len(tabs) > 1:
+                        nd_page = tabs[-1]
+                        await nd_page.get(job_url)
+                    else:
+                        nd_page = await nd_browser.get(job_url)
             await asyncio.sleep(4)
 
             # Check if job is closed
@@ -617,7 +639,7 @@ class SmartRecruitersHandler(BaseHandler):
                 })()
             """)
             logger.info(f"City autocomplete focus: {focus_result}")
-            if focus_result != 'FOCUSED':
+            if not focus_result or not str(focus_result).startswith('FOCUSED'):
                 return False
 
             await asyncio.sleep(0.5)

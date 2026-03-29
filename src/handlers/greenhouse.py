@@ -1485,7 +1485,8 @@ class GreenhouseHandler(BaseHandler):
     @staticmethod
     async def _find_visible_select_menu(page):
         """Find the currently visible React-Select dropdown menu, scoped to avoid cross-dropdown contamination."""
-        for sel in ['.select__menu', '[class*="menu-list"]', '[role="listbox"]']:
+        for sel in ['.select__menu', '[class*="menu-list"]', '[role="listbox"]',
+                    '[class*="MenuList"]', '[class*="menu"]', 'div[id*="react-select"][id*="listbox"]']:
             menus = await page.query_selector_all(sel)
             for m in menus:
                 if await m.is_visible():
