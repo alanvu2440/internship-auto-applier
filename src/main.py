@@ -1618,31 +1618,23 @@ def run(max):
 def backfill(max, headless, dry_run, review, ats, smart, with_simplify, workday_accounts, assist, max_open_tabs):
     """Apply to all existing jobs in the database."""
     async def main():
-        # Kill any orphaned nodriver Chrome from previous crashed runs
-        import subprocess
-        try:
-            result = subprocess.run(["pgrep", "-f", "nodriver_profile"],
-                                    capture_output=True, text=True, timeout=5)
-            if result.stdout.strip():
-                logger.warning(f"Killing orphaned Chrome from previous run")
-                subprocess.run(["pkill", "-9", "-f", "nodriver_profile"],
-                               capture_output=True, timeout=5)
-                import time; time.sleep(1)
-        except Exception:
-            pass
-        # Clean stale lock files from both profile directories
+        # NEVER kill Chrome processes — user manages their own browser
+        # Only clean lock files so Playwright/nodriver can start
         from pathlib import Path
+        for lock in ["SingletonLock", "SingletonSocket", "SingletonCookie"]:
+            for profile in ["data/browser_profiles/extension_default", "data/browser_profiles/nodriver_profile"]:
+                lp = Path(profile) / lock
+                if lp.exists():
+                    try:
+                        lp.unlink()
+                    except Exception:
+                        pass
+        # Also clean nodriver-specific lock files
         for f in ["data/browser_profiles/nodriver.lock", "data/browser_profiles/nodriver.pid"]:
             try:
                 Path(f).unlink(missing_ok=True)
             except Exception:
                 pass
-        for profile_dir in ["data/browser_profiles/nodriver_profile", "data/browser_profiles/extension_default"]:
-            for lock_file in ["SingletonLock", "SingletonCookie", "SingletonSocket"]:
-                try:
-                    Path(profile_dir, lock_file).unlink(missing_ok=True)
-                except Exception:
-                    pass
 
         app = InternshipAutoApplier()
         try:
@@ -1754,14 +1746,27 @@ def backfill(max, headless, dry_run, review, ats, smart, with_simplify, workday_
                 sys.stdout.flush()
                 await asyncio.get_event_loop().run_in_executor(None, input)
             except (EOFError, KeyboardInterrupt):
+                # Running in background (no stdin) — just exit cleanly
+                # Chrome stays alive — user closes it manually
                 pass
 
-            # Only NOW close browser (user explicitly pressed Enter)
+            # NEVER close browsers — user closes them manually
+            # Just null out references. Chrome processes stay alive as orphans.
             if app.browser_manager:
-                await app.browser_manager.close()
-            from handlers.smartrecruiters import SmartRecruitersHandler
-            SmartRecruitersHandler._shared_nd_browser = None
-            SmartRecruitersHandler._release_browser_lock()
+                app.browser_manager._persistent_context = None
+                app.browser_manager._browser = None
+                app.browser_manager._pw_started = False
+                app.browser_manager._nd_browser = None
+                app.browser_manager._nd_started = False
+                # Do NOT call playwright.stop() — it kills Chrome
+                app.browser_manager._playwright = None
+                logger.info("Released browser references (NOT closing Chrome — user closes manually)")
+            try:
+                from handlers.smartrecruiters import SmartRecruitersHandler
+                SmartRecruitersHandler._shared_nd_browser = None
+                SmartRecruitersHandler._release_browser_lock()
+            except Exception:
+                pass
 
     asyncio.run(main())
 
@@ -2201,6 +2206,25 @@ def track(interval, days):
     """Continuously monitor Gmail for application responses."""
     tracker = _get_response_tracker()
     tracker.track(interval_hours=interval, days=days)
+
+
+@cli.command(name="reclassify-responses")
+def reclassify_responses():
+    """Re-classify all stored email responses using updated rules."""
+    tracker = _get_response_tracker()
+    result = tracker.reclassify()
+    changes = result.get("changes", [])
+    total = result.get("total_reviewed", 0)
+    print(f"\nReviewed {total} emails, {len(changes)} reclassified.")
+    if changes:
+        for c in changes:
+            print(f"  {c['company']}: {c['old']} -> {c['new']} (conf={c['confidence']}) \"{c['subject'][:60]}\"")
+    # Print fresh summary from DB (reclassify already updated everything)
+    db = tracker._get_db()
+    applied = tracker._get_applied_companies(db)
+    summary = tracker._build_summary(db, [], 0, applied, None)
+    tracker._print_summary(summary)
+    db.close()
 
 
 @cli.command()
@@ -2658,9 +2682,14 @@ def discover(max, ats):
             logger.info("\nDiscovery interrupted by user.")
         finally:
             await app.cleanup()
-            # Close browser
+            # NEVER close browsers — user closes manually
             if app.browser_manager:
-                await app.browser_manager.close()
+                app.browser_manager._persistent_context = None
+                app.browser_manager._browser = None
+                app.browser_manager._pw_started = False
+                app.browser_manager._nd_browser = None
+                app.browser_manager._nd_started = False
+                app.browser_manager._playwright = None
             try:
                 from handlers.smartrecruiters import SmartRecruitersHandler
                 SmartRecruitersHandler._shared_nd_browser = None

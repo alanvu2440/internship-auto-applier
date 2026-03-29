@@ -198,7 +198,7 @@ questions:
     answer: N/A
     type: text
   sunwater capital:
-    answer: I'm enthusiastic about Sunwater Capital's mission. My data engineering experience at Kruiz and
+    answer: 'I''m enthusiastic about Sunwater Capital''s mission. My data engineering experience at Kruiz, where I built ETL pipelines processing 10K+ records and led a team of engineers, along with my AI/ML work on Scorecard (86% prediction accuracy), positions me well to contribute to data-driven investment strategies.'
     type: text
   tiktok url:
     answer: N/A
@@ -418,3 +418,295 @@ questions:
   github url:
     answer: 'https://github.com/alanvu2440'
     type: text
+
+  website/portfolio url:
+    answer: 'https://github.com/alanvu2440'
+    type: text
+
+  vevo therapeutics inc.:
+    answer: 'I believe there might be a typo in the question, as I''m applying for the Machine'
+    type: text
+
+  current location ✱san jose, ca, usasan josé, campeche, mexsan josé, calakmul, campeche, mexno location found. try entering a different locationloading:
+    answer: 'San Jose, CA'
+    type: text
+
+  yes - i am a u.s. citizen:
+    answer: 'Yes'
+    type: select
+
+  high school diploma/ged:
+    answer: 'Evergreen Valley High School'
+    type: select
+
+  saronic:
+    answer: 'Excited to join [Company] as a Full Stack Engineer Intern, applying my React, Node.js, and Python skills to contribute to your innovative solutions.'
+    type: text
+
+  female:
+    answer: 'No'
+    type: select
+
+  "white (not hispanic or latino): white (not hispanic or latino)":
+    answer: 'No'
+    type: select
+
+  "white (not hispanic or latino): hispanic or latino":
+    answer: 'No'
+    type: select
+
+  "white (not hispanic or latino): black or african american":
+    answer: 'No'
+    type: select
+
+  "white (not hispanic or latino): asian (not hispanic or latino)":
+    answer: 'No'
+    type: select
+
+  "white (not hispanic or latino): native hawaiian or other pacific islanders":
+    answer: 'No'
+    type: select
+
+  "white (not hispanic or latino): native american/ american indian or alaska native":
+    answer: 'No'
+    type: select
+
+  "white (not hispanic or latino): middle eastern or north african":
+    answer: 'No'
+    type: select
+
+  "white (not hispanic or latino): two or more races (not hispanic or latino)":
+    answer: 'No'
+    type: select
+
+  "white (not hispanic or latino): decline to self-identify":
+    answer: 'No'
+    type: select
+
+  "white (not hispanic or latino): other":
+    answer: 'No'
+    type: select
+
+  "submit application: submit application":
+    answer: 'Yes'
+    type: select
+
+  current location - city/state/country url:
+    answer: 'San Jose, CA'
+    type: text
+
+  indeed:
+    answer: 'Indeed'
+    type: select
+
+  "accuracy: precision":
+    answer: 'Yes'
+    type: select
+
+  "accuracy: recall":
+    answer: 'Yes'
+    type: select
+
+  "accuracy: confusion matrix":
+    answer: 'Yes'
+    type: select
+
+  "accuracy: i am not familiar with these metrics":
+    answer: 'No'
+    type: select
+
+  spring 2026:
+    answer: 'Spring 2026'
+    type: select
+
+  "immediately/flexible: immediately/flexible":
+    answer: 'Yes'
+    type: select
+
+  "gazebo: gazebo":
+    answer: 'No'
+    type: select
+
+  "gazebo: webots":
+    answer: 'Yes'
+    type: select
+
+  "gazebo: isaac sim":
+    answer: 'No'
+    type: select
+
+  "gazebo: isaac gym":
+    answer: 'No'
+    type: select
+
+  "gazebo: mujoco":
+    answer: 'No'
+    type: select
+
+  "gazebo: pybullet":
+    answer: 'No'
+    type: select
+
+  "gazebo: none of the above":
+    answer: 'No'
+    type: select
+
+  "gazebo: other (please specify below)":
+    answer: 'No'
+    type: select
+
+  "american indian or alaskan native: hispanic or latinx":
+    answer: 'No'
+    type: select
+
+  i have the right to work in the country of employment on a permanent basis:
+    answer: 'I have the right to work in the country of employment on a permanent basis'
+    type: select
+
+  zaimler:
+    answer: 'I''m deeply interested in Zaimler''s product vision. My skills in React, Node.js, and Python are well-suited for'
+    type: text
+
+  vevo careers page:
+    answer: 'Online Job Board'
+    type: select
+
+  "acknowledge: acknowledge":
+    answer: 'Yes'
+    type: select
+
+  "hispanic or latinx: hispanic or latinx":
+    answer: 'No'
+    type: select
+
+  "hispanic or latinx: non-hispanic/non-latinx":
+    answer: 'No'
+    type: select
+
+  "hispanic or latinx: prefer not to disclose":
+    answer: 'No'
+    type: select
+
+  "american indian or alaska native: american indian or alaska native":
+    answer: 'No'
+    type: select
+
+  "american indian or alaska native: asian":
+    answer: 'Yes'
+    type: select
+
+  "asexual: asexual":
+    answer: 'No'
+    type: select
+
+  "asexual: bisexual":
+    answer: 'No'
+    type: select
+
+  "asexual: gay":
+    answer: 'No'
+    type: select
+
+  "asexual: heterosexual":
+    answer: 'No'
+    type: select
+
+  "asexual: lesbian":
+    answer: 'No'
+    type: select
+
+  "asexual: pansexual":
+    answer: 'No'
+    type: select
+
+  "asexual: queer":
+    answer: 'No'
+    type: select
+
+  "asexual: transgender":
+    answer: 'Male'
+    type: select
+
+  "asexual: not listed":
+    answer: 'Yes'
+    type: select
+
+  "asexual: prefer not to disclose":
+    answer: 'No'
+    type: select
+
+  "yes - i am a caregiver: yes - i am a caregiver":
+    answer: 'No'
+    type: select
+
+  "yes - i am a caregiver: no - i am not a caregiver":
+    answer: 'No'
+    type: select
+
+  "yes - i am a caregiver: prefer not to disclose":
+    answer: 'No'
+    type: select
+
+  undergraduate student:
+    answer: 'Undergraduate student'
+    type: select
+
+  "beta career site: beta career site":
+    answer: 'Yes'
+    type: select
+
+  "beta career site: beta events and programs":
+    answer: 'Yes'
+    type: select
+
+  "beta career site: conferences":
+    answer: 'No'
+    type: select
+
+  "beta career site: indeed":
+    answer: 'Yes'
+    type: select
+
+  "beta career site: zip recruiter":
+    answer: 'Yes'
+    type: select
+
+  "beta career site: craigslist":
+    answer: 'No'
+    type: select
+
+  "beta career site: seven days - print":
+    answer: 'No'
+    type: select
+
+  "beta career site: seven days - online":
+    answer: 'Yes'
+    type: select
+
+  "beta career site: glassdoor":
+    answer: 'No'
+    type: select
+
+  "beta career site: vermont job link":
+    answer: 'Yes'
+    type: select
+
+  "beta career site: vermont professional of color network":
+    answer: 'No'
+    type: select
+
+  "beta career site: facebook":
+    answer: 'No'
+    type: select
+
+  "beta career site: monster":
+    answer: 'No'
+    type: select
+
+  "beta career site: radio advertisement":
+    answer: 'No'
+    type: select
+
+  "beta career site: other":
+    answer: 'No'
+    type: select

@@ -44,6 +44,9 @@ class BrowserManager:
         self.proxy = proxy
         self.extension_paths = extension_paths or []
 
+        # Async lock to prevent concurrent browser starts
+        self._nd_lock = asyncio.Lock()
+
         # Profile directories (SEPARATE to avoid lock conflicts between browsers)
         # Playwright gets the old extension_default profile (has Simplify login data)
         # nodriver gets its own profile
@@ -85,15 +88,19 @@ class BrowserManager:
         Uses real Chrome with stealth patches — bypasses DataDome.
         Loads Simplify extension. Stays alive for entire session.
         """
+        async with self._nd_lock:
+            await self._start_nodriver_locked()
+
+    async def _start_nodriver_locked(self):
+        """Internal: start nodriver Chrome (must be called under _nd_lock)."""
         if self._nd_started and self._nd_browser:
             return
 
         profile = Path(self._nodriver_profile)
         profile.mkdir(parents=True, exist_ok=True)
 
-        # Clean stale locks and kill orphaned Chrome
+        # Clean stale locks only — NEVER kill Chrome processes
         self._clean_stale_locks(str(profile))
-        self._kill_orphaned_chrome(str(profile))
 
         try:
             import nodriver as uc
@@ -144,12 +151,10 @@ class BrowserManager:
         profile = Path(self._playwright_profile)
         profile.mkdir(parents=True, exist_ok=True)
 
-        # Clean stale locks and kill orphans ONLY on first ever start
-        # NEVER do this on restarts — it kills the nodriver Chrome too
+        # Clean stale locks only — NEVER kill Chrome processes
         if not hasattr(self, '_ever_started_pw'):
             self._ever_started_pw = True
             self._clean_stale_locks(str(profile))
-            self._kill_orphaned_chrome(str(profile))
 
         self._playwright = await async_playwright().start()
 
@@ -191,9 +196,23 @@ class BrowserManager:
                     await self._playwright.stop()
                 except Exception:
                     pass
+                # Clean locks, cache, and corrupted DB files (profile structure preserved)
+                self._clean_stale_locks(str(profile))
                 import shutil
-                shutil.rmtree(str(profile), ignore_errors=True)
-                profile.mkdir(parents=True, exist_ok=True)
+                for cache_dir in ["Cache", "Code Cache", "GPUCache"]:
+                    cache_path = profile / cache_dir
+                    if cache_path.exists():
+                        shutil.rmtree(str(cache_path), ignore_errors=True)
+                # Also clean corrupted SQLite files that cause SIGTRAP
+                for db_file in ["Default/Cookies", "Default/Web Data",
+                                "Default/Cookies-journal", "Default/Web Data-journal"]:
+                    db_path = profile / db_file
+                    if db_path.exists():
+                        try:
+                            db_path.unlink()
+                        except Exception:
+                            pass
+                logger.info("Cleaned locks, cache, and corrupted DB files")
                 self._playwright = await async_playwright().start()
                 try:
                     self._persistent_context = await self._playwright.chromium.launch_persistent_context(
@@ -332,6 +351,15 @@ class BrowserManager:
         self._last_restart = now
         logger.warning(f"Browser context dead — restarting Chrome (restart #{self._restart_count}, cooldown 30s)")
 
+        # Stop old Playwright connection first (frees CDP port)
+        old_pw = self._playwright
+        if old_pw:
+            try:
+                await old_pw.stop()
+            except Exception:
+                pass
+
+        # Clear state so start_playwright() creates fresh resources
         self._persistent_context = None
         self._context = None
         self._contexts.clear()
@@ -339,12 +367,8 @@ class BrowserManager:
         self._pw_started = False
         self._browser = None
         self._work_page = None
-        if self._playwright:
-            try:
-                await self._playwright.stop()
-            except Exception:
-                pass
-            self._playwright = None
+        self._playwright = None
+
         await self.start_playwright()
 
     # ── HUMAN-LIKE INTERACTIONS ───────────────────────────────────────
@@ -396,23 +420,9 @@ class BrowserManager:
                     pass
 
     def _kill_orphaned_chrome(self, profile_dir: str):
-        """Kill orphaned Chrome processes using a specific profile."""
-        try:
-            result = subprocess.run(
-                ["pgrep", "-f", profile_dir],
-                capture_output=True, text=True, timeout=5
-            )
-            if result.stdout.strip():
-                logger.warning(f"Killing orphaned Chrome from previous run ({profile_dir})")
-                subprocess.run(
-                    ["pkill", "-9", "-f", profile_dir],
-                    capture_output=True, timeout=5
-                )
-                # Brief sync sleep OK here — only runs once at startup before event loop is hot
-                import time as _time
-                _time.sleep(1)
-        except Exception:
-            pass
+        """DISABLED — NEVER kill Chrome processes. User manages their own browser.
+        Only lock file cleanup is safe (done by _clean_stale_locks)."""
+        return  # NEVER kill Chrome
 
     async def close_context(self, context: BrowserContext):
         """DISABLED — never close contexts during a session. Browser stays alive."""

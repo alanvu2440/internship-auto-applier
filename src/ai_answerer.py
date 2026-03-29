@@ -1687,7 +1687,7 @@ Role: {role}
                             lambda: model.generate_content(
                                 full_prompt,
                                 generation_config=genai.types.GenerationConfig(
-                                    max_output_tokens=500,
+                                    max_output_tokens=800,
                                     temperature=0.7,
                                 )
                             )

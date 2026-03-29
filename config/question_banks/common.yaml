@@ -318,7 +318,7 @@ questions:
     answer: 'No'
     type: textarea
   have you used vercel, next.js, or any of our products? if so, how — and if not, what drew you to this role specifically?:
-    answer: While I haven't directly used Vercel or Next.js, I have extensive experience with
+    answer: 'While I haven''t directly used Vercel or Next.js, I have extensive experience with modern web frameworks and cloud deployment. I''ve built full-stack applications using React, Python/Flask, and PostgreSQL, and deployed them using Docker and cloud services. I''m drawn to this role because of Vercel''s impact on developer experience and web performance.'
     type: textarea
   how did you hear about str?:
     answer: Online Job Board
@@ -572,7 +572,7 @@ questions:
     answer: He/Him
     type: select
   what intrigues you the most about being a data engineer?:
-    answer: I'm drawn to the innovative work being done at this company and see a strong
+    answer: 'What intrigues me most about data engineering is the challenge of building reliable, scalable data pipelines that power real decision-making. At Kruiz, I built ETL pipelines processing 10K+ records and designed database schemas that improved query performance. I enjoy the intersection of software engineering and data — architecting systems that transform raw data into actionable insights.'
     type: textarea
   what is the highest level of education you have completed?:
     answer: Bachelor of Science
@@ -1806,7 +1806,7 @@ working independently or on a team. Happy to discuss any aspect of my background
     answer: 'California'
     type: text
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -4088,7 +4088,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -4116,7 +4116,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -4144,7 +4144,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -4172,7 +4172,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -4200,7 +4200,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -4228,7 +4228,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -4256,7 +4256,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -4284,7 +4284,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -4312,7 +4312,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -4340,7 +4340,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -4368,7 +4368,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -4396,7 +4396,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -4424,7 +4424,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -4452,7 +4452,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -4480,7 +4480,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -4508,7 +4508,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -4536,7 +4536,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -4564,7 +4564,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -4592,7 +4592,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -4620,7 +4620,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -5184,7 +5184,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'Yes'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -5212,7 +5212,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -5240,7 +5240,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -5268,7 +5268,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -5296,7 +5296,7 @@ scraping pipelines, demonstrating my abili...'
     answer: 'No'
     type: select
 
-  "select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export controls do not apply to u.s. persons. are you a u.s. citizen, a lawful permanent resident (issued an alien registration card from the u.s. government), a lawful asylee, or a lawful refugee of the united states? (note: an inaccurate answer could cause delay to the hiring process.)":
+  'select u.s. export compliance assessment please read and respond carefully. under applicable laws and regulations, intuitive may be required to apply for a u.s. export license, or implement other controls, on the applicant’s behalf. the following questions are solely used as part of a standard export compliance assessment to make that determination. the information you provide in this section will only be reviewed by our compliance team (not hiring personnel), and only if the job to which you are applying involves certain technical data or technology that may implicate export controls. such conditions do not preclude employment, rather, they enable intuitive to hire globally in accordance with u.s. regulations. when answering the below questions, do not include work permits, study permits, or other temporary residence statuses, which do not apply to export control determinations. export ...':
     answer: 'Yes'
     type: text
 
@@ -7650,7 +7650,7 @@ a FastAPI backend, React...'
     answer: 'I don''t wish to answer.'
     type: text
 
-  "select this employer is a government contractor subject to the vietnam era veterans’ readjustment assistance act of 1974, as amended by the jobs for veterans act of 2002, 38 u.s.c. 4212 (vevraa), which requires government contractors to take affirmative action to employ and advance in employment: - disabled veterans - recently separated veterans - active duty wartime or campaign badge veterans - armed forces service medal veterans protected veterans may have additional rights under userra—the uniformed services employment and reemployment rights act. in particular, if you were absent from employment in order to perform service in the uniformed service, you may be entitled to be reemployed by your employer in the position you would have obtained with reasonable certainty if not for the absence due to service. for more information, call the u.s. department of labor’s veterans employment and training service (vets), toll-free, at 1–866–4–usa–dol. if you believe you belong to any of the categories of protected veterans listed above, please indicate by checking the appropriate box below. as a government contractor subject to vevraa, we request this information in order to measure the effectiveness of the outreach and positive recruitment efforts we undertake pursuant to vevraa.":
+  'select this employer is a government contractor subject to the vietnam era veterans’ readjustment assistance act of 1974, as amended by the jobs for veterans act of 2002, 38 u.s.c. 4212 (vevraa), which requires government contractors to take affirmative action to employ and advance in employment: - disabled veterans - recently separated veterans - active duty wartime or campaign badge veterans - armed forces service medal veterans protected veterans may have additional rights under userra—the uniformed services employment and reemployment rights act. in particular, if you were absent from employment in order to perform service in the uniformed service, you may be entitled to be reemployed by your employer in the position you would have obtained with reasonable certainty if not for the absence due to service. for more information, call the u.s. department of labor’s veterans employment an...':
     answer: 'I am not a protected veteran'
     type: text
 
@@ -7680,7 +7680,7 @@ a FastAPI backend, React...'
     answer: 'No'
     type: text
 
-  "select this employer is a government contractor subject to the vietnam era veterans’ readjustment assistance act of 1974, as amended by the jobs for veterans act of 2002, 38 u.s.c. 4212 (vevraa), which requires government contractors to take affirmative action to employ and advance in employment: - disabled veterans - recently separated veterans - active duty wartime or campaign badge veterans - armed forces service medal veterans protected veterans may have additional rights under userra—the uniformed services employment and reemployment rights act. in particular, if you were absent from employment in order to perform service in the uniformed service, you may be entitled to be reemployed by your employer in the position you would have obtained with reasonable certainty if not for the absence due to service. for more information, call the u.s. department of labor’s veterans employment and training service (vets), toll-free, at 1–866–4–usa–dol. if you believe you belong to any of the categories of protected veterans listed above, please indicate by checking the appropriate box below. as a government contractor subject to vevraa, we request this information in order to measure the effectiveness of the outreach and positive recruitment efforts we undertake pursuant to vevraa.":
+  'select this employer is a government contractor subject to the vietnam era veterans’ readjustment assistance act of 1974, as amended by the jobs for veterans act of 2002, 38 u.s.c. 4212 (vevraa), which requires government contractors to take affirmative action to employ and advance in employment: - disabled veterans - recently separated veterans - active duty wartime or campaign badge veterans - armed forces service medal veterans protected veterans may have additional rights under userra—the uniformed services employment and reemployment rights act. in particular, if you were absent from employment in order to perform service in the uniformed service, you may be entitled to be reemployed by your employer in the position you would have obtained with reasonable certainty if not for the absence due to service. for more information, call the u.s. department of labor’s veterans employment an...':
     answer: 'I am not a protected veteran'
     type: text
 
@@ -7710,7 +7710,7 @@ a FastAPI backend, React...'
     answer: 'No'
     type: text
 
-  "select this employer is a government contractor subject to the vietnam era veterans’ readjustment assistance act of 1974, as amended by the jobs for veterans act of 2002, 38 u.s.c. 4212 (vevraa), which requires government contractors to take affirmative action to employ and advance in employment: - disabled veterans - recently separated veterans - active duty wartime or campaign badge veterans - armed forces service medal veterans protected veterans may have additional rights under userra—the uniformed services employment and reemployment rights act. in particular, if you were absent from employment in order to perform service in the uniformed service, you may be entitled to be reemployed by your employer in the position you would have obtained with reasonable certainty if not for the absence due to service. for more information, call the u.s. department of labor’s veterans employment and training service (vets), toll-free, at 1–866–4–usa–dol. if you believe you belong to any of the categories of protected veterans listed above, please indicate by checking the appropriate box below. as a government contractor subject to vevraa, we request this information in order to measure the effectiveness of the outreach and positive recruitment efforts we undertake pursuant to vevraa.":
+  'select this employer is a government contractor subject to the vietnam era veterans’ readjustment assistance act of 1974, as amended by the jobs for veterans act of 2002, 38 u.s.c. 4212 (vevraa), which requires government contractors to take affirmative action to employ and advance in employment: - disabled veterans - recently separated veterans - active duty wartime or campaign badge veterans - armed forces service medal veterans protected veterans may have additional rights under userra—the uniformed services employment and reemployment rights act. in particular, if you were absent from employment in order to perform service in the uniformed service, you may be entitled to be reemployed by your employer in the position you would have obtained with reasonable certainty if not for the absence due to service. for more information, call the u.s. department of labor’s veterans employment an...':
     answer: 'I am not a protected veteran'
     type: text
 
@@ -7736,7 +7736,7 @@ a FastAPI backend, React...'
     answer: 'No'
     type: text
 
-  "select this employer is a government contractor subject to the vietnam era veterans’ readjustment assistance act of 1974, as amended by the jobs for veterans act of 2002, 38 u.s.c. 4212 (vevraa), which requires government contractors to take affirmative action to employ and advance in employment: - disabled veterans - recently separated veterans - active duty wartime or campaign badge veterans - armed forces service medal veterans protected veterans may have additional rights under userra—the uniformed services employment and reemployment rights act. in particular, if you were absent from employment in order to perform service in the uniformed service, you may be entitled to be reemployed by your employer in the position you would have obtained with reasonable certainty if not for the absence due to service. for more information, call the u.s. department of labor’s veterans employment and training service (vets), toll-free, at 1–866–4–usa–dol. if you believe you belong to any of the categories of protected veterans listed above, please indicate by checking the appropriate box below. as a government contractor subject to vevraa, we request this information in order to measure the effectiveness of the outreach and positive recruitment efforts we undertake pursuant to vevraa.":
+  'select this employer is a government contractor subject to the vietnam era veterans’ readjustment assistance act of 1974, as amended by the jobs for veterans act of 2002, 38 u.s.c. 4212 (vevraa), which requires government contractors to take affirmative action to employ and advance in employment: - disabled veterans - recently separated veterans - active duty wartime or campaign badge veterans - armed forces service medal veterans protected veterans may have additional rights under userra—the uniformed services employment and reemployment rights act. in particular, if you were absent from employment in order to perform service in the uniformed service, you may be entitled to be reemployed by your employer in the position you would have obtained with reasonable certainty if not for the absence due to service. for more information, call the u.s. department of labor’s veterans employment an...':
     answer: 'I am not a protected veteran'
     type: text
 
@@ -7762,7 +7762,7 @@ a FastAPI backend, React...'
     answer: 'No'
     type: text
 
-  "select this employer is a government contractor subject to the vietnam era veterans’ readjustment assistance act of 1974, as amended by the jobs for veterans act of 2002, 38 u.s.c. 4212 (vevraa), which requires government contractors to take affirmative action to employ and advance in employment: - disabled veterans - recently separated veterans - active duty wartime or campaign badge veterans - armed forces service medal veterans protected veterans may have additional rights under userra—the uniformed services employment and reemployment rights act. in particular, if you were absent from employment in order to perform service in the uniformed service, you may be entitled to be reemployed by your employer in the position you would have obtained with reasonable certainty if not for the absence due to service. for more information, call the u.s. department of labor’s veterans employment and training service (vets), toll-free, at 1–866–4–usa–dol. if you believe you belong to any of the categories of protected veterans listed above, please indicate by checking the appropriate box below. as a government contractor subject to vevraa, we request this information in order to measure the effectiveness of the outreach and positive recruitment efforts we undertake pursuant to vevraa.":
+  'select this employer is a government contractor subject to the vietnam era veterans’ readjustment assistance act of 1974, as amended by the jobs for veterans act of 2002, 38 u.s.c. 4212 (vevraa), which requires government contractors to take affirmative action to employ and advance in employment: - disabled veterans - recently separated veterans - active duty wartime or campaign badge veterans - armed forces service medal veterans protected veterans may have additional rights under userra—the uniformed services employment and reemployment rights act. in particular, if you were absent from employment in order to perform service in the uniformed service, you may be entitled to be reemployed by your employer in the position you would have obtained with reasonable certainty if not for the absence due to service. for more information, call the u.s. department of labor’s veterans employment an...':
     answer: 'I am not a protected veteran'
     type: text
 
@@ -9846,7 +9846,7 @@ a FastAPI backend, React...'
     answer: 'No'
     type: dropdown
 
-  "veteran status: “disabled veteran” means: (i) a veteran of the u.s. military, ground, naval or air service who is entitled to compensation (or who but for the receipt of military retired pay would be entitled to compensation) under laws administered by the secretary of veterans affairs, or (ii) a person who was discharged or released from active duty because of a service-connected disability. “active duty wartime or campaign badge veteran” means a veteran who served on active duty in the u.s. military, ground, naval, or air service during a war or in a campaign or expedition for which a campaign badge has been authorized. for those with internet access, the information required to make this determination is available at http://www.opm.gov/veterans/html/vgmedal2.htm. a copy of the list also may be obtained by sending an e-mail to helpdesk@vets100.com or by calling (301)-306-6752 and requesting that a copy be mailed to you. “armed forces service medal veteran” means a veteran who, while serving on active duty in the u.s. military, ground, naval, or air service, participated in a united states military operation for which an armed forces service medal was awarded pursuant to executive order 12985 (61 fed. reg. 1209) at http://www.opm.gov/veterans/html/vgmedal2.asp “recently separated veteran” means a veteran during the three-year period beginning on the date of such veteran’s discharge or release from active duty in the u.s. military, ground, naval, or air service.":
+  'veteran status: “disabled veteran” means: (i) a veteran of the u.s. military, ground, naval or air service who is entitled to compensation (or who but for the receipt of military retired pay would be entitled to compensation) under laws administered by the secretary of veterans affairs, or (ii) a person who was discharged or released from active duty because of a service-connected disability. “active duty wartime or campaign badge veteran” means a veteran who served on active duty in the u.s. military, ground, naval, or air service during a war or in a campaign or expedition for which a campaign badge has been authorized. for those with internet access, the information required to make this determination is available at http://www.opm.gov/veterans/html/vgmedal2.htm. a copy of the list also may be obtained by sending an e-mail to helpdesk@vets100.com or by calling (301)-306-6752 and reque...':
     answer: 'I am not a Veteran'
     type: dropdown
 
@@ -10378,7 +10378,7 @@ a FastAPI backend, React...'
     answer: 'No'
     type: dropdown
 
-  "veteran status: “disabled veteran” means: (i) a veteran of the u.s. military, ground, naval or air service who is entitled to compensation (or who but for the receipt of military retired pay would be entitled to compensation) under laws administered by the secretary of veterans affairs, or (ii) a person who was discharged or released from active duty because of a service-connected disability. “active duty wartime or campaign badge veteran” means a veteran who served on active duty in the u.s. military, ground, naval, or air service during a war or in a campaign or expedition for which a campaign badge has been authorized. for those with internet access, the information required to make this determination is available at http://www.opm.gov/veterans/html/vgmedal2.htm. a copy of the list also may be obtained by sending an e-mail to helpdesk@vets100.com or by calling (301)-306-6752 and requesting that a copy be mailed to you. “armed forces service medal veteran” means a veteran who, while serving on active duty in the u.s. military, ground, naval, or air service, participated in a united states military operation for which an armed forces service medal was awarded pursuant to executive order 12985 (61 fed. reg. 1209) at http://www.opm.gov/veterans/html/vgmedal2.asp “recently separated veteran” means a veteran during the three-year period beginning on the date of such veteran’s discharge or release from active duty in the u.s. military, ground, naval, or air service.":
+  'veteran status: “disabled veteran” means: (i) a veteran of the u.s. military, ground, naval or air service who is entitled to compensation (or who but for the receipt of military retired pay would be entitled to compensation) under laws administered by the secretary of veterans affairs, or (ii) a person who was discharged or released from active duty because of a service-connected disability. “active duty wartime or campaign badge veteran” means a veteran who served on active duty in the u.s. military, ground, naval, or air service during a war or in a campaign or expedition for which a campaign badge has been authorized. for those with internet access, the information required to make this determination is available at http://www.opm.gov/veterans/html/vgmedal2.htm. a copy of the list also may be obtained by sending an e-mail to helpdesk@vets100.com or by calling (301)-306-6752 and reque...':
     answer: 'I am not a Veteran'
     type: dropdown
 
@@ -11498,7 +11498,7 @@ a FastAPI backend, React...'
     answer: 'Yes'
     type: dropdown
 
-  i certify that the facts given in my resume and/or application of employment are true and correct. i understand that if employed, any false misleading statements, omissions, or failure to fully answer any requested item on this application or any document used to secure employment may be grounds for rejection of this application or for termination from employment, if i am employed, regardless of when such information is discovered. i authorize my references to disclose information about me to the company without giving me prior notice of such disclosure. i hereby release the company, my former employers, and all other sources from any and all claims, demands, or liabilities arising out of or in any way related to securing such information or disclosures. i understand that nothing contained in the application, or information conveyed during any interview, which may be granted , or during my employment , if hired, is intended to create an employment contract between the company and me. i understand that any employment with this company, is “at will”, which means that without prior notice and for any reason not prohibited by statue. all employment is continued on the “at-will” basis. i understand that no employee of the company, including but not limited to any supervisor, manager, or executive of the company, has any authority to alter the foregoing unless a specific term of employment is in writing and signed by ceo.:
+  'i certify that the facts given in my resume and/or application of employment are true and correct. i understand that if employed, any false misleading statements, omissions, or failure to fully answer any requested item on this application or any document used to secure employment may be grounds for rejection of this application or for termination from employment, if i am employed, regardless of when such information is discovered. i authorize my references to disclose information about me to the company without giving me prior notice of such disclosure. i hereby release the company, my former employers, and all other sources from any and all claims, demands, or liabilities arising out of or in any way related to securing such information or disclosures. i understand that nothing contained in the application, or information conveyed during any interview, which may be granted , or during ...':
     answer: 'Yes, I acknowledge'
     type: dropdown
 
@@ -11526,7 +11526,7 @@ a FastAPI backend, React...'
     answer: 'Yes'
     type: dropdown
 
-  i certify that the facts given in my resume and/or application of employment are true and correct. i understand that if employed, any false misleading statements, omissions, or failure to fully answer any requested item on this application or any document used to secure employment may be grounds for rejection of this application or for termination from employment, if i am employed, regardless of when such information is discovered. i authorize my references to disclose information about me to the company without giving me prior notice of such disclosure. i hereby release the company, my former employers, and all other sources from any and all claims, demands, or liabilities arising out of or in any way related to securing such information or disclosures. i understand that nothing contained in the application, or information conveyed during any interview, which may be granted , or during my employment , if hired, is intended to create an employment contract between the company and me. i understand that any employment with this company, is “at will”, which means that without prior notice and for any reason not prohibited by statue. all employment is continued on the “at-will” basis. i understand that no employee of the company, including but not limited to any supervisor, manager, or executive of the company, has any authority to alter the foregoing unless a specific term of employment is in writing and signed by ceo.:
+  'i certify that the facts given in my resume and/or application of employment are true and correct. i understand that if employed, any false misleading statements, omissions, or failure to fully answer any requested item on this application or any document used to secure employment may be grounds for rejection of this application or for termination from employment, if i am employed, regardless of when such information is discovered. i authorize my references to disclose information about me to the company without giving me prior notice of such disclosure. i hereby release the company, my former employers, and all other sources from any and all claims, demands, or liabilities arising out of or in any way related to securing such information or disclosures. i understand that nothing contained in the application, or information conveyed during any interview, which may be granted , or during ...':
     answer: 'Yes, I acknowledge'
     type: dropdown
 
@@ -11558,7 +11558,7 @@ a FastAPI backend, React...'
     answer: 'Kruiz'
     type: textarea
 
-  "relationships with cohesity employeesa conflict of interest may arise if a person with whom you have a close personal or family relationship is employed by cohesity. this type of conflict could create issues of real or perceived impropriety, bias, undue influence, or favoritism, or cause others to question your ability to make objective decisions on behalf of cohesity.this can include:having a person with whom you have a close personal or family relationship with in your reporting chain, even if the reporting relationship is indirectevaluating (or otherwise providing feedback regarding) a coworker or applicant who is a family member or someone with whom you have a close personal relationshipworking with a person with whom you have a close personal or family relationship on cross-departmental projectsworking with a person with whom you have a close personal or family relationship is not prohibited, but disclosure is required. appropriate action must be taken to ensure that conflicts of interest are appropriately mitigated and managed. no employee should allow a personal relationship of any type (family, friendship or romantic relationship) to interfere or potentially interfere with their objectivity in making business decisions in cohesity's best interest.is any person with whom you have a close personal or family relationship employed by cohesity?":
+  'relationships with cohesity employeesa conflict of interest may arise if a person with whom you have a close personal or family relationship is employed by cohesity. this type of conflict could create issues of real or perceived impropriety, bias, undue influence, or favoritism, or cause others to question your ability to make objective decisions on behalf of cohesity.this can include:having a person with whom you have a close personal or family relationship with in your reporting chain, even if the reporting relationship is indirectevaluating (or otherwise providing feedback regarding) a coworker or applicant who is a family member or someone with whom you have a close personal relationshipworking with a person with whom you have a close personal or family relationship on cross-departmental projectsworking with a person with whom you have a close personal or family relationship is not p...':
     answer: 'Yes'
     type: dropdown
 
@@ -11586,7 +11586,7 @@ a FastAPI backend, React...'
     answer: 'Kruiz'
     type: textarea
 
-  "relationships with cohesity employeesa conflict of interest may arise if a person with whom you have a close personal or family relationship is employed by cohesity. this type of conflict could create issues of real or perceived impropriety, bias, undue influence, or favoritism, or cause others to question your ability to make objective decisions on behalf of cohesity.this can include:having a person with whom you have a close personal or family relationship with in your reporting chain, even if the reporting relationship is indirectevaluating (or otherwise providing feedback regarding) a coworker or applicant who is a family member or someone with whom you have a close personal relationshipworking with a person with whom you have a close personal or family relationship on cross-departmental projectsworking with a person with whom you have a close personal or family relationship is not prohibited, but disclosure is required. appropriate action must be taken to ensure that conflicts of interest are appropriately mitigated and managed. no employee should allow a personal relationship of any type (family, friendship or romantic relationship) to interfere or potentially interfere with their objectivity in making business decisions in cohesity's best interest.is any person with whom you have a close personal or family relationship employed by cohesity?":
+  'relationships with cohesity employeesa conflict of interest may arise if a person with whom you have a close personal or family relationship is employed by cohesity. this type of conflict could create issues of real or perceived impropriety, bias, undue influence, or favoritism, or cause others to question your ability to make objective decisions on behalf of cohesity.this can include:having a person with whom you have a close personal or family relationship with in your reporting chain, even if the reporting relationship is indirectevaluating (or otherwise providing feedback regarding) a coworker or applicant who is a family member or someone with whom you have a close personal relationshipworking with a person with whom you have a close personal or family relationship on cross-departmental projectsworking with a person with whom you have a close personal or family relationship is not p...':
     answer: 'Yes'
     type: dropdown
 
@@ -12849,3 +12849,187 @@ working independently or on a team. Happy to discuss any aspect of my background
   please indicate if you are hispanic or latino?:
     answer: 'No'
     type: dropdown
+
+  i have the right to work in the country of employment on a permanent basis:
+    answer: 'I have the right to work in the country of employment on a permanent basis'
+    type: select
+
+  zaimler:
+    answer: 'I''m deeply interested in Zaimler''s product vision. My skills in React, Node.js, and Python are well-suited for'
+    type: text
+
+  vevo careers page:
+    answer: 'Online Job Board'
+    type: select
+
+  "acknowledge: acknowledge":
+    answer: 'Yes'
+    type: select
+
+  "hispanic or latinx: hispanic or latinx":
+    answer: 'No'
+    type: select
+
+  "hispanic or latinx: non-hispanic/non-latinx":
+    answer: 'No'
+    type: select
+
+  "hispanic or latinx: prefer not to disclose":
+    answer: 'No'
+    type: select
+
+  "american indian or alaska native: american indian or alaska native":
+    answer: 'No'
+    type: select
+
+  "american indian or alaska native: asian":
+    answer: 'Yes'
+    type: select
+
+  "asexual: asexual":
+    answer: 'No'
+    type: select
+
+  "asexual: bisexual":
+    answer: 'No'
+    type: select
+
+  "asexual: gay":
+    answer: 'No'
+    type: select
+
+  "asexual: heterosexual":
+    answer: 'No'
+    type: select
+
+  "asexual: lesbian":
+    answer: 'No'
+    type: select
+
+  "asexual: pansexual":
+    answer: 'No'
+    type: select
+
+  "asexual: queer":
+    answer: 'No'
+    type: select
+
+  "asexual: transgender":
+    answer: 'Male'
+    type: select
+
+  "asexual: not listed":
+    answer: 'Yes'
+    type: select
+
+  "asexual: prefer not to disclose":
+    answer: 'No'
+    type: select
+
+  "yes - i am a caregiver: yes - i am a caregiver":
+    answer: 'No'
+    type: select
+
+  "yes - i am a caregiver: no - i am not a caregiver":
+    answer: 'No'
+    type: select
+
+  "yes - i am a caregiver: prefer not to disclose":
+    answer: 'No'
+    type: select
+
+  undergraduate student:
+    answer: 'Undergraduate student'
+    type: select
+
+  "beta career site: beta career site":
+    answer: 'Yes'
+    type: select
+
+  "beta career site: beta events and programs":
+    answer: 'Yes'
+    type: select
+
+  "beta career site: conferences":
+    answer: 'No'
+    type: select
+
+  "beta career site: indeed":
+    answer: 'Yes'
+    type: select
+
+  "beta career site: zip recruiter":
+    answer: 'Yes'
+    type: select
+
+  "beta career site: craigslist":
+    answer: 'No'
+    type: select
+
+  "beta career site: seven days - print":
+    answer: 'No'
+    type: select
+
+  "beta career site: seven days - online":
+    answer: 'Yes'
+    type: select
+
+  "beta career site: glassdoor":
+    answer: 'No'
+    type: select
+
+  "beta career site: vermont job link":
+    answer: 'Yes'
+    type: select
+
+  "beta career site: vermont professional of color network":
+    answer: 'No'
+    type: select
+
+  "beta career site: facebook":
+    answer: 'No'
+    type: select
+
+  "beta career site: monster":
+    answer: 'No'
+    type: select
+
+  "beta career site: radio advertisement":
+    answer: 'No'
+    type: select
+
+  "beta career site: other":
+    answer: 'No'
+    type: select
+
+  this is a hybrid role, requiring at least being in our austin office on wednesdays. are you able to commit to this requirement?:
+    answer: 'Yes'
+    type: select
+
+  the internship program pays an hourly rate of $20/hour - does this align with your expectations?:
+    answer: 'Open to discuss'
+    type: select
+
+  what are you majoring in?:
+    answer: 'Software Engineering'
+    type: select
+
+  what are some relevant courses you are taking/have taken?:
+    answer: 'Software Engineering, Data Structures & Algorithms, and Database Systems, providing a strong foundation for AI Ops.'
+    type: select
+
+  do you have any experience with ai tools?:
+    answer: 'Yes'
+    type: select
+
+  are you a current or former employee of palmetto?:
+    answer: 'No'
+    type: select
+
+  do you have any agreements with a current or former employer, such as a non-compete or non-solicitation agreement, that would restrict your ability to work for palmetto?:
+    answer: 'No'
+    type: select
+
+  how did you hear about palmetto?:
+    answer: 'Online Job Board'
+    type: select

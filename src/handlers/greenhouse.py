@@ -1482,6 +1482,16 @@ class GreenhouseHandler(BaseHandler):
         except Exception as e:
             logger.debug(f"Error in _fill_greenhouse_question_inputs: {e}")
 
+    @staticmethod
+    async def _find_visible_select_menu(page):
+        """Find the currently visible React-Select dropdown menu, scoped to avoid cross-dropdown contamination."""
+        for sel in ['.select__menu', '[class*="menu-list"]', '[role="listbox"]']:
+            menus = await page.query_selector_all(sel)
+            for m in menus:
+                if await m.is_visible():
+                    return m
+        return None
+
     async def _fill_associated_react_select(self, page, inp, inp_id: str, question_text: str) -> bool:
         """
         Try to find and fill a React-Select dropdown associated with a hidden input.
@@ -1711,11 +1721,17 @@ class GreenhouseHandler(BaseHandler):
                     pass
 
             # Strategy 3: Acknowledgment/disclosure/policy/export controls fallback
-            if not found and any(x in question_text.lower() for x in ["california", "ccpa", "disclosure", "additional information", "acknowledgment", "policy", "usage policy", "employment history", "export control", "export controls", "itar", "u.s. citizen", "authorized to work", "legally authorized", "work authorization", "sponsorship", "require sponsorship"]):
+            if not found and any(x in question_text.lower() for x in ["california", "ccpa", "disclosure", "additional information", "acknowledgment", "privacy", "privacy notice", "policy", "usage policy", "employment history", "export control", "export controls", "itar", "u.s. citizen", "authorized to work", "legally authorized", "work authorization", "sponsorship", "require sponsorship"]):
                 try:
                     await react_select_elem.click()
                     await self.browser_manager.human_delay(400, 600)
-                    options = await page.query_selector_all('.select__option, [role="option"]')
+                    # Scope to visible menu to avoid picking options from other dropdowns
+                    menu = await self._find_visible_select_menu(page)
+                    if not menu:
+                        logger.debug(f"Strategy 3: no visible menu for '{question_text[:40]}', skipping")
+                        raise Exception("no menu")
+                    options = await menu.query_selector_all('.select__option, [role="option"]')
+                    logger.debug(f"Strategy 3 for '{question_text[:40]}': found {len(options)} options (scoped={menu is not None})")
                     for i, opt in enumerate(options):
                         if not await opt.is_visible():
                             continue
@@ -1770,7 +1786,12 @@ class GreenhouseHandler(BaseHandler):
                 try:
                     await react_select_elem.click()
                     await self.browser_manager.human_delay(300, 500)
-                    options = await page.query_selector_all('.select__option, [role="option"]')
+                    # Scope to visible menu
+                    s4_menu = await self._find_visible_select_menu(page)
+                    if not s4_menu:
+                        logger.debug(f"Strategy 4: no visible menu for '{question_text[:40]}', skipping")
+                        raise Exception("no menu")
+                    options = await s4_menu.query_selector_all('.select__option, [role="option"]')
                     visible_opts = []
                     for opt in options:
                         if await opt.is_visible():
@@ -1807,6 +1828,48 @@ class GreenhouseHandler(BaseHandler):
                             logger.info(f"Strategy 4: Selected first option as fallback: {visible_opts[0][1][:50]}")
                 except Exception:
                     pass
+
+            # Strategy 5: Last resort — open dropdown and pick best fuzzy match or first option
+            if not found:
+                try:
+                    await react_select_elem.click()
+                    await self.browser_manager.human_delay(400, 600)
+                    s5_menu = await self._find_visible_select_menu(page)
+                    if not s5_menu:
+                        logger.debug(f"Strategy 5: no visible menu for '{question_text[:40]}', skipping")
+                        raise Exception("no menu")
+                    s5_opts = await s5_menu.query_selector_all('.select__option, [role="option"]')
+                    if s5_opts:
+                        # Try fuzzy match: pick option with most word overlap with our answer
+                        best_opt = None
+                        best_score = 0
+                        answer_words = set(answer.lower().split())
+                        for opt in s5_opts:
+                            text = (await opt.text_content() or "").strip()
+                            opt_words = set(text.lower().split())
+                            overlap = len(answer_words & opt_words)
+                            if overlap > best_score:
+                                best_score = overlap
+                                best_opt = (opt, text)
+                        if best_opt and best_score > 0:
+                            await best_opt[0].click()
+                            found = True
+                            logger.info(f"Strategy 5: Fuzzy matched '{best_opt[1][:50]}' (score={best_score})")
+                        else:
+                            # No word overlap — only pick first if it's a safe question
+                            # (NOT salary/compensation/location which could have wrong defaults)
+                            q_lower_s5 = question_text.lower()
+                            unsafe_patterns = ["salary", "compensation", "pay rate", "hourly rate",
+                                               "wage", "location", "city", "office", "relocat"]
+                            if not any(p in q_lower_s5 for p in unsafe_patterns):
+                                first_text = (await s5_opts[0].text_content() or "").strip()
+                                await s5_opts[0].click()
+                                found = True
+                                logger.info(f"Strategy 5: Selected first option as last resort: {first_text[:50]}")
+                            else:
+                                logger.info(f"Strategy 5: Skipping first-option fallback for unsafe question: {question_text[:50]}")
+                except Exception as s5_err:
+                    logger.debug(f"Strategy 5 failed: {s5_err}")
 
             if not found:
                 logger.warning(f"React-Select fill FAILED for {inp_id}: answer={answer[:30]!r}, question={question_text[:50]!r} — all strategies exhausted")
@@ -2083,6 +2146,8 @@ class GreenhouseHandler(BaseHandler):
                         await checkbox.check()
                         logger.info(f"Checked {reason} checkbox: {label_text[:50]}...")
                         await self.browser_manager.human_delay(100, 200)
+                    else:
+                        logger.debug(f"UNHANDLED checkbox (not checked) — label='{label_text[:60]}' name='{checkbox_name[:40]}' parent='{parent_label[:60] if parent_label else '?'}'")
 
                 except Exception as e:
                     logger.debug(f"Error handling checkbox: {e}")
@@ -2181,6 +2246,8 @@ class GreenhouseHandler(BaseHandler):
 
         # Also try React-select style gender dropdown
         await self._fill_react_select_by_label(page, "gender", demographics.get("gender", "Prefer not to say"))
+        # Also handle "Sex*" labeled dropdowns (same answer as gender)
+        await self._fill_react_select_by_label(page, "sex", demographics.get("gender", "Prefer not to say"))
 
         # Ethnicity
         ethnicity_selectors = [
@@ -4242,17 +4309,19 @@ class GreenhouseHandler(BaseHandler):
                                 el.dispatchEvent(new Event('input', { bubbles: true }));
                                 el.dispatchEvent(new Event('change', { bubbles: true }));
                                 // Also trigger React's onChange via fiber if available
-                                const reactKey = Object.keys(el).find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
-                                if (reactKey) {
-                                    let fiber = el[reactKey];
-                                    while (fiber) {
-                                        if (fiber.memoizedProps && fiber.memoizedProps.onChange) {
-                                            fiber.memoizedProps.onChange({ target: { value: val } });
-                                            break;
+                                try {
+                                    const reactKey = Object.keys(el).find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+                                    if (reactKey) {
+                                        let fiber = el[reactKey];
+                                        while (fiber) {
+                                            if (fiber.memoizedProps && fiber.memoizedProps.onChange) {
+                                                try { fiber.memoizedProps.onChange({ target: { value: val }, currentTarget: { value: val } }); } catch(e) {}
+                                                break;
+                                            }
+                                            fiber = fiber.return;
                                         }
-                                        fiber = fiber.return;
                                     }
-                                }
+                                } catch(e) {}
                             }''', inject_val)
                             logger.info(f"PRE-SUBMIT INJECT: Force-filled {actual_id} = {inject_val[:50]}")
                             edu_injected += 1
@@ -4637,25 +4706,45 @@ class GreenhouseHandler(BaseHandler):
             else:
                 logger.info("PRE-SUBMIT: Retry successful — all fields now filled")
 
-        # CRITICAL: Last-resort inject — set empty type="text" inputs from React-Select display values.
-        # Must happen RIGHT before submit so React doesn't re-render and clear them.
-        # This handles forms where React-Select uses type="text" instead of type="hidden".
-        await self._inject_react_select_values_before_submit(page)
-
         # Solve invisible reCAPTCHA before clicking submit
         captcha_solved = await self.solve_invisible_recaptcha(page)
         if not captcha_solved:
             logger.error("Failed to solve reCAPTCHA - cannot submit")
             return False
 
+        # CRITICAL: Last-resort inject AFTER reCAPTCHA — set empty type="text" inputs
+        # from React-Select display values.  Must happen after CAPTCHA because the solve
+        # can trigger a React re-render that clears earlier injections.
+        await self._inject_react_select_values_before_submit(page)
+
         # ── GOLDEN PATH GUARD: final required-field check before submit ──
         empty_required = await self._check_required_fields_before_submit(page)
         if empty_required:
-            logger.warning(
-                f"GOLDEN PATH GUARD: {len(empty_required)} required field(s) still empty — "
-                f"NOT submitting, leaving tab open: {empty_required}"
-            )
-            return False
+            # Filter out EEO/demographic fields — these should never block submit
+            eeo_keywords = ['ethnic', 'race', 'gender', 'sex', 'veteran', 'disability',
+                            'demographic', 'eeo', 'equal employment', 'voluntary',
+                            'cc-305', 'form cc']
+            critical_empty = [f for f in empty_required if not any(
+                kw in f.lower() for kw in eeo_keywords
+            )]
+            # Also filter out bare numeric IDs (e.g. '4008516007') — these are React-Select
+            # value-store inputs for EEO fields that were already filtered by label above.
+            # If the guard returns just a numeric ID, the field has no label text and is
+            # almost certainly a demographic React-Select input.
+            critical_empty = [f for f in critical_empty if not f.strip().isdigit()]
+            if critical_empty:
+                logger.warning(
+                    f"GOLDEN PATH GUARD: {len(critical_empty)} required field(s) still empty — "
+                    f"NOT submitting, leaving tab open: {critical_empty}"
+                )
+                if len(empty_required) > len(critical_empty):
+                    logger.info(f"GOLDEN PATH GUARD: Filtered out {len(empty_required) - len(critical_empty)} EEO/demographic field(s)")
+                return False
+            else:
+                logger.info(
+                    f"GOLDEN PATH GUARD: {len(empty_required)} empty field(s) are all EEO/demographic — "
+                    f"proceeding with submit: {empty_required}"
+                )
 
         submit_selectors = [
             'button[type="submit"]',

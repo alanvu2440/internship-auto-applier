@@ -633,6 +633,12 @@ class LeverHandler(BaseHandler):
                     # Solve CAPTCHA (handles both reCAPTCHA and hCaptcha via base handler)
                     captcha_solved = await self.solve_invisible_recaptcha(page)
                     if not captcha_solved:
+                        # Check if hCaptcha overlay is actively blocking the submit button
+                        hcaptcha_blocking = await page.query_selector('.h-captcha iframe[src*="hcaptcha"]')
+                        if hcaptcha_blocking and not getattr(self, 'assist_mode', False):
+                            logger.warning("hCaptcha blocking submit and solve failed — skipping job")
+                            self._last_status = "captcha"
+                            return False
                         logger.warning("CAPTCHA solve failed — submitting anyway, tab stays open for manual")
                     await self.browser_manager.human_delay(500, 1000)
                     await btn.click()
