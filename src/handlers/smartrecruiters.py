@@ -3804,12 +3804,23 @@ class SmartRecruitersHandler(BaseHandler):
                                         if (!sr) continue;
                                         var inner = sr.querySelector('input[type="checkbox"]');
                                         if (!inner) continue;
-                                        // Force checked state
-                                        if (!inner.checked) inner.checked = true;
+                                        // Force checked state via native setter (bypasses Angular tracking)
+                                        var descriptor = Object.getOwnPropertyDescriptor(
+                                            window.HTMLInputElement.prototype, 'checked');
+                                        if (descriptor && descriptor.set) {
+                                            descriptor.set.call(inner, true);
+                                        } else {
+                                            inner.checked = true;
+                                        }
                                         inner.setAttribute('aria-checked', 'true');
+                                        // Click the inner input to trigger Angular's click handler
+                                        inner.focus();
+                                        inner.click();
                                         // Dispatch all necessary events for Angular
                                         inner.dispatchEvent(new Event('change', {bubbles: true, composed: true}));
                                         inner.dispatchEvent(new Event('input', {bubbles: true, composed: true}));
+                                        // Also click the host element (triggers Angular's zone)
+                                        splChecks[i].click();
                                         // Trigger zone.js spl-change on the host element
                                         splChecks[i].dispatchEvent(new CustomEvent('spl-change', {
                                             detail: {value: true, checked: true}, bubbles: true, composed: true
